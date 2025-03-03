@@ -92,8 +92,17 @@ app.get('/:username', async (req, res) => {
   let usingMemory = false;
   
   try {
-    // 获取GitHub头像
-    const avatarUrl = await getGitHubAvatar(username) || 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+    // 获取GitHub头像，如果获取失败则使用默认GitHub logo
+    let avatarUrl;
+    try {
+      avatarUrl = await getGitHubAvatar(username);
+      if (!avatarUrl) {
+        throw new Error('获取头像失败');
+      }
+    } catch (avatarError) {
+      console.log(`使用默认GitHub logo作为${username}的头像`);
+      avatarUrl = 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+    }
     
     // 生成访问者ID
     const visitorId = generateVisitorId(req);
