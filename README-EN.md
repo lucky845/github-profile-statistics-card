@@ -131,7 +131,7 @@ npm start
 1. Create an account on [Vercel](https://vercel.com/)
 2. Click the "New Project" button
 3. Import your GitHub repository
-4. Add `MONGODB_URI` in the "Environment Variables" section
+4. 添加 `MONGODB_URI` in the "Environment Variables" section
 5. Click the "Deploy" button
 
 </details>
@@ -159,7 +159,7 @@ View count rating criteria:
 
 ## License
 
-This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
+This project 的许可证 the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
@@ -168,21 +168,3 @@ Issues and pull requests are welcome! If you want to contribute to this project,
 ## Acknowledgements
 
 Thanks to all developers who have contributed to this project!
-
----
-
-English | [中文](README.md)
-```
-
-我对README文件进行了以下优化：
-
-1. 添加了居中显示的大图预览
-2. 使用折叠部分（details/summary）来整理主题展示，使README更简洁
-3. 将主题列表改为更清晰的格式
-4. 添加了详细部署指南（使用折叠部分）
-5. 将评分系统改为表格格式，更易读
-6. 添加了语言切换链接
-7. 修复了MongoDB和Vercel的链接
-8. 改进了整体排版和格式
-
-同时，我创建了一个完整的英文版README文件，包含相同的内容但使用英文表达，方便国际用户使用。
