@@ -2,10 +2,19 @@ const express = require('express');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const axios = require('axios');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// 设置静态文件目录
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/styles', express.static(path.join(__dirname, 'styles.css')));
+
+// 设置视图引擎
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // 优化MongoDB连接
 const connectDB = async () => {
@@ -75,13 +84,134 @@ app.get('/health', async (req, res) => {
 // 获取GitHub用户头像
 async function getGitHubAvatar(username) {
   try {
-    const response = await axios.get(`https://api.github.com/users/${username}`);
-    return response.data.avatar_url;
+    // 添加请求头以减少GitHub API限制
+    const response = await axios.get(`https://api.github.com/users/${username}`, {
+      headers: {
+        'User-Agent': 'GitHub-Profile-Views-Counter',
+        'Accept': 'application/vnd.github.v3+json',
+        'If-None-Match': '' // 避免304缓存响应
+      },
+      timeout: 5000, // 设置超时时间为5秒
+      validateStatus: status => status < 500 // 只对500以上错误抛出异常
+    });
+    
+    if (response.status === 200 && response.data && response.data.avatar_url) {
+      return response.data.avatar_url;
+    } else {
+      console.warn(`获取GitHub头像异常状态码: ${response.status}`);
+      return null;
+    }
   } catch (error) {
     console.error(`获取GitHub头像失败: ${error.message}`);
     return null;
   }
 }
+
+// 设置根路径展示页面
+app.get('/', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  
+  // 主题列表
+  const themesList = [
+    { name: 'rainbow', description: '彩虹渐变主题（默认）' },
+    { name: 'github', description: 'GitHub风格暗色主题' },
+    { name: 'blue', description: '蓝色渐变主题' },
+    { name: 'purple', description: '紫色渐变主题' },
+    { name: 'green', description: '绿色渐变主题' },
+    { name: 'dark', description: '深色主题' },
+    { name: 'light', description: '浅色主题' },
+    { name: 'neon', description: '霓虹风格主题' },
+    { name: 'sunset', description: '日落渐变主题' },
+    { name: 'ocean', description: '海洋渐变主题' }
+  ];
+  
+  // 渲染HTML页面
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>GitHub Profile Views Counter</title>
+      <link rel="stylesheet" href="/styles">
+    </head>
+    <body>
+      <div class="container">
+        <h1>GitHub Profile Views Counter</h1>
+        <p>一个简单而美观的GitHub个人主页访问量统计工具，可以轻松集成到你的GitHub个人资料页面。</p>
+        
+        <h2>特点</h2>
+        <ul class="features-list">
+          <li>🌈 多种主题可选</li>
+          <li>👁️ 同时显示总访问量和唯一访问者数量</li>
+          <li>🏆 根据访问量自动评级（从D-到S+）</li>
+          <li>🖼️ 显示用户GitHub头像</li>
+          <li>🚀 易于部署到Vercel</li>
+          <li>💾 MongoDB数据存储，支持内存模式作为备用</li>
+        </ul>
+        
+        <h2>使用方法</h2>
+        <p>只需在你的GitHub个人资料README.md中添加以下代码：</p>
+        <div class="code-block">
+          ![GitHub Profile Views](${baseUrl}/your-github-username)
+        </div>
+        
+        <h3>自定义选项</h3>
+        <p>你可以通过URL参数自定义显示效果：</p>
+        <div class="code-block">
+          ![GitHub Profile Views](${baseUrl}/your-github-username?theme=ocean)
+        </div>
+      </div>
+      
+      <div class="container">
+        <h2>主题展示</h2>
+        <p>以下是所有可用主题的展示效果：</p>
+        
+        <div class="theme-showcase">
+          ${themesList.map(theme => `
+            <div class="theme-card">
+              <div class="theme-name">${theme.name}</div>
+              <div class="theme-description">${theme.description}</div>
+              <img src="${baseUrl}/lucky845?theme=${theme.name}" alt="${theme.name} theme" width="100%">
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="container">
+        <h2>评分系统</h2>
+        <p>访问量评分标准：</p>
+        <ul>
+          <li>D-: 少于100次访问</li>
+          <li>D: 100-149次访问</li>
+          <li>D+: 150-199次访问</li>
+          <li>C-: 200-299次访问</li>
+          <li>C: 300-399次访问</li>
+          <li>C+: 400-599次访问</li>
+          <li>B-: 600-799次访问</li>
+          <li>B: 800-999次访问</li>
+          <li>B+: 1000-1499次访问</li>
+          <li>A-: 1500-1999次访问</li>
+          <li>A: 2000-2999次访问</li>
+          <li>A+: 3000-4999次访问</li>
+          <li>S: 5000-9999次访问</li>
+          <li>S+: 10000次及以上访问</li>
+        </ul>
+      </div>
+      
+      <div class="container">
+        <h2>部署自己的实例</h2>
+        <p>查看 <a href="https://github.com/lucky845/github-profile-views" target="_blank">GitHub仓库</a> 获取完整的部署指南。</p>
+        <a href="https://github.com/lucky845/github-profile-views" class="btn">查看源代码</a>
+      </div>
+      
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} GitHub Profile Views Counter. 使用 Apache 2.0 许可证。</p>
+      </div>
+    </body>
+    </html>
+  `);
+});
 
 // 设置SVG内容类型
 app.get('/:username', async (req, res) => {
@@ -92,8 +222,18 @@ app.get('/:username', async (req, res) => {
   let usingMemory = false;
   
   try {
-    // 获取GitHub头像
-    const avatarUrl = await getGitHubAvatar(username) || 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+    // 获取GitHub头像，如果获取失败则使用内置的GitHub logo SVG
+    let avatarUrl;
+    try {
+      avatarUrl = await getGitHubAvatar(username);
+      if (!avatarUrl) {
+        throw new Error('获取头像失败');
+      }
+    } catch (avatarError) {
+      console.log(`使用内置GitHub logo作为${username}的头像`);
+      // 使用内联SVG而不是外部URL，避免依赖外部资源
+      avatarUrl = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2Ij48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik04IDBDMy41OCAwIDAgMy41OCAwIDhjMCAzLjU0IDIuMjkgNi41MyA1LjQ3IDcuNTkuNC4wNy41NS0uMTcuNTUtLjM4IDAtLjE5LS4wMS0uODItLjAxLTEuNDktMi4wMS4zNy0yLjUzLS40OS0yLjY5LS45NC0uMDktLjIzLS40OC0uOTQtLjgyLTEuMTMtLjI4LS4xNS0uNjgtLjUyLS4wMS0uNTMuNjMtLjAxIDEuMDguNTggMS4yMy44Mi43MiAxLjIxIDEuODcuODcgMi4zMy42Ni4wNy0uNTIuMjgtLjg3LjUxLTEuMDctMS43OC0uMi0zLjY0LS44OS0zLjY0LTMuOTUgMC0uODcuMzEtMS41OS44Mi0yLjE1LS4wOC0uMi0uMzYtMS4wMi4wOC0yLjEyIDAgMCAuNjctLjIxIDIuMi44Mi42NC0uMTggMS4zMi0uMjcgMi0uMjcuNjggMCAxLjM2LjA5IDIgLjI3IDEuNTMtMS4wNCAyLjItLjgyIDIuMi0uODIuNDQgMS4xLjE2IDEuOTIuMDggMi4xMi41MS41Ni44MiAxLjI3LjgyIDIuMTUgMCAzLjA3LTEuODcgMy43NS0zLjY1IDMuOTUuMjkuMjUuNTQuNzMuNTQgMS40OCAwIDEuMDctLjAxIDEuOTMtLjAxIDIuMiAwIC4yMS4xNS40Ni41NS4zOEE4LjAxMyA4LjAxMyAwIDAwMTYgOGMwLTQuNDItMy41OC04LTgtOHoiPjwvcGF0aD48L3N2Zz4=';
+    }
     
     // 生成访问者ID
     const visitorId = generateVisitorId(req);
@@ -374,7 +514,14 @@ app.get('/:username', async (req, res) => {
       
       <!-- 用户头像 -->
       <circle cx="70" cy="70" r="45" fill="none" stroke="${selectedTheme.accentColor}" stroke-opacity="0.3" stroke-width="2" />
-      <image href="${avatarUrl}" x="25" y="25" height="90" width="90" clip-path="url(#avatarClip)" />
+      ${avatarUrl.startsWith('data:') 
+        ? `<g transform="translate(25, 25) scale(0.5)" fill="${selectedTheme.accentColor}">
+             <svg width="180" height="180" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+               <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+             </svg>
+           </g>`
+        : `<image href="${avatarUrl}" x="25" y="25" height="90" width="90" clip-path="url(#avatarClip)" />`
+      }
       
       <!-- 统计信息 -->
       <g font-family="Arial, sans-serif" font-weight="bold">
