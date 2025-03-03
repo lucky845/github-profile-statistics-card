@@ -84,7 +84,7 @@ app.get('/health', async (req, res) => {
 // 获取GitHub用户头像
 async function getGitHubAvatar(username) {
   try {
-    // 添加请求头以减少GitHub API限制
+    // 添加更多请求头以减少GitHub API限制
     const response = await axios.get(`https://api.github.com/users/${username}`, {
       headers: {
         'User-Agent': 'GitHub-Profile-Views-Counter',
@@ -96,14 +96,23 @@ async function getGitHubAvatar(username) {
     });
     
     if (response.status === 200 && response.data && response.data.avatar_url) {
-      return response.data.avatar_url;
+      return {
+        isValid: true,
+        avatarUrl: response.data.avatar_url
+      };
     } else {
       console.warn(`获取GitHub头像异常状态码: ${response.status}`);
-      return null;
+      return {
+        isValid: false,
+        avatarUrl: null
+      };
     }
   } catch (error) {
     console.error(`获取GitHub头像失败: ${error.message}`);
-    return null;
+    return {
+      isValid: false,
+      avatarUrl: null
+    };
   }
 }
 
@@ -222,16 +231,33 @@ app.get('/:username', async (req, res) => {
   let usingMemory = false;
   
   try {
-    // 获取GitHub头像，如果获取失败则使用内置的GitHub logo SVG
-    let avatarUrl;
-    try {
-      avatarUrl = await getGitHubAvatar(username);
-      if (!avatarUrl) {
-        throw new Error('获取头像失败');
-      }
-    } catch (avatarError) {
+    // 获取GitHub用户头像并验证用户是否存在
+    const githubUserData = await getGitHubAvatar(username);
+    
+    // 如果不是有效的GitHub用户，返回错误SVG
+    if (!githubUserData.isValid) {
+      const errorSvg = `
+      <svg width="650" height="140" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="errorGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#FF5252;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#FF1744;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="650" height="140" fill="url(#errorGradient)" rx="15" ry="15" />
+        <text x="70" y="60" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">GitHub Profile Views - Error</text>
+        <text x="70" y="100" font-family="Arial, sans-serif" font-size="18" fill="#FFFFFF">Error: Invalid GitHub username "${username}"</text>
+      </svg>
+      `;
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      return res.send(errorSvg);
+    }
+    
+    // 使用验证后的头像URL或默认头像
+    let avatarUrl = githubUserData.avatarUrl;
+    if (!avatarUrl) {
       console.log(`使用内置GitHub logo作为${username}的头像`);
-      // 使用内联SVG而不是外部URL，避免依赖外部资源
       avatarUrl = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2Ij48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik04IDBDMy41OCAwIDAgMy41OCAwIDhjMCAzLjU0IDIuMjkgNi41MyA1LjQ3IDcuNTkuNC4wNy41NS0uMTcuNTUtLjM4IDAtLjE5LS4wMS0uODItLjAxLTEuNDktMi4wMS4zNy0yLjUzLS40OS0yLjY5LS45NC0uMDktLjIzLS40OC0uOTQtLjgyLTEuMTMtLjI4LS4xNS0uNjgtLjUyLS4wMS0uNTMuNjMtLjAxIDEuMDguNTggMS4yMy44Mi43MiAxLjIxIDEuODcuODcgMi4zMy42Ni4wNy0uNTIuMjgtLjg3LjUxLTEuMDctMS43OC0uMi0zLjY0LS44OS0zLjY0LTMuOTUgMC0uODcuMzEtMS41OS44Mi0yLjE1LS4wOC0uMi0uMzYtMS4wMi4wOC0yLjEyIDAgMCAuNjctLjIxIDIuMi44Mi42NC0uMTggMS4zMi0uMjcgMi0uMjcuNjggMCAxLjM2LjA5IDIgLjI3IDEuNTMtMS4wNCAyLjItLjgyIDIuMi0uODIuNDQgMS4xLjE2IDEuOTIuMDggMi4xMi41MS41Ni44MiAxLjI3LjgyIDIuMTUgMCAzLjA3LTEuODcgMy43NS0zLjY1IDMuOTUuMjkuMjUuNTQuNzMuNTQgMS40OCAwIDEuMDctLjAxIDEuOTMtLjAxIDIuMiAwIC4yMS4xNS40Ni41NS4zOEE4LjAxMyA4LjAxMyAwIDAwMTYgOGMwLTQuNDItMy41OC04LTgtOHoiPjwvcGF0aD48L3N2Zz4=';
     }
     
