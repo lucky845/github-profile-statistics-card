@@ -1,38 +1,16 @@
 import mongoose from 'mongoose';
-import { dbConfig } from '../config';
 import { MemoryCache } from '../types';
 import { LeetCodeUser, GitHubUser, CSDNUser, JueJinUser } from '../models/mongodb.models';
 import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
-import { MongoClient, Collection } from 'mongodb';
-import { appConfig } from '../config';
 import { JuejinUserData } from '../types/juejin.types';
-
-let client: MongoClient | null = null;
-let cacheCollection: Collection | null = null;
+import { connectDB } from '../middleware/mongoMiddleware'; // 从mongoMiddleware导入connectDB函数
 
 // 内存缓存，作为MongoDB不可用时的备用
 const memoryCache: MemoryCache = {
   leetcode: {},
   github: {},
-  csdn: {}
-};
-
-// 连接MongoDB数据库
-export const connectDB = async (): Promise<boolean> => {
-  try {
-    // 检查是否有MongoDB URI
-    if (!dbConfig.mongoURI) {
-      console.error("MongoDB URI 未设置，使用内存模式");
-      return false;
-    }
-
-    const conn = await mongoose.connect(dbConfig.mongoURI, dbConfig.options);
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-    return true;
-  } catch (error: any) {
-    console.error(`MongoDB Connection Error: ${error.message}`);
-    return false;
-  }
+  csdn: {},
+  juejin: {},
 };
 
 // 获取LeetCode用户数据
@@ -94,7 +72,7 @@ export const updateUserData = async (username: string, userData: ILeetCodeUser, 
 
     if (isMongoConnected) {
       // 更新数据库，设置TTL索引
-      await LeetCodeUser.findOneAndUpdate({ username }, {...userData, lastUpdated: new Date()}, {
+      await LeetCodeUser.findOneAndUpdate({ username }, { ...userData, lastUpdated: new Date() }, {
         upsert: true,
         new: true,
         setDefaultsOnInsert: true,
@@ -160,7 +138,7 @@ export const updateGitHubUserData = async (username: string, avatarUrl?: string)
       $inc: { visitCount: 1 },
       $set: { lastVisited: now, lastUpdated: now }
     };
-    
+
     // 如果提供了头像URL，则更新头像和头像更新时间
     if (avatarUrl) {
       updateData.$set.avatarUrl = avatarUrl;
@@ -187,7 +165,7 @@ export const updateGitHubUserData = async (username: string, avatarUrl?: string)
       memoryCache.github[username].visitCount += 1;
       memoryCache.github[username].lastVisited = now;
       memoryCache.github[username].lastUpdated = now;
-      
+
       // 如果提供了头像URL，也更新缓存中的头像URL和头像更新时间
       if (avatarUrl) {
         memoryCache.github[username].avatarUrl = avatarUrl;
@@ -269,7 +247,7 @@ export const updateCSDNUserData = async (userId: string, userData: Partial<ICSDN
           lastUpdated: new Date()
         };
       }
-      
+
       // 合并更新的数据
       memoryCache.csdn[userId] = {
         ...memoryCache.csdn[userId],
@@ -277,7 +255,7 @@ export const updateCSDNUserData = async (userId: string, userData: Partial<ICSDN
         lastUpdated: new Date()
       };
     }
-    
+
     return true;
   } catch (error: any) {
     console.error(`更新CSDN用户数据失败: ${error.message}`);
@@ -318,4 +296,27 @@ export const getJuejinUserData = async (userId: string, cacheTimeInSeconds: numb
     console.error(`获取用户数据失败: ${error.message}`);
     return { userData: null, needsFetch: true, error: error as Error };
   }
-} 
+}
+
+// 更新掘金数据
+export const updateJuejinUserData = async (userId: string, userData: JuejinUserData): Promise<boolean> => {
+  try {
+    const isMongoConnected = mongoose.connection.readyState === 1;
+
+    if (isMongoConnected) {
+      // 更新数据库
+      await JueJinUser.findOneAndUpdate({ userId }, userData, {
+        upsert: true,
+        new: true,
+      });
+    } else {
+      // 更新内存缓存
+      memoryCache.juejin[userId] = userData;
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error(`更新用户数据失败: ${error.message}`);
+    return false;
+  }
+}
