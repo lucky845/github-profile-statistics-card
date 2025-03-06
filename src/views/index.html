@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub & LeetCode Stats</title>
+  <title>GitHub Profile Statistics Card</title>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -115,7 +115,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>GitHub & LeetCode Stats</h1>
+    <h1>GitHub Profile Statistics Card</h1>
     
     <h2>GitHub 访问统计</h2>
     <div class="code-block">
@@ -127,6 +127,18 @@
     <div class="code-block">
       <p>在你的GitHub个人资料中添加LeetCode统计：</p>
       <code>![](BASE_URL/leetcode/用户名)</code>
+    </div>
+
+    <h2>CSDN 统计卡片</h2>
+    <div class="code-block">
+      <p>在你的GitHub个人资料中添加CSDN统计：</p>
+      <code>![](BASE_URL/csdn/userId)</code>
+    </div>
+    
+    <h2>掘金统计卡片</h2>
+    <div class="code-block">
+      <p>在你的GitHub个人资料中添加掘金统计：</p>
+      <code>![](BASE_URL/juejin/userId)</code>
     </div>
 
     <h2>参数选项</h2>
@@ -147,6 +159,11 @@
         <td>cn</td>
         <td>true / false</td>
         <td>是否使用力扣中国区数据（默认false，使用美区数据）</td>
+      </tr>
+      <tr>
+        <td>cacheSeconds</td>
+        <td>数字</td>
+        <td>配置缓存的秒数（默认120秒）</td>
       </tr>
     </table>
 
@@ -169,16 +186,18 @@
     </div>
 
     <div class="theme-switch">
-      <a href="leetcode/lucky845?theme=light&cn=true" class="theme-option light-theme">预览亮色主题</a>
-      <a href="leetcode/lucky845?theme=dark&cn=true" class="theme-option dark-theme">预览暗色主题</a>
+      <a href="leetcode/lucky845?theme=light&cn=true" class="theme-option light-theme">预览LeetCode亮色主题</a>
+      <a href="leetcode/lucky845?theme=dark&cn=true" class="theme-option dark-theme">预览LeetCode暗色主题</a>
+      <a href="juejin/lucky845?theme=light" class="theme-option light-theme">预览掘金亮色主题</a>
+      <a href="juejin/lucky845?theme=dark" class="theme-option dark-theme">预览掘金暗色主题</a>
     </div>
 
     <h2>使用方法</h2>
-    <p>将上述代码添加到你的GitHub profile README.md文件中，将"用户名"替换为你的GitHub或LeetCode用户名。</p>
+    <p>将上述代码添加到你的GitHub profile README.md文件中，将"用户名"或"userId"替换为你的相应平台的用户名或ID。</p>
   </div>
 
   <footer>
-    &copy; 2024 LeetCode Stats. 开源项目 by <a href="https://github.com/lucky845">lucky845</a>
+    &copy; 2024 GitHub Profile Statistics Card. 开源项目 by <a href="https://github.com/lucky845">lucky845</a>
   </footer>
 </body>
 </html> 

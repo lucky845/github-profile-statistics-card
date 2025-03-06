@@ -52,4 +52,22 @@ const csdnUserSchema = new mongoose.Schema({
 // 添加TTL索引
 csdnUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
-export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', csdnUserSchema); 
+export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', csdnUserSchema);
+
+// juejin 用户数据模型
+const juejinUserSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  username: { type: String, default: '' },
+  desc: { type: String, default: '' },
+  articleCount: { type: Number, default: 0 },
+  followers: { type: Number, default: 0 },
+  likes: { type: Number, default: 0 },
+  views: { type: Number, default: 0 },
+  lastUpdated: { type: Date, default: Date.now },
+  expireAt: { type: Date, default: null }
+});
+
+// 添加TTL索引
+juejinUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+export const JueJinUser = mongoose.model<ICSDNUser>('JueJinUser', juejinUserSchema);
