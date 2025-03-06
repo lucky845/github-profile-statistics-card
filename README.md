@@ -25,12 +25,15 @@
 ```markdown
 ![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/lucky845?theme=light)
+* p.s. 头像在md文件显示好像有点问题
 
 ### LeetCode 统计卡片
 
 ```markdown
-![LeetCode Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=dark)
+![LeetCode Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=light)
 ```
+![LeetCode Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=light&cn=true)
 
 支持参数：
 - `username`: LeetCode 用户名
@@ -54,6 +57,7 @@
 ```markdown
 ![CSDN Stats](https://github-profile-views-plum.vercel.app/csdn/userId?theme=light)
 ```
+![CSDN Stats](https://github-profile-views-plum.vercel.app/csdn/weixin_46427785?theme=light)
 
 CSDN 统计卡片包含以下数据：
 - 文章数量
@@ -69,6 +73,7 @@ CSDN 统计卡片包含以下数据：
 ```markdown
 ![掘金统计](https://github-profile-views-plum.vercel.app/juejin/userId?theme=light)
 ```
+![掘金统计](https://github-profile-views-plum.vercel.app/juejin/2564503943252237?theme=light)
 
 掘金统计卡片包含以下数据：
 - 文章数量
@@ -105,38 +110,45 @@ CSDN 统计卡片包含以下数据：
 
 ### Light（默认）
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=light)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=light&cn=true)
 
 ### Dark
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=dark)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=dark)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=dark&cn=true)
 
 ### Merko
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=merko)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=merko)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=merko&cn=true)
 
 ### Gruvbox
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=gruvbox)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=gruvbox&cn=true)
 
 ### Gruvbox Light
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox_light)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=gruvbox_light&cn=true)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=gruvbox_light&cn=true)
 
 ### Tokyo Night
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=tokyonight)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=tokyonight)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=tokyonight&cn=true)
 
 ### One Dark
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=onedark)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=onedark)
 ```
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=onedark&cn=true)
 
 ## 🔜 即将支持的平台
 
