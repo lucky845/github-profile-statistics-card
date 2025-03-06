@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub & LeetCode Stats</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    
+    h1, h2 {
+      color: #2c3e50;
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 15px;
+    }
+    
+    .code-block {
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 15px 0;
+      overflow-x: auto;
+      font-family: monospace;
+      border-left: 4px solid #3498db;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #777;
+      font-size: 0.9em;
+    }
+
+    .theme-switch {
+      margin-top: 30px;
+      text-align: center;
+    }
+
+    .theme-option {
+      display: inline-block;
+      margin: 0 10px;
+      padding: 8px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .light-theme {
+      background-color: #ffffff;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+
+    .dark-theme {
+      background-color: #1e1e2e;
+      color: #fff;
+      border: 1px solid #333;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-left: 8px;
+      font-weight: bold;
+    }
+
+    .us-pill {
+      background-color: #3498db;
+      color: white;
+    }
+
+    .cn-pill {
+      background-color: #e74c3c;
+      color: white;
+    }
+
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+
+    .param-table th, .param-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .param-table th {
+      background-color: #f8f9fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub & LeetCode Stats</h1>
+    
+    <h2>GitHub 访问统计</h2>
+    <div class="code-block">
+      <p>在你的GitHub个人资料中添加访问计数器：</p>
+      <code>![](BASE_URL/github/用户名)</code>
+    </div>
+    
+    <h2>LeetCode 解题统计</h2>
+    <div class="code-block">
+      <p>在你的GitHub个人资料中添加LeetCode统计：</p>
+      <code>![](BASE_URL/leetcode/用户名)</code>
+    </div>
+
+    <h2>参数选项</h2>
+    <p>你可以通过添加以下参数来自定义显示结果：</p>
+
+    <table class="param-table">
+      <tr>
+        <th>参数</th>
+        <th>值</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>theme</td>
+        <td>light / dark</td>
+        <td>设置卡片的主题风格</td>
+      </tr>
+      <tr>
+        <td>cn</td>
+        <td>true / false</td>
+        <td>是否使用力扣中国区数据（默认false，使用美区数据）</td>
+      </tr>
+    </table>
+
+    <h3>主题选择</h3>
+    <div class="code-block">
+      <p>使用暗色主题：</p>
+      <code>![](BASE_URL/leetcode/用户名?theme=dark)</code>
+    </div>
+
+    <h3>LeetCode区域选择 <span class="pill us-pill">US</span> <span class="pill cn-pill">CN</span></h3>
+    <div class="code-block">
+      <p>使用中国区LeetCode数据：</p>
+      <code>![](BASE_URL/leetcode/用户名?cn=true)</code>
+    </div>
+
+    <h3>组合多个参数</h3>
+    <div class="code-block">
+      <p>使用暗色主题和中国区数据：</p>
+      <code>![](BASE_URL/leetcode/用户名?theme=dark&cn=true)</code>
+    </div>
+
+    <div class="theme-switch">
+      <a href="leetcode/lucky845?theme=light&cn=true" class="theme-option light-theme">预览亮色主题</a>
+      <a href="leetcode/lucky845?theme=dark&cn=true" class="theme-option dark-theme">预览暗色主题</a>
+    </div>
+
+    <h2>使用方法</h2>
+    <p>将上述代码添加到你的GitHub profile README.md文件中，将"用户名"替换为你的GitHub或LeetCode用户名。</p>
+  </div>
+
+  <footer>
+    &copy; 2024 LeetCode Stats. 开源项目 by <a href="https://github.com/lucky845">lucky845</a>
+  </footer>
+</body>
+</html> 
