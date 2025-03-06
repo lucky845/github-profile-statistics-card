@@ -1,0 +1,5 @@
+// 内存缓存接口定义
+export interface MemoryCache {
+  leetcode: { [key: string]: import('./leetcode.types').ILeetCodeUser };
+  github: { [key: string]: import('./github.types').IGitHubUser };
+} 
