@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { IJuejinUserData, JuejinUserData } from '../types/juejin.types';
-import { getJuejinUserData } from './mongodb.service';
+import { getJuejinUserData, updateJuejinUserData } from './mongodb.service';
 
 interface JuejinApiResponseData {
     user_id: string,
@@ -78,6 +78,9 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
             lastUpdated: new Date(),
             expireAt: new Date(new Date().getTime() + cacheTimeInSeconds * 1000), // 设置过期时间
         };
+
+        // 更新MongoDB数据
+        updateJuejinUserData(cachedUserData.userId, cachedUserData)
 
         return {
             ...cachedUserData,

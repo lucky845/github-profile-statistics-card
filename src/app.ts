@@ -3,7 +3,6 @@ import './polyfill';
 
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { connectDB } from './services/mongodb.service';
 import leetcodeRouter from './routes/leetcode.routes';
 import githubRouter from './routes/github.routes';
 import csdnRouter from './routes/csdn.routes';
@@ -13,6 +12,7 @@ import { errorHandler } from './middleware/error.middleware';
 import { appConfig } from './config';
 import { defaultTheme, darkTheme, merkoTheme, gruvboxTheme, gruvboxLightTheme, tokyonightTheme, onedarkTheme } from './config/theme.config';
 import fs from 'fs';
+import { connectDB, mongoMiddleware } from './middleware/mongoMiddleware';
 
 // 全局主题设置
 const themes = {
@@ -56,6 +56,7 @@ connectDB().then((connected) => {
 app.use(logger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(mongoMiddleware);
 app.use(themeMiddleware);
 
 // 设置静态文件目录
