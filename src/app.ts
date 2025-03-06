@@ -7,6 +7,7 @@ import { connectDB } from './services/mongodb.service';
 import leetcodeRouter from './routes/leetcode.routes';
 import githubRouter from './routes/github.routes';
 import csdnRouter from './routes/csdn.routes';
+import juejinRouter from './routes/juejin.routes';
 import { logger } from './middleware/logger.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { appConfig } from './config';
@@ -64,6 +65,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/leetcode', leetcodeRouter);
 app.use('/github', githubRouter);
 app.use('/csdn', csdnRouter);
+app.use('/juejin', juejinRouter);
 
 // 设置根路径展示页面
 app.get('/', (req: Request, res: Response) => {

@@ -8,6 +8,7 @@
   - GitHub 统计数据
   - LeetCode 刷题数据
   - CSDN 博客数据
+  - 掘金
   - 更多平台持续添加中...
 - 自定义主题支持
   - 明亮主题
@@ -63,6 +64,31 @@ CSDN 统计卡片包含以下数据：
 - 积分
 - ...
 
+### 掘金统计卡片
+
+```markdown
+![掘金统计](https://github-profile-views-plum.vercel.app/juejin/userId?theme=light)
+```
+
+掘金统计卡片包含以下数据：
+- 文章数量
+- 关注者数量
+- 点赞数
+- 浏览量
+- 个人简介
+- ...
+
+支持参数：
+- `userId`: 掘金用户ID
+- `theme`: 主题选择（可选，默认为 light）
+- `cacheSeconds`: 配置缓存的秒数(默认120秒)
+
+示例：
+```markdown
+# 使用暗黑主题
+![掘金统计](https://github-profile-views-plum.vercel.app/juejin/userId?theme=dark)
+```
+
 ## 🎨 主题配置
 
 支持以下主题参数：
@@ -115,7 +141,6 @@ CSDN 统计卡片包含以下数据：
 ## 🔜 即将支持的平台
 
 - Bilibili
-- 掘金
 - ...更多平台开发中
 
 ## 🛠️ 技术栈

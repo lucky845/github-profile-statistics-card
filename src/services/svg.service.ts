@@ -1,24 +1,26 @@
 import { activeTheme, ThemeOptions } from '../config/theme.config';
 import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
+import { JuejinUserData } from '../types/juejin.types';
 
 // 卡片类型定义
 export enum CardType {
   LEETCODE = 'leetcode',
   GITHUB = 'github',
   CSDN = 'csdn',
+  JUEJIN = 'juejin',
   ERROR = 'error'
 }
 
-/**
+/**s
  * 生成错误卡片
  * @param message 错误信息
  * @param theme 主题配置
  * @returns SVG字符串
  */
 export function generateErrorCard(message: string, theme: ThemeOptions = activeTheme): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="120" viewBox="0 0 495 120">
-    <rect width="495" height="120" fill="${theme.colors.background}" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
-    <text x="247.5" y="60" font-family="${theme.fonts.family}" font-size="${theme.fonts.size.normal}" text-anchor="middle" fill="#dc3545">
+  return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"495\" height=\"120\" viewBox=\"0 0 495 120\">
+    <rect width=\"495\" height=\"120\" fill=\"${theme.colors.background}\" rx=\"${theme.card.borderRadius}\" ry=\"${theme.card.borderRadius}\" stroke=\"${theme.colors.border}\" stroke-width=\"1\"/>
+    <text x=\"247.5\" y=\"60\" font-family=\"${theme.fonts.family}\" font-size=\"${theme.fonts.size.normal}\" text-anchor=\"middle\" fill=\"#dc3545\">
       ${message}
     </text>
   </svg>`;
@@ -32,7 +34,7 @@ export function generateErrorCard(message: string, theme: ThemeOptions = activeT
  */
 export function generateLeetCodeCard(data: ILeetCodeUser | null, theme: ThemeOptions = activeTheme): string {
   if (!data) {
-    return generateErrorCard('未找到LeetCode用户数据');
+    return generateErrorCard('未找到LeetCode用户数据', theme);
   }
 
   const easySolved = data.easySolved || 0;
@@ -311,6 +313,85 @@ export function generateCSDNCard(data: any, theme: ThemeOptions = activeTheme): 
 }
 
 /**
+ * 生成掘金统计卡片
+ * @param data 掘金用户数据
+ * @param theme 主题配置
+ * @returns SVG字符串
+ */
+export function generateJuejinCard(data: JuejinUserData, theme: ThemeOptions = activeTheme): string {
+  if (!data) {
+    return generateErrorCard('无法获取掘金数据', theme);
+  }
+
+  const {
+    username,
+    desc,
+    followers,
+    articleCount,
+    likes,
+    views,
+  } = data;
+
+  // 数据格式化
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  };
+
+  // 当前日期
+  const currentDate = new Date().toLocaleDateString('zh-CN');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
+    <style>
+      .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
+      .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
+      .small { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.small}; fill: ${theme.colors.text.secondary}; }
+      .label { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.secondary}; }
+      .value { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; font-weight: bold; fill: ${theme.colors.text.secondary}; }
+      .footer { font-family: ${theme.fonts.family}; font-size: 10px; fill: ${theme.colors.text.secondary}; }
+      .power { font-family: ${theme.fonts.family}; font-size: 12px; font-weight: bold; fill: #1E80FF; }
+    </style>
+    
+    <rect width="495" height="245" fill="${theme.colors.background}" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
+    
+    <!-- 标题和用户名 -->
+    <text x="25" y="35" class="header">掘金统计</text>
+    <text x="465" y="35" text-anchor="end" class="small">用户: ${username}</text>
+    
+    <!-- 分隔线 -->
+    <rect x="25" y="80" width="445" height="1" fill="${theme.colors.border}"/>
+    
+    <!-- 统计数据 - 左侧 -->
+    <text x="25" y="110" class="label">文章数:</text>
+    <text x="150" y="110" class="value">${formatNumber(articleCount)}</text>
+    
+    <text x="25" y="140" class="label">总浏览量:</text>
+    <text x="150" y="140" class="value">${formatNumber(views)}</text>
+    
+    <text x="25" y="170" class="label">总点赞数:</text>
+    <text x="150" y="170" class="value">${formatNumber(likes)}</text>
+    
+    <!-- 统计数据 - 右侧 -->
+    <text x="250" y="110" class="label">关注者:</text>
+    <text x="375" y="110" class="value">${formatNumber(followers)}</text>
+    
+    <text x="250" y="140" class="label">个人简介:</text>
+    <text x="375" y="140" class="value">${desc}</text>
+    
+    <!-- 分隔线 -->
+    <rect x="25" y="200" width="445" height="1" fill="${theme.colors.border}"/>
+    
+    <!-- 底部信息 -->
+    <text x="25" y="225" class="footer">Generated by GitHub Profile Statistics Card</text>
+    <text x="465" y="225" text-anchor="end" class="footer">更新时间: ${currentDate}</text>
+  </svg>`;
+}
+
+/**
  * 通用卡片生成器 - 根据类型生成对应的卡片
  * @param type 卡片类型
  * @param data 卡片数据
@@ -333,15 +414,18 @@ export function generateCard(
         const { count, avatarUrl, username } = data;
         return generateGitHubCounterCard(count, avatarUrl, username, theme);
       }
-      return generateErrorCard('GitHub数据格式错误');
+      return generateErrorCard('GitHub数据格式错误', theme);
 
     case CardType.CSDN:
       return generateCSDNCard(data, theme);
+
+    case CardType.JUEJIN:
+      return generateJuejinCard(data as JuejinUserData, theme);
 
     case CardType.ERROR:
       return generateErrorCard(data as string, theme);
 
     default:
-      return generateErrorCard('未知卡片类型');
+      return generateErrorCard('未知卡片类型', theme);
   }
 } 

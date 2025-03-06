@@ -1,8 +1,14 @@
 import mongoose from 'mongoose';
 import { dbConfig } from '../config';
 import { MemoryCache } from '../types';
-import { LeetCodeUser, GitHubUser, CSDNUser } from '../models/mongodb.models';
+import { LeetCodeUser, GitHubUser, CSDNUser, JueJinUser } from '../models/mongodb.models';
 import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
+import { MongoClient, Collection } from 'mongodb';
+import { appConfig } from '../config';
+import { JuejinUserData } from '../types/juejin.types';
+
+let client: MongoClient | null = null;
+let cacheCollection: Collection | null = null;
 
 // 内存缓存，作为MongoDB不可用时的备用
 const memoryCache: MemoryCache = {
@@ -277,4 +283,39 @@ export const updateCSDNUserData = async (userId: string, userData: Partial<ICSDN
     console.error(`更新CSDN用户数据失败: ${error.message}`);
     return false;
   }
-}; 
+};
+
+// 获取掘金数据
+export const getJuejinUserData = async (userId: string, cacheTimeInSeconds: number): Promise<{ userData: JuejinUserData | null; needsFetch: boolean; error?: Error; }> => {
+  try {
+    // 检查MongoDB连接状态
+    const isMongoConnected = mongoose.connection.readyState === 1;
+    if (!isMongoConnected) {
+      await connectDB();
+    }
+
+    let userData: JuejinUserData | null = null;
+    let needsFetch = true;
+
+    if (isMongoConnected) {
+      // 从数据库获取数据
+      userData = await JueJinUser.findOne({ userId });
+
+      // 检查数据是否需要更新（超过指定的缓存时间）
+      if (userData) {
+        const lastUpdated = new Date(userData.lastUpdated);
+        const now = new Date();
+        const secondsSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
+
+        if (secondsSinceUpdate < cacheTimeInSeconds) {
+          needsFetch = false;
+        }
+      }
+    }
+
+    return { userData, needsFetch };
+  } catch (error: any) {
+    console.error(`获取用户数据失败: ${error.message}`);
+    return { userData: null, needsFetch: true, error: error as Error };
+  }
+} 
