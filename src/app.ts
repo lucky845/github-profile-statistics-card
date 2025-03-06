@@ -1,8 +1,12 @@
+// 导入 polyfill，确保在所有其他导入之前
+import './polyfill';
+
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { connectDB } from './services/mongodb.service';
 import leetcodeRouter from './routes/leetcode.routes';
 import githubRouter from './routes/github.routes';
+import csdnRouter from './routes/csdn.routes';
 import { logger } from './middleware/logger.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { appConfig } from './config';
@@ -54,6 +58,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 使用路由
 app.use('/leetcode', leetcodeRouter);
 app.use('/github', githubRouter);
+app.use('/csdn', csdnRouter);
 
 // 设置根路径展示页面
 app.get('/', (req: Request, res: Response) => {

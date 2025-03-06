@@ -7,6 +7,7 @@
 - 支持多个平台数据统计
   - GitHub 统计数据
   - LeetCode 刷题数据
+  - CSDN 博客数据
   - 更多平台持续添加中...
 - 自定义主题支持
   - 明亮主题
@@ -45,6 +46,21 @@
 # 获取 LeetCode 美国区数据
 ![LeetCode Stats](https://github-profile-views-plum.vercel.app/api/leetcode/username?theme=dark)
 ```
+
+### CSDN 统计卡片
+
+```markdown
+![CSDN Stats](https://github-profile-views-plum.vercel.app/csdn/userId?theme=light)
+```
+
+CSDN 统计卡片包含以下数据：
+- 文章数量
+- 粉丝数
+- 点赞数
+- 浏览量
+- 评论数
+- 积分
+- ...
 
 ## 🎨 主题配置
 
@@ -97,7 +113,6 @@
 ## 🔜 即将支持的平台
 
 - Bilibili
-- CSDN
 - 掘金
 - ...更多平台开发中
 

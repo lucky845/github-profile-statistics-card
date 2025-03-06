@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { createRequest } from '../utils/http.utils';
 import { LeetCodeStats } from '../types';
 
