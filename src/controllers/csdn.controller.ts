@@ -9,6 +9,8 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
     const userId = req.params.userId;
     // 获取主题（从中间件或使用默认主题）
     const theme = (res.locals.theme || defaultTheme) as ThemeOptions;
+    // 获取缓存时间
+    const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
 
     if (!userId) {
       res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户ID', theme));
@@ -16,7 +18,7 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
     }
 
     // 获取CSDN用户统计数据
-    const stats = await getCSDNUserStats(userId);
+    const stats = await getCSDNUserStats(userId, cacheTimeInSeconds);
     
     if (!stats.isValid) {
       res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到CSDN用户', theme));

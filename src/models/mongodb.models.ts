@@ -1,18 +1,6 @@
 import mongoose from 'mongoose';
 import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
 
-// LeetCode用户数据模型
-export const LeetCodeUser = mongoose.model<ILeetCodeUser>('LeetCodeUser', new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  totalSolved: { type: Number, default: 0 },
-  easySolved: { type: Number, default: 0 },
-  mediumSolved: { type: Number, default: 0 },
-  hardSolved: { type: Number, default: 0 },
-  acceptanceRate: { type: String, default: '0%' },
-  lastUpdated: { type: Date, default: Date.now },
-  region: { type: String, enum: ['US', 'CN'], default: 'US' }
-}));
-
 // GitHub用户数据模型
 export const GitHubUser = mongoose.model<IGitHubUser>('GitHubUser', new mongoose.Schema({
   username: { type: String, required: true, unique: true },
@@ -23,8 +11,26 @@ export const GitHubUser = mongoose.model<IGitHubUser>('GitHubUser', new mongoose
   avatarUpdatedAt: { type: Date, default: Date.now },
 }));
 
+// LeetCode用户数据模型
+const leetCodeUserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  totalSolved: { type: Number, default: 0 },
+  easySolved: { type: Number, default: 0 },
+  mediumSolved: { type: Number, default: 0 },
+  hardSolved: { type: Number, default: 0 },
+  acceptanceRate: { type: String, default: '0%' },
+  lastUpdated: { type: Date, default: Date.now },
+  region: { type: String, enum: ['US', 'CN'], default: 'US' },
+  expireAt: { type: Date, default: null }
+});
+
+// 添加TTL索引
+leetCodeUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+export const LeetCodeUser = mongoose.model<ILeetCodeUser>('LeetCodeUser', leetCodeUserSchema);
+
 // CSDN用户数据模型
-export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', new mongoose.Schema({
+const csdnUserSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   username: { type: String, default: '' },
   articleCount: { type: Number, default: 0 },
@@ -40,4 +46,10 @@ export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', new mongoose.Schem
   codeAge: { type: String, default: 0 },
   level: { type: Number, default: null },
   monthPoints: { type: Number, default: null },
-})); 
+  expireAt: { type: Date, default: null }
+});
+
+// 添加TTL索引
+csdnUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', csdnUserSchema); 

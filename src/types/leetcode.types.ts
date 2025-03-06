@@ -8,6 +8,7 @@ export interface ILeetCodeUser {
   acceptanceRate: string;
   lastUpdated: Date;
   region: "US" | "CN";
+  expireAt: Date;
 }
 
 export interface LeetCodeStats {
