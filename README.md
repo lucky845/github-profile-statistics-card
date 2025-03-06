@@ -21,13 +21,13 @@
 ### GitHub 统计卡片
 
 ```markdown
-![GitHub Stats](https://your-domain.com/github/username?theme=light)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
 ```
 
 ### LeetCode 统计卡片
 
 ```markdown
-![LeetCode Stats](https://your-domain.com/leetcode/username?theme=dark)
+![LeetCode Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=dark)
 ```
 
 支持参数：
@@ -40,10 +40,10 @@
 示例：
 ```markdown
 # 获取 LeetCode 中国区数据
-![LeetCode CN Stats](https://your-domain.com/leetcode/username?theme=dark&cn=true)
+![LeetCode CN Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=dark&cn=true)
 
 # 获取 LeetCode 美国区数据
-![LeetCode Stats](https://your-domain.com/api/leetcode/username?theme=dark)
+![LeetCode Stats](https://github-profile-views-plum.vercel.app/api/leetcode/username?theme=dark)
 ```
 
 ## 🎨 主题配置
