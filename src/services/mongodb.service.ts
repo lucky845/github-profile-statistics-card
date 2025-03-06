@@ -1,13 +1,14 @@
 import mongoose from 'mongoose';
 import { dbConfig } from '../config';
 import { MemoryCache } from '../types';
-import { LeetCodeUser, GitHubUser } from '../models/mongodb.models';
-import { ILeetCodeUser, IGitHubUser } from '../types';
+import { LeetCodeUser, GitHubUser, CSDNUser } from '../models/mongodb.models';
+import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
 
 // 内存缓存，作为MongoDB不可用时的备用
 const memoryCache: MemoryCache = {
   leetcode: {},
-  github: {}
+  github: {},
+  csdn: {}
 };
 
 // 连接MongoDB数据库
@@ -187,6 +188,107 @@ export const updateGitHubUserData = async (username: string, avatarUrl?: string)
     return true;
   } catch (error: any) {
     console.error(`更新GitHub用户数据失败: ${error.message}`);
+    return false;
+  }
+};
+
+// 获取CSDN用户数据
+export const getCSDNUserData = async (userId: string): Promise<{
+  userData: ICSDNUser | null;
+  needsFetch: boolean;
+  error?: Error;
+}> => {
+  try {
+    // 检查MongoDB连接状态
+    const isMongoConnected = mongoose.connection.readyState === 1;
+    if (!isMongoConnected) {
+      await connectDB();
+    }
+
+    let userData: ICSDNUser | null = null;
+    let needsFetch = true;
+
+    if (isMongoConnected) {
+      // 从数据库获取数据
+      userData = await CSDNUser.findOne({ userId });
+
+      // 检查数据是否需要更新（超过24小时）
+      if (userData) {
+        const lastUpdated = new Date(userData.lastUpdated);
+        const now = new Date();
+        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+
+        if (hoursSinceUpdate < 24) {
+          needsFetch = false;
+        }
+      }
+    } else {
+      // 使用内存缓存
+      userData = memoryCache.csdn[userId] || null;
+
+      if (userData) {
+        const lastUpdated = new Date(userData.lastUpdated);
+        const now = new Date();
+        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+
+        if (hoursSinceUpdate < 24) {
+          needsFetch = false;
+        }
+      }
+    }
+
+    return { userData, needsFetch };
+  } catch (error: any) {
+    console.error(`获取CSDN用户数据失败: ${error.message}`);
+    return { userData: null, needsFetch: true, error: error as Error };
+  }
+};
+
+// 更新CSDN用户数据
+export const updateCSDNUserData = async (userId: string, userData: Partial<ICSDNUser>): Promise<boolean> => {
+  try {
+    const isMongoConnected = mongoose.connection.readyState === 1;
+
+    // 确保userData包含userId字段
+    const updatedData = {
+      ...userData,
+      userId
+    };
+
+    if (isMongoConnected) {
+      // 更新数据库
+      await CSDNUser.findOneAndUpdate({ userId }, updatedData, {
+        upsert: true,
+        new: true,
+      });
+    } else {
+      // 更新内存缓存
+      if (!memoryCache.csdn[userId]) {
+        memoryCache.csdn[userId] = {
+          userId,
+          username: updatedData.username || userId,
+          articleCount: 0,
+          followers: 0,
+          likes: 0,
+          views: 0,
+          comments: 0,
+          points: 0,
+          visitCount: 0,
+          lastUpdated: new Date()
+        };
+      }
+      
+      // 合并更新的数据
+      memoryCache.csdn[userId] = {
+        ...memoryCache.csdn[userId],
+        ...updatedData,
+        lastUpdated: new Date()
+      };
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.error(`更新CSDN用户数据失败: ${error.message}`);
     return false;
   }
 }; 

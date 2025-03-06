@@ -7,6 +7,7 @@
 - 支持多个平台数据统计
   - GitHub 统计数据
   - LeetCode 刷题数据
+  - CSDN 博客数据
   - 更多平台持续添加中...
 - 自定义主题支持
   - 明亮主题
@@ -46,16 +47,72 @@
 ![LeetCode Stats](https://github-profile-views-plum.vercel.app/api/leetcode/username?theme=dark)
 ```
 
+### CSDN 统计卡片
+
+```markdown
+![CSDN Stats](https://github-profile-views-plum.vercel.app/csdn/userId?theme=light)
+```
+
+CSDN 统计卡片包含以下数据：
+- 文章数量
+- 粉丝数
+- 点赞数
+- 浏览量
+- 评论数
+- 积分
+- ...
+
 ## 🎨 主题配置
 
 支持以下主题参数：
 - `theme=light` - 明亮主题（默认）
 - `theme=dark` - 暗黑主题
+- `theme=merko` - Merko 主题
+- `theme=gruvbox` - Gruvbox 主题
+- `theme=gruvbox_light` - Gruvbox Light 主题
+- `theme=tokyonight` - Tokyo Night 主题
+- `theme=onedark` - One Dark 主题
+
+主题预览：
+
+### Light（默认）
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
+```
+
+### Dark
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=dark)
+```
+
+### Merko
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=merko)
+```
+
+### Gruvbox
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox)
+```
+
+### Gruvbox Light
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox_light)
+```
+
+### Tokyo Night
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=tokyonight)
+```
+
+### One Dark
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=onedark)
+```
 
 ## 🔜 即将支持的平台
 
 - Bilibili
-- CSDN
 - 掘金
 - ...更多平台开发中
 
