@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你考虑为GitHub Profile Views Counter项目做出贡献！
+感谢你考虑为github-profile-statistics-card项目做出贡献！
 
 ## 如何贡献
 
