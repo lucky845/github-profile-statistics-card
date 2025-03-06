@@ -51,6 +51,48 @@
 支持以下主题参数：
 - `theme=light` - 明亮主题（默认）
 - `theme=dark` - 暗黑主题
+- `theme=merko` - Merko 主题
+- `theme=gruvbox` - Gruvbox 主题
+- `theme=gruvbox_light` - Gruvbox Light 主题
+- `theme=tokyonight` - Tokyo Night 主题
+- `theme=onedark` - One Dark 主题
+
+主题预览：
+
+### Light（默认）
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
+```
+
+### Dark
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=dark)
+```
+
+### Merko
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=merko)
+```
+
+### Gruvbox
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox)
+```
+
+### Gruvbox Light
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=gruvbox_light)
+```
+
+### Tokyo Night
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=tokyonight)
+```
+
+### One Dark
+```markdown
+![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=onedark)
+```
 
 ## 🔜 即将支持的平台
 

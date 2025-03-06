@@ -117,5 +117,206 @@ export const darkTheme: ThemeOptions = {
   },
 };
 
+// Merko 主题
+export const merkoTheme: ThemeOptions = {
+  colors: {
+    background: '#2d2d2d',
+    border: '#4d4d4d',
+    text: {
+      primary: '#ffffff',
+      secondary: '#b3b3b3',
+      title: '#ffffff',
+    },
+    accent: {
+      primary: '#ffcc00',
+      secondary: '#ffcc00',
+    },
+    stats: {
+      total: '#ffffff',
+      easy: '#00ff00',
+      medium: '#ffff00',
+      hard: '#ff0000',
+      count: '#ffcc00',
+    },
+  },
+  fonts: {
+    family: 'Arial, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      large: '18px',
+      title: '20px',
+    },
+  },
+  card: {
+    borderRadius: '10px',
+    shadow: '0 2px 5px rgba(0,0,0,0.2)',
+    padding: '20px',
+  },
+};
+
+// Gruvbox 主题
+export const gruvboxTheme: ThemeOptions = {
+  colors: {
+    background: '#fbf1c7',
+    border: '#d5c4a1',
+    text: {
+      primary: '#3c3836',
+      secondary: '#7c6f64',
+      title: '#3c3836',
+    },
+    accent: {
+      primary: '#fb4934',
+      secondary: '#b8bb26',
+    },
+    stats: {
+      total: '#3c3836',
+      easy: '#b8bb26',
+      medium: '#fabd2f',
+      hard: '#fb4934',
+      count: '#3c3836',
+    },
+  },
+  fonts: {
+    family: 'Arial, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      large: '18px',
+      title: '20px',
+    },
+  },
+  card: {
+    borderRadius: '10px',
+    shadow: '0 2px 5px rgba(0,0,0,0.2)',
+    padding: '20px',
+  },
+};
+
+// Gruvbox Light 主题
+export const gruvboxLightTheme: ThemeOptions = {
+  colors: {
+    background: '#fbf1c7',
+    border: '#d5c4a1',
+    text: {
+      primary: '#3c3836',
+      secondary: '#7c6f64',
+      title: '#3c3836',
+    },
+    accent: {
+      primary: '#fb4934',
+      secondary: '#b8bb26',
+    },
+    stats: {
+      total: '#3c3836',
+      easy: '#b8bb26',
+      medium: '#fabd2f',
+      hard: '#fb4934',
+      count: '#3c3836',
+    },
+  },
+  fonts: {
+    family: 'Arial, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      large: '18px',
+      title: '20px',
+    },
+  },
+  card: {
+    borderRadius: '10px',
+    shadow: '0 2px 5px rgba(0,0,0,0.2)',
+    padding: '20px',
+  },
+};
+
+// Tokyo Night 主题
+export const tokyonightTheme: ThemeOptions = {
+  colors: {
+    background: '#1f1f28',
+    border: '#3b3b58',
+    text: {
+      primary: '#c0caf5',
+      secondary: '#a9b1d6',
+      title: '#c0caf5',
+    },
+    accent: {
+      primary: '#7aa2f7',
+      secondary: '#a9b1d6',
+    },
+    stats: {
+      total: '#c0caf5',
+      easy: '#9ece6a',
+      medium: '#e0af68',
+      hard: '#ff757f',
+      count: '#c0caf5',
+    },
+  },
+  fonts: {
+    family: 'Arial, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      large: '18px',
+      title: '20px',
+    },
+  },
+  card: {
+    borderRadius: '10px',
+    shadow: '0 2px 5px rgba(0,0,0,0.2)',
+    padding: '20px',
+  },
+};
+
+// One Dark 主题
+export const onedarkTheme: ThemeOptions = {
+  colors: {
+    background: '#282c34',
+    border: '#3e4451',
+    text: {
+      primary: '#abb2bf',
+      secondary: '#5c6370',
+      title: '#61afef',
+    },
+    accent: {
+      primary: '#e06c75',
+      secondary: '#98c379',
+    },
+    stats: {
+      total: '#e06c75',
+      easy: '#98c379',
+      medium: '#e5c07b',
+      hard: '#c678dd',
+      count: '#61afef',
+    },
+  },
+  fonts: {
+    family: 'Arial, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      large: '18px',
+      title: '20px',
+    },
+  },
+  card: {
+    borderRadius: '10px',
+    shadow: '0 2px 5px rgba(0,0,0,0.2)',
+    padding: '20px',
+  },
+};
+
+// 导出所有主题
+export const themes = {
+  default: defaultTheme,
+  dark: darkTheme,
+  merko: merkoTheme,
+  gruvbox: gruvboxTheme,
+  gruvbox_light: gruvboxLightTheme,
+  tokyonight: tokyonightTheme,
+  onedark: onedarkTheme,
+};
+
 // 导出当前活动主题
 export const activeTheme = defaultTheme; 
