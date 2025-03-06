@@ -221,7 +221,7 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
         };
 
         // 更新数据库
-        // await updateCSDNUserData(userId, csdnUserData);
+        await updateCSDNUserData(userId, csdnUserData);
 
         return {
             ...csdnUserData,
