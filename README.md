@@ -69,7 +69,7 @@
 
 ## 📝 开源协议
 
-[MIT License](LICENSE)
+[Apache 2.0 许可证](LICENSE)
 
 ## 🚀 部署指南
 
