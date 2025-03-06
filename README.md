@@ -37,6 +37,7 @@
 - `cn`: 是否获取中国区数据（可选，默认为 false）
   - `cn=true`: 获取 leetcode-cn.com 的数据
   - 不携带该参数: 获取 leetcode.com 的数据
+- `cacheSeconds`: 配置缓存的秒数(默认120秒)
 
 示例：
 ```markdown
@@ -65,6 +66,7 @@ CSDN 统计卡片包含以下数据：
 ## 🎨 主题配置
 
 支持以下主题参数：
+- `cacheSeconds`: 配置缓存的秒数(默认120秒)
 - `theme=light` - 明亮主题（默认）
 - `theme=dark` - 暗黑主题
 - `theme=merko` - Merko 主题

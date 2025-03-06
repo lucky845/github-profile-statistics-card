@@ -30,7 +30,7 @@ export const connectDB = async (): Promise<boolean> => {
 };
 
 // 获取LeetCode用户数据
-export const getLeetCodeUserData = async (username: string): Promise<{
+export const getLeetCodeUserData = async (username: string, cacheTimeInSeconds: number): Promise<{
   userData: ILeetCodeUser | null;
   needsFetch: boolean;
   error?: Error;
@@ -53,9 +53,9 @@ export const getLeetCodeUserData = async (username: string): Promise<{
       if (userData) {
         const lastUpdated = new Date(userData.lastUpdated);
         const now = new Date();
-        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
 
-        if (hoursSinceUpdate < 24) {
+        if (hoursSinceUpdate < cacheTimeInSeconds) {
           needsFetch = false;
         }
       }
@@ -82,15 +82,18 @@ export const getLeetCodeUserData = async (username: string): Promise<{
 };
 
 // 更新用户数据
-export const updateUserData = async (username: string, userData: ILeetCodeUser): Promise<boolean> => {
+export const updateUserData = async (username: string, userData: ILeetCodeUser, cacheTimeInSeconds: number): Promise<boolean> => {
   try {
     const isMongoConnected = mongoose.connection.readyState === 1;
 
     if (isMongoConnected) {
-      // 更新数据库
-      await LeetCodeUser.findOneAndUpdate({ username }, userData, {
+      // 更新数据库，设置TTL索引
+      await LeetCodeUser.findOneAndUpdate({ username }, {...userData, lastUpdated: new Date()}, {
         upsert: true,
         new: true,
+        setDefaultsOnInsert: true,
+        // 设置TTL索引
+        expires: cacheTimeInSeconds
       });
     } else {
       // 更新内存缓存
@@ -193,11 +196,7 @@ export const updateGitHubUserData = async (username: string, avatarUrl?: string)
 };
 
 // 获取CSDN用户数据
-export const getCSDNUserData = async (userId: string): Promise<{
-  userData: ICSDNUser | null;
-  needsFetch: boolean;
-  error?: Error;
-}> => {
+export const getCSDNUserData = async (userId: string, cacheTimeInSeconds: number): Promise<{ userData: ICSDNUser | null; needsFetch: boolean; error?: Error; }> => {
   try {
     // 检查MongoDB连接状态
     const isMongoConnected = mongoose.connection.readyState === 1;
@@ -212,26 +211,13 @@ export const getCSDNUserData = async (userId: string): Promise<{
       // 从数据库获取数据
       userData = await CSDNUser.findOne({ userId });
 
-      // 检查数据是否需要更新（超过24小时）
+      // 检查数据是否需要更新（超过指定的缓存时间）
       if (userData) {
         const lastUpdated = new Date(userData.lastUpdated);
         const now = new Date();
-        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+        const secondsSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
 
-        if (hoursSinceUpdate < 24) {
-          needsFetch = false;
-        }
-      }
-    } else {
-      // 使用内存缓存
-      userData = memoryCache.csdn[userId] || null;
-
-      if (userData) {
-        const lastUpdated = new Date(userData.lastUpdated);
-        const now = new Date();
-        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
-
-        if (hoursSinceUpdate < 24) {
+        if (secondsSinceUpdate < cacheTimeInSeconds) {
           needsFetch = false;
         }
       }
@@ -239,7 +225,7 @@ export const getCSDNUserData = async (userId: string): Promise<{
 
     return { userData, needsFetch };
   } catch (error: any) {
-    console.error(`获取CSDN用户数据失败: ${error.message}`);
+    console.error(`获取用户数据失败: ${error.message}`);
     return { userData: null, needsFetch: true, error: error as Error };
   }
 };

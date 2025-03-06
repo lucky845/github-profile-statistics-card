@@ -10,13 +10,18 @@ import csdnRouter from './routes/csdn.routes';
 import { logger } from './middleware/logger.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { appConfig } from './config';
-import { defaultTheme, darkTheme, ThemeOptions } from './config/theme.config';
+import { defaultTheme, darkTheme, merkoTheme, gruvboxTheme, gruvboxLightTheme, tokyonightTheme, onedarkTheme } from './config/theme.config';
 import fs from 'fs';
 
 // 全局主题设置
 const themes = {
   light: defaultTheme,
-  dark: darkTheme
+  dark: darkTheme,
+  merko: merkoTheme,
+  gruvbox: gruvboxTheme,
+  gruvbox_light: gruvboxLightTheme,
+  tokyonight: tokyonightTheme,
+  onedark: onedarkTheme,
 };
 
 // 中间件: 设置主题

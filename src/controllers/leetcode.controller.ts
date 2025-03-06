@@ -13,6 +13,8 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     const theme = (res.locals.theme || defaultTheme) as ThemeOptions;
     // 获取区域参数，默认为非中国区
     const useCN = req.query.cn === 'true';
+    // 获取缓存时间
+    const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
     console.debug(`处理LeetCode请求: 用户名=${username}, 区域=${useCN ? 'CN' : 'US'}`);
     
 
@@ -22,7 +24,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     }
 
     // 从缓存/数据库获取用户数据
-    const { userData, needsFetch } = await getLeetCodeUserData(username);
+    const { userData, needsFetch } = await getLeetCodeUserData(username, cacheTimeInSeconds);
 
     // 确保当请求的区域与存储的数据区域不一致时，始终从API重新获取数据
     const regionMismatch = userData && ((useCN && userData.region !== 'CN') || (!useCN && userData.region === 'CN'));
@@ -40,10 +42,11 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
           hardSolved: result.data.hardSolved,
           acceptanceRate: result.data.acceptanceRate,
           lastUpdated: result.data.lastUpdated,
-          region: result.data.region  // 保存区域信息
+          region: result.data.region,  // 保存区域信息
+          expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
         };
 
-        await updateUserData(username, leetcodeData);
+        await updateUserData(username, leetcodeData, cacheTimeInSeconds);
         
         // 返回SVG
         res.set('Content-Type', 'image/svg+xml');

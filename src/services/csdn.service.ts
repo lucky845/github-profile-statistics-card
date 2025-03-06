@@ -19,6 +19,7 @@ export interface CSDNUserStats {
     level?: number | string;
     monthPoints?: number;
     isValid: boolean;
+    expireAt: Date;
 }
 
 /**
@@ -142,15 +143,16 @@ function parseCSDNUserPage(html: string, userId: string): Partial<CSDNUserStats>
 /**
  * 获取CSDN用户统计数据
  * @param userId CSDN用户ID
+ * @param cacheTimeInSeconds 缓存时间（秒）
  * @returns 用户统计数据
  */
-export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
+export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: number): Promise<CSDNUserStats> {
     // 声明userData变量，以便在catch块中可以访问
     let cachedUserData: any = null;
 
     try {
         // 先从MongoDB中获取缓存的数据
-        const { userData, needsFetch } = await getCSDNUserData(userId);
+        const { userData, needsFetch } = await getCSDNUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
         cachedUserData = userData;
 
@@ -170,7 +172,8 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
                 codeAge: userData.codeAge || 0,
                 level: userData.level !== undefined ? userData.level : 'N/A',
                 monthPoints: userData.monthPoints || 0,
-                isValid: true
+                isValid: true,
+                expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
             };
         }
 
@@ -217,7 +220,8 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
         const csdnUserData = {
             ...parsedUserData,
             visitCount: cachedUserData?.visitCount ? cachedUserData.visitCount + 1 : 1,
-            lastUpdated: new Date()
+            lastUpdated: new Date(),
+            expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
         };
 
         // 更新数据库
@@ -229,10 +233,8 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
         } as CSDNUserStats;
     } catch (error: any) {
         console.error(`获取CSDN用户数据失败: ${error.message}`);
-
-        // 如果有缓存数据，即使过期也返回
+        // 如果有缓存数据，返回缓存数据
         if (cachedUserData) {
-            console.log(`返回过期的缓存数据: ${userId}`);
             return {
                 userId,
                 username: cachedUserData.username || userId,
@@ -246,11 +248,11 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
                 codeAge: cachedUserData.codeAge || 0,
                 level: cachedUserData.level !== undefined ? cachedUserData.level : 'N/A',
                 monthPoints: cachedUserData.monthPoints || 0,
-                isValid: true
+                isValid: true,
+                expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
             };
         }
-
-        // 否则返回默认数据
+        // 如果没有缓存数据，返回默认值
         return {
             userId,
             username: userId,
@@ -260,11 +262,8 @@ export async function getCSDNUserStats(userId: string): Promise<CSDNUserStats> {
             views: 0,
             comments: 0,
             points: 0,
-            rank: 0,
-            codeAge: 0,
-            level: 'N/A',
-            monthPoints: 0,
-            isValid: false
+            isValid: false,
+            expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间s
         };
     }
 } 
