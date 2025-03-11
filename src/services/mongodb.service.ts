@@ -129,13 +129,35 @@ export const getGitHubUserData = async (username: string): Promise<{
 };
 
 // 更新GitHub用户数据
-export const updateGitHubUserData = async (username: string, avatarUrl?: string): Promise<boolean> => {
+export const updateGitHubUserData = async (username: string, oldUserData: IGitHubUser | null, avatarUrl?: string): Promise<boolean> => {
   try {
     const isMongoConnected = mongoose.connection.readyState === 1;
     const now = new Date();
 
+    // 如果oldUserData为null，初始化新的用户数据
+    if (!oldUserData) {
+      const newUserData = {
+        username,
+        visitCount: 1,
+        lastVisited: now,
+        lastUpdated: now,
+        avatarUrl: avatarUrl || undefined,
+        avatarUpdatedAt: now
+      };
+
+      if (isMongoConnected) {
+        // 保存到数据库
+        await GitHubUser.create(newUserData);
+      } else {
+        // 保存到内存缓存
+        memoryCache.github[username] = newUserData;
+      }
+      return true;
+    }
+
+    // 否则，更新现有用户数据
     const updateData: any = {
-      $inc: { visitCount: 1 },
+      $inc: { visitCount: 1 }, // 增加访问计数
       $set: { lastVisited: now, lastUpdated: now }
     };
 
@@ -153,16 +175,7 @@ export const updateGitHubUserData = async (username: string, avatarUrl?: string)
       });
     } else {
       // 更新内存缓存
-      if (!memoryCache.github[username]) {
-        memoryCache.github[username] = {
-          username,
-          visitCount: 0,
-          lastVisited: now,
-          lastUpdated: now,
-          avatarUpdatedAt: now
-        };
-      }
-      memoryCache.github[username].visitCount += 1;
+      memoryCache.github[username].visitCount += 1; // 增加访问计数
       memoryCache.github[username].lastVisited = now;
       memoryCache.github[username].lastUpdated = now;
 

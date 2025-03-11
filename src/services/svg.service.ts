@@ -148,6 +148,10 @@ export function generateGitHubCounterCard(
 
   // 添加用户头像或默认GitHub图标
   if (avatarUrl) {
+    // 检查是否是 base64 格式的头像
+    const isBase64 = avatarUrl.startsWith('data:image');
+    const imageUrl = isBase64 ? avatarUrl : `${avatarUrl}`;
+
     svg += `
       <!-- 用户头像 -->
       <g transform="translate(20, 30)">
@@ -157,7 +161,7 @@ export function generateGitHubCounterCard(
         <clipPath id="userAvatarClip">
           <circle cx="18" cy="18" r="18" />
         </clipPath>
-        <image x="0" y="0" width="36" height="36" href="${avatarUrl}" clip-path="url(#userAvatarClip)" />
+        <image x="0" y="0" width="36" height="36" href="${imageUrl}" clip-path="url(#userAvatarClip)" />
       </g>
       
       <!-- 用户名和标题 -->

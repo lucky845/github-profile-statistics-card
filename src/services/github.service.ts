@@ -4,6 +4,26 @@ import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
 // 默认GitHub logo URL用于头像获取失败时显示
 const DEFAULT_GITHUB_LOGO = 'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png';
 
+// 将图片URL转换为base64
+async function getImageAsBase64(imageUrl: string): Promise<string> {
+  try {
+    const httpClient = createRequest(8000);
+    const response = await httpClient.get(imageUrl, {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'GitHub-Stats-Card'
+      }
+    });
+    
+    const base64 = Buffer.from(response.data, 'binary').toString('base64');
+    const contentType = response.headers['content-type'];
+    return `data:${contentType};base64,${base64}`;
+  } catch (error) {
+    console.error(`获取图片base64失败: ${error}`);
+    return '';
+  }
+}
+
 // 获取GitHub用户数据（包括头像和访问计数）
 export async function getGitHubUserStats(username: string): Promise<{
   isValid: boolean;
@@ -16,7 +36,7 @@ export async function getGitHubUserStats(username: string): Promise<{
     let avatarUrl = DEFAULT_GITHUB_LOGO;
     let needFetchAvatar = true;
 
-    // 检查缓存的头像是否有效（30天内）
+    // 检查缓存的头像URL是否有效（30天内）
     if (userData?.avatarUrl && userData.avatarUpdatedAt) {
       const avatarAge = new Date().getTime() - new Date(userData.avatarUpdatedAt).getTime();
       if (avatarAge < 30 * 24 * 60 * 60 * 1000) {
@@ -25,7 +45,7 @@ export async function getGitHubUserStats(username: string): Promise<{
       }
     }
 
-    // 如果需要，从GitHub API获取新的头像
+    // 如果需要，从GitHub API获取新的头像URL
     if (needFetchAvatar) {
       const httpClient = createRequest(8000);
       try {
@@ -44,25 +64,29 @@ export async function getGitHubUserStats(username: string): Promise<{
       } catch (error) {
         console.error(`获取GitHub头像失败: ${error}`);
         // 使用默认头像，继续执行
+        avatarUrl = DEFAULT_GITHUB_LOGO;
       }
     }
 
-    // 更新访问计数和头像（如果有新的）
-    await updateGitHubUserData(username, needFetchAvatar ? avatarUrl : undefined);
+    // 更新访问计数和头像URL（如果有新的）
+    await updateGitHubUserData(username, userData, needFetchAvatar ? avatarUrl : undefined);
 
     // 获取更新后的用户数据以获取最新的访问计数
     const { userData: updatedData } = await getGitHubUserData(username);
 
+    // 在返回数据前将URL转换为base64,节省mongodb空间(使用的免费空间额度，牺牲性能)
+    const base64Avatar = await getImageAsBase64(avatarUrl);
+
     return {
       isValid: true,
-      avatarUrl,
+      avatarUrl: base64Avatar || await getImageAsBase64(DEFAULT_GITHUB_LOGO),
       visitCount: updatedData?.visitCount || 1
     };
   } catch (error) {
     console.error(`获取GitHub用户统计失败: ${error}`);
     return {
       isValid: true,
-      avatarUrl: DEFAULT_GITHUB_LOGO,
+      avatarUrl: await getImageAsBase64(DEFAULT_GITHUB_LOGO),
       visitCount: 1
     };
   }
