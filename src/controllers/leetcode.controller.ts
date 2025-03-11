@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { fetchLeetCodeStats } from '../services/leetcode.service';
-import { getLeetCodeUserData, updateUserData } from '../services/mongodb.service';
+import { getLeetCodeUserData, updateLeetCodeData } from '../services/mongodb.service';
 import { ILeetCodeUser } from '../types';
 import { generateCard, CardType } from '../services/svg.service';
 import { ThemeOptions, defaultTheme } from '../config/theme.config';
@@ -24,11 +24,11 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     }
 
     // 从缓存/数据库获取用户数据
-    const { userData, needsFetch } = await getLeetCodeUserData(username, cacheTimeInSeconds);
+    const { data, needsFetch } = await getLeetCodeUserData(username, cacheTimeInSeconds);
 
     // 确保当请求的区域与存储的数据区域不一致时，始终从API重新获取数据
-    const regionMismatch = userData && ((useCN && userData.region !== 'CN') || (!useCN && userData.region === 'CN'));
-    if (!userData || regionMismatch || needsFetch) {
+    const regionMismatch = data && ((useCN && data.region !== 'CN') || (!useCN && data.region === 'CN'));
+    if (!data || regionMismatch || needsFetch) {
       // 从LeetCode API获取数据，传入区域参数
       const result = await fetchLeetCodeStats(username, useCN);
 
@@ -46,7 +46,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
           expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
         };
 
-        await updateUserData(username, leetcodeData, cacheTimeInSeconds);
+        await updateLeetCodeData(username, leetcodeData, cacheTimeInSeconds);
         
         // 返回SVG
         res.set('Content-Type', 'image/svg+xml');
@@ -59,7 +59,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     // 如果已有缓存数据或无法获取新数据，使用缓存数据
     res.set('Content-Type', 'image/svg+xml');
     res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
-    res.send(generateCard(CardType.LEETCODE, userData, theme));
+    res.send(generateCard(CardType.LEETCODE, data, theme));
 
   } catch (error: any) {
     console.error(`LeetCode控制器错误: ${error.message}`);
