@@ -1,335 +1,310 @@
-import mongoose from 'mongoose';
-import { MemoryCache } from '../types';
-import { LeetCodeUser, GitHubUser, CSDNUser, JueJinUser } from '../models/mongodb.models';
-import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
-import { JuejinUserData } from '../types/juejin.types';
-import { connectDB } from '../middleware/mongoMiddleware'; // 从mongoMiddleware导入connectDB函数
+import {
+  ILeetCodeUser,
+  IGitHubUser,
+  ICSDNUser,
+  JuejinUserData
+} from '../types';
+import {
+  LeetCodeUser,
+  GitHubUser,
+  CSDNUser,
+  JueJinUser
+} from '../models/mongodb.models';
+import { memoryCache } from '../utils/cacheManager';
+import { MongoDBManager } from '../utils/dbManager';
 
-// 内存缓存，作为MongoDB不可用时的备用
-const memoryCache: MemoryCache = {
-  leetcode: {},
-  github: {},
-  csdn: {},
-  juejin: {},
+// 初始化数据库管理器
+const dbManager = MongoDBManager.getInstance();
+const CACHE_TTL = 86400; // 默认缓存24小时
+
+// 统一缓存验证方法
+const validateCache = <T extends { lastUpdated: Date }>(
+  data: T | null,
+  ttl: number
+): { data: T | null; needsFetch: boolean } => {
+  if (!data) return { data: null, needsFetch: true };
+
+  const now = Date.now();
+  const lastUpdated = new Date(data.lastUpdated).getTime();
+  return {
+    data,
+    needsFetch: (now - lastUpdated) / 1000 > ttl
+  };
 };
 
-// 获取LeetCode用户数据
-export const getLeetCodeUserData = async (username: string, cacheTimeInSeconds: number): Promise<{
-  userData: ILeetCodeUser | null;
-  needsFetch: boolean;
-  error?: Error;
-}> => {
+// 统一数据库操作处理器
+const handleDbOperation = async <T>(
+  operation: () => Promise<T>,
+  fallback?: () => T
+): Promise<T> => {
   try {
-    // 检查MongoDB连接状态
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    if (!isMongoConnected) {
-      await connectDB();
-    }
-
-    let userData: ILeetCodeUser | null = null;
-    let needsFetch = true;
-
-    if (isMongoConnected) {
-      // 从数据库获取数据
-      userData = await LeetCodeUser.findOne({ username });
-
-      // 检查数据是否需要更新（超过24小时）
-      if (userData) {
-        const lastUpdated = new Date(userData.lastUpdated);
-        const now = new Date();
-        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
-
-        if (hoursSinceUpdate < cacheTimeInSeconds) {
-          needsFetch = false;
-        }
-      }
-    } else {
-      // 使用内存缓存
-      userData = memoryCache.leetcode[username] || null;
-
-      if (userData) {
-        const lastUpdated = new Date(userData.lastUpdated);
-        const now = new Date();
-        const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
-
-        if (hoursSinceUpdate < 24) {
-          needsFetch = false;
-        }
-      }
-    }
-
-    return { userData, needsFetch };
+    await dbManager.ensureConnection();
+    return await operation();
   } catch (error: any) {
-    console.error(`获取用户数据失败: ${error.message}`);
-    return { userData: null, needsFetch: true, error: error as Error };
+    console.warn(`Database operation failed: ${error.message}`);
+    if (fallback) return fallback();
+    throw error;
   }
 };
 
-// 更新用户数据
-export const updateUserData = async (username: string, userData: ILeetCodeUser, cacheTimeInSeconds: number): Promise<boolean> => {
+// LeetCode 服务
+export const getLeetCodeUserData = async (
+  username: string,
+  cacheTime = CACHE_TTL
+): Promise<{ data: ILeetCodeUser | null; needsFetch: boolean }> => {
   try {
-    const isMongoConnected = mongoose.connection.readyState === 1;
+    // 尝试数据库查询
+    const dbResult: any = await handleDbOperation(async () => {
+      const data = await LeetCodeUser.findOne({ username }).lean();
+      return validateCache(data, cacheTime);
+    });
 
-    if (isMongoConnected) {
-      // 更新数据库，设置TTL索引
-      await LeetCodeUser.findOneAndUpdate({ username }, { ...userData, lastUpdated: new Date() }, {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-        // 设置TTL索引
-        expires: cacheTimeInSeconds
-      });
-    } else {
-      // 更新内存缓存
-      memoryCache.leetcode[username] = userData;
-    }
-    return true;
+    if (dbResult.data) return dbResult;
+
+    // 回退到内存缓存
+    const cacheResult = validateCache(
+      memoryCache.leetcode[username],
+      cacheTime
+    );
+
+    return cacheResult;
+
   } catch (error: any) {
-    console.error(`更新用户数据失败: ${error.message}`);
-    return false;
+    console.error(`[LeetCode] 获取数据失败: ${error.message}`);
+    return { data: null, needsFetch: true };
   }
 };
 
-// 获取GitHub用户数据
-export const getGitHubUserData = async (username: string): Promise<{
-  userData: IGitHubUser | null;
-  error?: Error;
-}> => {
+export const updateLeetCodeData = async (
+  username: string,
+  userData: ILeetCodeUser,
+  cacheTime = CACHE_TTL
+) => {
   try {
-    // 检查MongoDB连接状态
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    if (!isMongoConnected) {
-      await connectDB();
-    }
+    // 优先更新数据库
+    await handleDbOperation(async () => {
+      await LeetCodeUser.findOneAndUpdate(
+        { username },
+        { ...userData, lastUpdated: new Date() },
+        { upsert: true, new: true }
+      );
+    });
 
-    let userData: IGitHubUser | null = null;
-
-    if (isMongoConnected) {
-      // 从数据库获取数据
-      userData = await GitHubUser.findOne({ username });
-    } else {
-      // 使用内存缓存
-      const cachedData = memoryCache.github[username];
-      if (cachedData) {
-        userData = {
-          ...cachedData,
-          // 确保 avatarUpdatedAt 有默认值
-          avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
-        };
-      } else {
-        userData = null;
-      }
-    }
-
-    return { userData };
-  } catch (error: any) {
-    console.error(`获取GitHub用户数据失败: ${error.message}`);
-    return { userData: null, error: error as Error };
-  }
-};
-
-// 更新GitHub用户数据
-export const updateGitHubUserData = async (username: string, oldUserData: IGitHubUser | null, avatarUrl?: string): Promise<boolean> => {
-  try {
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    const now = new Date();
-
-    // 如果oldUserData为null，初始化新的用户数据
-    if (!oldUserData) {
-      const newUserData = {
-        username,
-        visitCount: 1,
-        lastVisited: now,
-        lastUpdated: now,
-        avatarUrl: avatarUrl || undefined,
-        avatarUpdatedAt: now
-      };
-
-      if (isMongoConnected) {
-        // 保存到数据库
-        await GitHubUser.create(newUserData);
-      } else {
-        // 保存到内存缓存
-        memoryCache.github[username] = newUserData;
-      }
-      return true;
-    }
-
-    // 否则，更新现有用户数据
-    const updateData: any = {
-      $inc: { visitCount: 1 }, // 增加访问计数
-      $set: { lastVisited: now, lastUpdated: now }
-    };
-
-    // 如果提供了头像URL，则更新头像和头像更新时间
-    if (avatarUrl) {
-      updateData.$set.avatarUrl = avatarUrl;
-      updateData.$set.avatarUpdatedAt = now;
-    }
-
-    if (isMongoConnected) {
-      // 更新数据库
-      await GitHubUser.findOneAndUpdate({ username }, updateData, {
-        upsert: true,
-        new: true,
-      });
-    } else {
-      // 更新内存缓存
-      memoryCache.github[username].visitCount += 1; // 增加访问计数
-      memoryCache.github[username].lastVisited = now;
-      memoryCache.github[username].lastUpdated = now;
-
-      // 如果提供了头像URL，也更新缓存中的头像URL和头像更新时间
-      if (avatarUrl) {
-        memoryCache.github[username].avatarUrl = avatarUrl;
-        memoryCache.github[username].avatarUpdatedAt = now;
-      }
-    }
-    return true;
-  } catch (error: any) {
-    console.error(`更新GitHub用户数据失败: ${error.message}`);
-    return false;
-  }
-};
-
-// 获取CSDN用户数据
-export const getCSDNUserData = async (userId: string, cacheTimeInSeconds: number): Promise<{ userData: ICSDNUser | null; needsFetch: boolean; error?: Error; }> => {
-  try {
-    // 检查MongoDB连接状态
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    if (!isMongoConnected) {
-      await connectDB();
-    }
-
-    let userData: ICSDNUser | null = null;
-    let needsFetch = true;
-
-    if (isMongoConnected) {
-      // 从数据库获取数据
-      userData = await CSDNUser.findOne({ userId });
-
-      // 检查数据是否需要更新（超过指定的缓存时间）
-      if (userData) {
-        const lastUpdated = new Date(userData.lastUpdated);
-        const now = new Date();
-        const secondsSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
-
-        if (secondsSinceUpdate < cacheTimeInSeconds) {
-          needsFetch = false;
-        }
-      }
-    }
-
-    return { userData, needsFetch };
-  } catch (error: any) {
-    console.error(`获取用户数据失败: ${error.message}`);
-    return { userData: null, needsFetch: true, error: error as Error };
-  }
-};
-
-// 更新CSDN用户数据
-export const updateCSDNUserData = async (userId: string, userData: Partial<ICSDNUser>): Promise<boolean> => {
-  try {
-    const isMongoConnected = mongoose.connection.readyState === 1;
-
-    // 确保userData包含userId字段
-    const updatedData = {
+    // 更新缓存
+    memoryCache.leetcode[username] = {
       ...userData,
-      userId
+      lastUpdated: new Date()
     };
 
-    if (isMongoConnected) {
-      // 更新数据库
-      await CSDNUser.findOneAndUpdate({ userId }, updatedData, {
-        upsert: true,
-        new: true,
-      });
-    } else {
-      // 更新内存缓存
-      if (!memoryCache.csdn[userId]) {
-        memoryCache.csdn[userId] = {
-          userId,
-          username: updatedData.username || userId,
-          articleCount: 0,
-          followers: 0,
-          likes: 0,
-          views: 0,
-          comments: 0,
-          points: 0,
-          visitCount: 0,
-          lastUpdated: new Date()
-        };
-      }
-
-      // 合并更新的数据
-      memoryCache.csdn[userId] = {
-        ...memoryCache.csdn[userId],
-        ...updatedData,
-        lastUpdated: new Date()
-      };
-    }
-
     return true;
+
   } catch (error: any) {
-    console.error(`更新CSDN用户数据失败: ${error.message}`);
+    console.error(`[LeetCode] 更新失败: ${error.message}`);
     return false;
   }
 };
 
-// 获取掘金数据
-export const getJuejinUserData = async (userId: string, cacheTimeInSeconds: number): Promise<{ userData: JuejinUserData | null; needsFetch: boolean; error?: Error; }> => {
+// GitHub 服务
+export const getGitHubUserData = async (username: string) => {
   try {
-    // 检查MongoDB连接状态
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    if (!isMongoConnected) {
-      await connectDB();
-    }
+    // 尝试数据库查询
+    const dbResult = await handleDbOperation(async () => {
+      const data = await GitHubUser.findOne({ username }).lean();
+      return data ? { ...data, avatarUpdatedAt: data.avatarUpdatedAt || new Date() } : null;
+    });
 
-    let userData: JuejinUserData | null = null;
-    let needsFetch = true;
+    if (dbResult) return { userData: dbResult };
 
-    if (isMongoConnected) {
-      // 从数据库获取数据
-      userData = await JueJinUser.findOne({ userId });
+    // 回退到内存缓存
+    const cachedData = memoryCache.github[username];
+    return {
+      userData: cachedData ? {
+        ...cachedData,
+        avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
+      } : null
+    };
 
-      // 检查数据是否需要更新（超过指定的缓存时间）
-      if (userData) {
-        const lastUpdated = new Date(userData.lastUpdated);
-        const now = new Date();
-        const secondsSinceUpdate = (now.getTime() - lastUpdated.getTime()) / 1000;
-
-        if (secondsSinceUpdate < cacheTimeInSeconds) {
-          needsFetch = false;
-        }
-      }
-    }
-
-    return { userData, needsFetch };
   } catch (error: any) {
-    console.error(`获取用户数据失败: ${error.message}`);
-    return { userData: null, needsFetch: true, error: error as Error };
+    console.error(`[GitHub] 获取数据失败: ${error.message}`);
+    return { userData: null };
   }
-}
+};
 
-// 更新掘金数据
-export const updateJuejinUserData = async (userId: string, userData: JuejinUserData): Promise<boolean> => {
-  try {
-    const isMongoConnected = mongoose.connection.readyState === 1;
-
-    if (isMongoConnected) {
-      // 更新数据库
-      await JueJinUser.findOneAndUpdate({ userId }, userData, {
-        upsert: true,
-        new: true,
-      });
-    } else {
-      // 更新内存缓存
-      memoryCache.juejin[userId] = userData;
+export const updateGitHubUserData = async (
+  username: string,
+  oldUserData: IGitHubUser | null,
+  avatarUrl?: string
+) => {
+  const now = new Date();
+  const newUserData = oldUserData ? {
+    $inc: { visitCount: 1 },
+    $set: {
+      lastVisited: now,
+      lastUpdated: now,
+      ...(avatarUrl && {
+        avatarUrl,
+        avatarUpdatedAt: now
+      })
     }
+  } : {
+    username,
+    visitCount: 1,
+    lastVisited: now,
+    lastUpdated: now,
+    avatarUrl: avatarUrl || '',
+    avatarUpdatedAt: now
+  };
+
+  try {
+    // 数据库操作
+    await handleDbOperation(async () => {
+      if (oldUserData) {
+        await GitHubUser.findOneAndUpdate(
+          { username },
+          newUserData,
+          { upsert: true, new: true }
+        );
+      } else {
+        await GitHubUser.create(newUserData);
+      }
+    });
+
+    // 更新缓存
+    memoryCache.github[username] = {
+      ...(oldUserData || {}),
+      ...(oldUserData ? newUserData.$set : newUserData),
+      visitCount: oldUserData ? oldUserData.visitCount + 1 : 1
+    };
 
     return true;
+
   } catch (error: any) {
-    console.error(`更新用户数据失败: ${error.message}`);
+    console.error(`[GitHub] 更新失败: ${error.message}`);
     return false;
   }
-}
+};
+
+// CSDN 服务
+export const getCSDNUserData = async (
+  userId: string,
+  cacheTime = CACHE_TTL
+) => {
+  try {
+    // 尝试数据库查询
+    const dbResult = await handleDbOperation(async () => {
+      const data = await CSDNUser.findOne({ userId }).lean();
+      return validateCache(data, cacheTime);
+    });
+
+    if (dbResult.data) return dbResult;
+
+    // 回退到内存缓存
+    const cacheResult = validateCache(
+      memoryCache.csdn[userId],
+      cacheTime
+    );
+
+    return cacheResult;
+
+  } catch (error: any) {
+    console.error(`[CSDN] 获取数据失败: ${error.message}`);
+    return { data: null, needsFetch: true };
+  }
+};
+
+export const updateCSDNUserData = async (
+  userId: string,
+  userData: Partial<ICSDNUser>
+) => {
+  const updatedData = { ...userData, userId };
+
+  try {
+    // 数据库操作
+    await handleDbOperation(async () => {
+      await CSDNUser.findOneAndUpdate(
+        { userId },
+        updatedData,
+        { upsert: true, new: true }
+      );
+    });
+
+    // 更新缓存
+    memoryCache.csdn[userId] = {
+      ...(memoryCache.csdn[userId] || {
+        userId,
+        username: userId,
+        articleCount: 0,
+        followers: 0,
+        likes: 0,
+        views: 0,
+        comments: 0,
+        points: 0,
+        visitCount: 0
+      }),
+      ...updatedData,
+      lastUpdated: new Date()
+    };
+
+    return true;
+
+  } catch (error: any) {
+    console.error(`[CSDN] 更新失败: ${error.message}`);
+    return false;
+  }
+};
+
+// 掘金服务
+export const getJuejinUserData = async (
+  userId: string,
+  cacheTime = CACHE_TTL
+) => {
+  try {
+    // 尝试数据库查询
+    const dbResult = await handleDbOperation(async () => {
+      const data = await JueJinUser.findOne({ userId }).lean();
+      return validateCache(data, cacheTime);
+    });
+
+    if (dbResult.data) return dbResult;
+
+    // 回退到内存缓存
+    const cacheResult = validateCache(
+      memoryCache.juejin[userId],
+      cacheTime
+    );
+
+    return cacheResult;
+
+  } catch (error: any) {
+    console.error(`[掘金] 获取数据失败: ${error.message}`);
+    return { data: null, needsFetch: true };
+  }
+};
+
+export const updateJuejinUserData = async (
+  userId: string,
+  userData: JuejinUserData
+) => {
+  try {
+    // 数据库操作
+    await handleDbOperation(async () => {
+      await JueJinUser.findOneAndUpdate(
+        { userId },
+        { ...userData, lastUpdated: new Date() },
+        { upsert: true, new: true }
+      );
+    });
+
+    // 更新缓存
+    memoryCache.juejin[userId] = {
+      ...userData,
+      lastUpdated: new Date()
+    };
+
+    return true;
+
+  } catch (error: any) {
+    console.error(`[掘金] 更新失败: ${error.message}`);
+    return false;
+  }
+};

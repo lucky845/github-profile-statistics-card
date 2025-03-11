@@ -152,26 +152,26 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
 
     try {
         // 先从MongoDB中获取缓存的数据
-        const { userData, needsFetch } = await getCSDNUserData(userId, cacheTimeInSeconds);
+        const { data, needsFetch } = await getCSDNUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
-        cachedUserData = userData;
+        cachedUserData = data;
 
         // 如果有有效的缓存数据且不需要刷新，直接返回
-        if (userData && !needsFetch) {
+        if (data && !needsFetch) {
             console.log(`使用缓存的CSDN用户数据: ${userId}`);
             return {
                 userId,
-                username: userData.username || userId,
-                articleCount: userData.articleCount || 0,
-                followers: userData.followers || 0,
-                likes: userData.likes || 0,
-                views: userData.views || 0,
-                comments: userData.comments || 0,
-                points: userData.points || 0,
-                rank: userData.rank || 0,
-                codeAge: userData.codeAge || 0,
-                level: userData.level !== undefined ? userData.level : 'N/A',
-                monthPoints: userData.monthPoints || 0,
+                username: data.username || userId,
+                articleCount: data.articleCount || 0,
+                followers: data.followers || 0,
+                likes: data.likes || 0,
+                views: data.views || 0,
+                comments: data.comments || 0,
+                points: data.points || 0,
+                rank: data.rank || 0,
+                codeAge: data.codeAge || 0,
+                level: data.level !== undefined ? data.level : 'N/A',
+                monthPoints: data.monthPoints || 0,
                 isValid: true,
                 expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
             };

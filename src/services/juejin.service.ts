@@ -27,14 +27,14 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
     let cachedUserData: any = null;
 
     try {
-        const { userData, needsFetch } = await getJuejinUserData(userId, cacheTimeInSeconds);
+        const { data, needsFetch } = await getJuejinUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
-        cachedUserData = userData;
+        cachedUserData = data;
 
         // 如果有有效的缓存数据且不需要刷新，直接返回
-        if (userData && !needsFetch) {
+        if (data && !needsFetch) {
             console.log(`使用缓存的掘金用户数据: ${userId}`);
-            return {...userData, isValid: true};
+            return {...data, isValid: true};
         }
 
         // 获取用户基本信息

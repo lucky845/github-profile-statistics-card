@@ -1,9 +1,6 @@
 import { createRequest } from '../utils/http.utils';
 import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
 
-// 默认GitHub logo URL用于头像获取失败时显示
-const DEFAULT_GITHUB_LOGO = 'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png';
-
 // 将图片URL转换为base64
 async function getImageAsBase64(imageUrl: string): Promise<string> {
   try {
@@ -27,13 +24,13 @@ async function getImageAsBase64(imageUrl: string): Promise<string> {
 // 获取GitHub用户数据（包括头像和访问计数）
 export async function getGitHubUserStats(username: string): Promise<{
   isValid: boolean;
-  avatarUrl: string;
+  avatarUrl: string | null;
   visitCount: number;
 }> {
   try {
     // 先从MongoDB中获取用户数据
     const { userData } = await getGitHubUserData(username);
-    let avatarUrl = DEFAULT_GITHUB_LOGO;
+    let avatarUrl = null;
     let needFetchAvatar = true;
 
     // 检查缓存的头像URL是否有效（30天内）
@@ -63,8 +60,6 @@ export async function getGitHubUserStats(username: string): Promise<{
         }
       } catch (error) {
         console.error(`获取GitHub头像失败: ${error}`);
-        // 使用默认头像，继续执行
-        avatarUrl = DEFAULT_GITHUB_LOGO;
       }
     }
 
@@ -79,14 +74,14 @@ export async function getGitHubUserStats(username: string): Promise<{
 
     return {
       isValid: true,
-      avatarUrl: base64Avatar || await getImageAsBase64(DEFAULT_GITHUB_LOGO),
+      avatarUrl: base64Avatar || null,
       visitCount: updatedData?.visitCount || 1
     };
   } catch (error) {
     console.error(`获取GitHub用户统计失败: ${error}`);
     return {
       isValid: true,
-      avatarUrl: await getImageAsBase64(DEFAULT_GITHUB_LOGO),
+      avatarUrl: null,
       visitCount: 1
     };
   }

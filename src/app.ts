@@ -12,7 +12,12 @@ import { errorHandler } from './middleware/error.middleware';
 import { appConfig } from './config';
 import { defaultTheme, darkTheme, merkoTheme, gruvboxTheme, gruvboxLightTheme, tokyonightTheme, onedarkTheme } from './config/theme.config';
 import fs from 'fs';
-import { connectDB, mongoMiddleware } from './middleware/mongoMiddleware';
+import { mongoMiddleware } from './middleware/mongoMiddleware';
+import mongoose from 'mongoose';
+import { MongoDBManager } from './utils/dbManager';
+
+// 初始化数据库连接管理器
+const dbManager = MongoDBManager.getInstance();
 
 // 全局主题设置
 const themes = {
@@ -43,21 +48,28 @@ const themeMiddleware = (req: Request, res: Response, next: Function) => {
 const app = express();
 const port = appConfig.port;
 
-// 连接数据库
-connectDB().then((connected) => {
-  if (connected) {
-    console.log('MongoDB 连接成功');
-  } else {
-    console.log('使用内存缓存模式');
-  }
-});
-
 // 应用中间件
 app.use(logger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(mongoMiddleware);
 app.use(themeMiddleware);
+
+// 健康检查端点
+app.get('/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
+  const poolStats = (mongoose.connection as any).poolMetrics || {};
+
+  res.json({
+    status: dbStatus,
+    uptime: process.uptime(),
+    database: {
+      status: dbStatus,
+      pool: poolStats
+    },
+    memory: process.memoryUsage()
+  });
+});
 
 // 设置静态文件目录
 app.use(express.static(path.join(__dirname, 'public')));
@@ -71,12 +83,12 @@ app.use('/juejin', juejinRouter);
 // 设置根路径展示页面
 app.get('/', (req: Request, res: Response) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
+
   try {
     // 尝试读取首页HTML文件
     const indexPath = path.join(__dirname, 'views/index.html');
     let indexHtml: string;
-    
+
     if (fs.existsSync(indexPath)) {
       indexHtml = fs.readFileSync(indexPath, 'utf8');
       // 替换基础URL
@@ -222,7 +234,7 @@ app.get('/', (req: Request, res: Response) => {
         </html>
       `;
     }
-    
+
     res.send(indexHtml);
   } catch (error) {
     console.error('读取首页错误:', error);
@@ -239,9 +251,26 @@ app.use((req: Request, res: Response) => {
 app.use(errorHandler);
 
 // 启动服务器
-app.listen(port, () => {
-  console.log(`服务器启动在端口 ${port}`);
-});
+let server: ReturnType<typeof app.listen>;
+
+const startServer = async () => {
+  try {
+    // 初始化数据库连接
+    await dbManager.connect();
+
+    server = app.listen(port, () => {
+      console.log(`
+      🚀 服务已启动于端口 ${port}
+      📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}
+      `);
+    });
+
+    return server;
+  } catch (error) {
+    console.error('服务启动失败:', error);
+    process.exit(1);
+  }
+};
 
 // 处理未捕获的异常
 process.on('unhandledRejection', (reason, promise) => {
@@ -252,4 +281,45 @@ process.on('uncaughtException', (error) => {
   console.error('未捕获的异常:', error);
   // 对于严重错误，可能需要优雅地关闭应用
   process.exit(1);
+});
+
+// 优雅终止
+process.on('SIGINT', async () => {
+  console.log('\n🛑 接收到终止信号');
+
+  try {
+    // 1. 停止接受新请求
+    server.close(() => {
+      console.log('🚫 已停止接受新请求');
+    });
+
+    // 2. 关闭数据库连接
+    await dbManager.disconnect();
+    console.log('✅ MongoDB连接已关闭');
+
+    // 3. 关闭现有连接
+    server.close(() => {
+      console.log('🛑 HTTP服务完全停止');
+      process.exit(0);
+    });
+
+    // 强制退出保护
+    setTimeout(() => {
+      console.error('⏰ 关闭超时，强制退出');
+      process.exit(1);
+    }, 10000); // 10秒超时
+
+  } catch (error) {
+    console.error('关闭资源失败:', error);
+    process.exit(1);
+  }
+});
+
+// 初始化并启动服务
+startServer().then(serverInstance => {
+  // 处理其他关闭信号
+  process.on('SIGTERM', () => {
+    console.log('\n🛑 接收到SIGTERM信号');
+    serverInstance.close();
+  });
 });
