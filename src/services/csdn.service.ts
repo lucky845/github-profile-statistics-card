@@ -1,26 +1,8 @@
 import * as cheerio from 'cheerio';
-import { createRequest, createRequestWithRetry } from '../utils/http.utils';
-import { getCSDNUserData, updateCSDNUserData } from './mongodb.service';
-import * as fs from 'fs';
-import * as path from 'path';
+import {createRequest, createRequestWithRetry} from '../utils/http.utils';
+import {getCSDNUserData, updateCSDNUserData} from './mongodb.service';
+import {CSDNUserStats} from "../types";
 
-// CSDN用户数据接口
-export interface CSDNUserStats {
-    userId: string;
-    username: string;
-    articleCount: number;
-    followers: number;
-    likes: number;
-    views: number;
-    comments: number;
-    points: number;
-    rank?: number;
-    codeAge?: string | number;
-    level?: number | string;
-    monthPoints?: number;
-    isValid: boolean;
-    expireAt: Date;
-}
 
 /**
  * 解析CSDN用户页面
@@ -136,7 +118,7 @@ function parseCSDNUserPage(html: string, userId: string): Partial<CSDNUserStats>
         };
     } catch (error) {
         console.error(`解析CSDN用户页面失败: ${error}`);
-        return { userId, isValid: false };
+        return {userId, isValid: false};
     }
 }
 
@@ -152,7 +134,7 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
 
     try {
         // 先从MongoDB中获取缓存的数据
-        const { data, needsFetch } = await getCSDNUserData(userId, cacheTimeInSeconds);
+        const {data, needsFetch} = await getCSDNUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
         cachedUserData = data;
 
@@ -266,4 +248,4 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
             expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间s
         };
     }
-} 
+}

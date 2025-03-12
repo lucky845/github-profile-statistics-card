@@ -9,6 +9,7 @@
   - LeetCode 刷题数据
   - CSDN 博客数据
   - 掘金
+  - 哔哩哔哩
   - 更多平台持续添加中...
 - 自定义主题支持
   - 明亮主题
@@ -93,6 +94,37 @@ CSDN 统计卡片包含以下数据：
 ![掘金统计](https://github-profile-views-plum.vercel.app/juejin/userId?theme=dark)
 ```
 
+### 哔哩哔哩统计卡片
+
+```markdown
+![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/uid?theme=light)
+```
+![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/1574741?theme=light)
+
+哔哩哔哩统计卡片包含以下数据：
+- 用户名称
+- 粉丝数
+- 关注数
+- 获赞数
+- 播放量
+- 个人签名
+- ...
+
+支持参数：
+- `uid`: 哔哩哔哩用户ID
+- `theme`: 主题选择（可选，默认为 light）
+- `cacheSeconds`: 配置缓存的秒数(默认120秒)
+
+示例：
+```markdown
+# 使用暗黑主题
+![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/uid?theme=dark)
+```
+
+⚠️ 已知问题：
+- 由于哔哩哔哩的等级是svg图片，用户等级信息可能无法正常获取
+- 部分用户数据可能因为隐私设置而无法显示
+
 ## 🎨 主题配置
 
 支持以下主题参数：
@@ -151,7 +183,8 @@ CSDN 统计卡片包含以下数据：
 
 ## 🔜 即将支持的平台
 
-- Bilibili
+- 知乎
+- 微博
 - ...更多平台开发中
 
 ## 🛠️ 技术栈

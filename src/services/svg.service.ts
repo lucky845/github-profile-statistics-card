@@ -1,29 +1,14 @@
-import { activeTheme, ThemeOptions } from '../config/theme.config';
-import { ILeetCodeUser, IGitHubUser, ICSDNUser } from '../types';
-import { JuejinUserData } from '../types/juejin.types';
+import {activeTheme, ThemeOptions} from '../config';
+import {ILeetCodeUser, JuejinUserData} from '../types';
 
 // 卡片类型定义
 export enum CardType {
-  LEETCODE = 'leetcode',
-  GITHUB = 'github',
-  CSDN = 'csdn',
-  JUEJIN = 'juejin',
-  ERROR = 'error'
-}
-
-/**s
- * 生成错误卡片
- * @param message 错误信息
- * @param theme 主题配置
- * @returns SVG字符串
- */
-export function generateErrorCard(message: string, theme: ThemeOptions = activeTheme): string {
-  return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"495\" height=\"120\" viewBox=\"0 0 495 120\">
-    <rect width=\"495\" height=\"120\" fill=\"${theme.colors.background}\" rx=\"${theme.card.borderRadius}\" ry=\"${theme.card.borderRadius}\" stroke=\"${theme.colors.border}\" stroke-width=\"1\"/>
-    <text x=\"247.5\" y=\"60\" font-family=\"${theme.fonts.family}\" font-size=\"${theme.fonts.size.normal}\" text-anchor=\"middle\" fill=\"#dc3545\">
-      ${message}
-    </text>
-  </svg>`;
+    LEETCODE = 'leetcode',
+    GITHUB = 'github',
+    CSDN = 'csdn',
+    JUEJIN = 'juejin',
+    BILIBLI = 'bilibili',
+    ERROR = 'error'
 }
 
 /**
@@ -32,25 +17,25 @@ export function generateErrorCard(message: string, theme: ThemeOptions = activeT
  * @param theme 主题配置
  * @returns SVG字符串
  */
-export function generateLeetCodeCard(data: ILeetCodeUser | null, theme: ThemeOptions = activeTheme): string {
-  if (!data) {
-    return generateErrorCard('未找到LeetCode用户数据', theme);
-  }
+const generateLeetCodeCard = (data: ILeetCodeUser | null, theme: ThemeOptions = activeTheme): string => {
+    if (!data) {
+        return generateErrorCard('未找到LeetCode用户数据', theme);
+    }
 
-  const easySolved = data.easySolved || 0;
-  const mediumSolved = data.mediumSolved || 0;
-  const hardSolved = data.hardSolved || 0;
-  const totalSolved = data.totalSolved || 0;
+    const easySolved = data.easySolved || 0;
+    const mediumSolved = data.mediumSolved || 0;
+    const hardSolved = data.hardSolved || 0;
+    const totalSolved = data.totalSolved || 0;
 
-  // 获取region信息 (如果有)
-  const region = data.region || 'US';
-  const regionColor = region === 'CN' ? '#e74c3c' : '#3498db';
+    // 获取region信息 (如果有)
+    const region = data.region || 'US';
+    const regionColor = region === 'CN' ? '#e74c3c' : '#3498db';
 
     // 当前日期
     const currentDate = new Date().toLocaleDateString();
 
-  // 生成SVG - 增加高度为240，为底部文本留出更多空间
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="240" viewBox="0 0 495 240">
+    // 生成SVG - 增加高度为240，为底部文本留出更多空间
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="240" viewBox="0 0 495 240">
     <style>
       .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
       .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
@@ -104,23 +89,23 @@ export function generateLeetCodeCard(data: ILeetCodeUser | null, theme: ThemeOpt
  * @param theme 主题配置
  * @returns SVG字符串
  */
-export function generateGitHubCounterCard(
-  count: number,
-  avatarUrl: string | null = null,
-  username: string = '',
-  theme: ThemeOptions = activeTheme
-): string {
-  // 安全处理计数显示
-  let countDisplay = count.toString();
-  if (count >= 1000) {
-    countDisplay = (count / 1000).toFixed(1) + 'k';
-  }
+const generateGitHubCounterCard = (
+    count: number,
+    avatarUrl: string | null = null,
+    username: string = '',
+    theme: ThemeOptions = activeTheme
+): string => {
+    // 安全处理计数显示
+    let countDisplay = count.toString();
+    if (count >= 1000) {
+        countDisplay = (count / 1000).toFixed(1) + 'k';
+    }
 
-  // 计算当前日期
-  const currentDate = new Date().toLocaleDateString();
+    // 计算当前日期
+    const currentDate = new Date().toLocaleDateString();
 
-  // 优化的基本SVG - 现代化设计
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="140" viewBox="0 0 320 140">
+    // 优化的基本SVG - 现代化设计
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="140" viewBox="0 0 320 140">
     <defs>
       <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${theme.colors.background}" />
@@ -146,13 +131,13 @@ export function generateGitHubCounterCard(
       <rect width="320" height="140" fill="url(#bgGradient)" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
     `;
 
-  // 添加用户头像或默认GitHub图标
-  if (avatarUrl) {
-    // 检查是否是 base64 格式的头像
-    const isBase64 = avatarUrl.startsWith('data:image');
-    const imageUrl = isBase64 ? avatarUrl : `${avatarUrl}`;
+    // 添加用户头像或默认GitHub图标
+    if (avatarUrl) {
+        // 检查是否是 base64 格式的头像
+        const isBase64 = avatarUrl.startsWith('data:image');
+        const imageUrl = isBase64 ? avatarUrl : `${avatarUrl}`;
 
-    svg += `
+        svg += `
       <!-- 用户头像 -->
       <g transform="translate(20, 30)">
         <!-- 圆形头像背景 -->
@@ -174,8 +159,8 @@ export function generateGitHubCounterCard(
       <text x="15" y="130" text-anchor="start" class="footer">Generated by GitHub Profile Statistics Card</text>
       <text x="285" y="130" text-anchor="end" class="footer">更新时间: ${currentDate}</text>
     `;
-  } else {
-    svg += `
+    } else {
+        svg += `
       <!-- GitHub 图标 -->
       <svg x="20" y="28" width="36" height="36" viewBox="0 0 24 24" class="github-icon">
         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
@@ -184,10 +169,10 @@ export function generateGitHubCounterCard(
       <!-- 标题 -->
       <text x="70" y="45" class="title">GitHub 访问</text>
     `;
-  }
+    }
 
-  // 添加计数和更新日期
-  svg += `
+    // 添加计数和更新日期
+    svg += `
       <!-- 计数 -->
       <text x="160" y="95" text-anchor="middle" class="count">${countDisplay}</text>
       
@@ -197,7 +182,7 @@ export function generateGitHubCounterCard(
     </g>
   </svg>`;
 
-  return svg;
+    return svg;
 }
 
 /**
@@ -206,41 +191,41 @@ export function generateGitHubCounterCard(
  * @param theme 主题配置
  * @returns SVG字符串
  */
-export function generateCSDNCard(data: any, theme: ThemeOptions = activeTheme): string {
-  if (!data) {
-    return generateErrorCard('无法获取CSDN数据', theme);
-  }
-
-  const {
-    articleCount,
-    followers,
-    likes,
-    views,
-    comments,
-    points,
-    username,
-    // 新增字段
-    rank,
-    codeAge,
-    level,
-    monthPoints
-  } = data;
-
-  // 数据格式化，大于1000的数字以k为单位
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
+const generateCSDNCard = (data: any, theme: ThemeOptions = activeTheme): string => {
+    if (!data) {
+        return generateErrorCard('无法获取CSDN数据', theme);
     }
-    return num.toString();
-  };
 
-  // 当前日期
-  const currentDate = new Date().toLocaleDateString();
+    const {
+        articleCount,
+        followers,
+        likes,
+        views,
+        comments,
+        points,
+        username,
+        // 新增字段
+        rank,
+        codeAge,
+        level,
+        monthPoints
+    } = data;
 
-  // 卡片高度增加以容纳更多数据
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
+    // 数据格式化，大于1000的数字以k为单位
+    const formatNumber = (num: number): string => {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    };
+
+    // 当前日期
+    const currentDate = new Date().toLocaleDateString();
+
+    // 卡片高度增加以容纳更多数据
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
     <style>
       .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
       .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
@@ -325,34 +310,34 @@ export function generateCSDNCard(data: any, theme: ThemeOptions = activeTheme): 
  * @param theme 主题配置
  * @returns SVG字符串
  */
-export function generateJuejinCard(data: JuejinUserData, theme: ThemeOptions = activeTheme): string {
-  if (!data) {
-    return generateErrorCard('无法获取掘金数据', theme);
-  }
-
-  const {
-    username,
-    desc,
-    followers,
-    articleCount,
-    likes,
-    views,
-  } = data;
-
-  // 数据格式化
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
+const generateJuejinCard = (data: JuejinUserData, theme: ThemeOptions = activeTheme): string => {
+    if (!data) {
+        return generateErrorCard('无法获取掘金数据', theme);
     }
-    return num.toString();
-  };
 
-  // 当前日期
-  const currentDate = new Date().toLocaleDateString();
+    const {
+        username,
+        desc,
+        followers,
+        articleCount,
+        likes,
+        views,
+    } = data;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
+    // 数据格式化
+    const formatNumber = (num: number): string => {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    };
+
+    // 当前日期
+    const currentDate = new Date().toLocaleDateString();
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
     <style>
       .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
       .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
@@ -399,40 +384,157 @@ export function generateJuejinCard(data: JuejinUserData, theme: ThemeOptions = a
 }
 
 /**
+ * 生成哔哩哔哩统计卡片
+ * @param data 哔哩哔哩用户数据
+ * @param theme 主题配置
+ * @returns SVG字符串
+ */
+const generateBilibiliCard = (data: any, theme: ThemeOptions = activeTheme): string => {
+    if (!data) {
+        return generateErrorCard('无法获取哔哩哔哩数据', theme);
+    }
+
+    const {
+        uid,
+        username,
+        level,
+        sign,
+        followers,
+        following,
+        likes,
+        views,
+        isValid
+    } = data;
+
+    // 数据格式化
+    const formatNumber = (num: number): string => {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    };
+
+    // 当前日期
+    const currentDate = new Date().toLocaleDateString();
+
+    // 生成SVG
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
+    <style>
+      .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
+      .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
+      .small { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.small}; fill: ${theme.colors.text.secondary}; }
+      .label { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.secondary}; }
+      .value { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; font-weight: bold; }
+      .footer { font-family: ${theme.fonts.family}; font-size: 10px; fill: ${theme.colors.text.secondary}; }
+      .invalid { font-family: ${theme.fonts.family}; font-size: 10px; fill: #dc3545; }
+    </style>
+    
+    <rect width="495" height="245" fill="${theme.colors.background}" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
+    
+    <!-- 标题区域 -->
+    <text x="25" y="35" class="header">哔哩哔哩统计</text>
+    <text x="465" y="35" text-anchor="end" class="small">用户: ${username}</text>
+    
+    <!-- 等级和签名 -->
+    <g transform="translate(25, 65)">
+      <text class="small">Lv.${level}</text>
+      <text x="111" class="small" fill="${theme.colors.text.secondary}">${sign || '这个人很懒，什么都没写'}</text>
+    </g>
+    
+    <!-- 分隔线 -->
+    <rect x="25" y="80" width="445" height="1" fill="${theme.colors.border}"/>
+    
+    <!-- 统计数据 - 使用网格布局 -->
+    <g transform="translate(0, 120)">
+      <!-- 第一行 -->
+      <g transform="translate(25, 0)">
+        <text x="0" class="label">粉丝数:</text>
+        <text x="100" class="value" fill="${theme.colors.stats.total}">${formatNumber(followers)}</text>
+      </g>
+      
+      <g transform="translate(260, 0)">
+        <text x="0" class="label">获赞数:</text>
+        <text x="100" class="value" fill="${theme.colors.stats.easy}">${formatNumber(likes)}</text>
+      </g>
+      
+      <!-- 第二行 -->
+      <g transform="translate(25, 40)">
+        <text x="0" class="label">关注数:</text>
+        <text x="100" class="value" fill="${theme.colors.stats.medium}">${formatNumber(following)}</text>
+      </g>
+      
+      <g transform="translate(260, 40)">
+        <text x="0" class="label">播放量:</text>
+        <text x="100" class="value" fill="${theme.colors.accent.primary}">${formatNumber(views)}</text>
+      </g>
+    </g>
+    
+    <!-- 分隔线 -->
+    <rect x="25" y="200" width="445" height="1" fill="${theme.colors.border}"/>
+    
+    <!-- 底部信息 -->
+    <g transform="translate(0, 225)">
+      <text x="25" class="footer">Generated by GitHub Profile Statistics Card</text>
+      <text x="465" text-anchor="end" class="footer">更新时间: ${currentDate}</text>
+    </g>
+  </svg>`;
+}
+
+/**
  * 通用卡片生成器 - 根据类型生成对应的卡片
  * @param type 卡片类型
  * @param data 卡片数据
  * @param theme 主题配置
  * @returns SVG字符串
  */
-export function generateCard(
-  type: CardType,
-  data: any,
-  theme: ThemeOptions = activeTheme
-): string {
-  switch (type) {
-    case CardType.LEETCODE:
-      return generateLeetCodeCard(data as ILeetCodeUser, theme);
+export const generateCard = (
+    type: CardType,
+    data: any,
+    theme: ThemeOptions = activeTheme
+): string => {
+    switch (type) {
+        case CardType.LEETCODE:
+            return generateLeetCodeCard(data as ILeetCodeUser, theme);
 
-    case CardType.GITHUB:
-      if (typeof data === 'number') {
-        return generateGitHubCounterCard(data, null, '', theme);
-      } else if (data && typeof data === 'object') {
-        const { count, avatarUrl, username } = data;
-        return generateGitHubCounterCard(count, avatarUrl, username, theme);
-      }
-      return generateErrorCard('GitHub数据格式错误', theme);
+        case CardType.GITHUB:
+            if (typeof data === 'number') {
+                return generateGitHubCounterCard(data, null, '', theme);
+            } else if (data && typeof data === 'object') {
+                const {count, avatarUrl, username} = data;
+                return generateGitHubCounterCard(count, avatarUrl, username, theme);
+            }
+            return generateErrorCard('GitHub数据格式错误', theme);
 
-    case CardType.CSDN:
-      return generateCSDNCard(data, theme);
+        case CardType.CSDN:
+            return generateCSDNCard(data, theme);
 
-    case CardType.JUEJIN:
-      return generateJuejinCard(data as JuejinUserData, theme);
+        case CardType.JUEJIN:
+            return generateJuejinCard(data as JuejinUserData, theme);
 
-    case CardType.ERROR:
-      return generateErrorCard(data as string, theme);
+        case CardType.BILIBLI:
+            return generateBilibiliCard(data, theme);
 
-    default:
-      return generateErrorCard('未知卡片类型', theme);
-  }
-} 
+        case CardType.ERROR:
+            return generateErrorCard(data as string, theme);
+
+        default:
+            return generateErrorCard('未知卡片类型', theme);
+    }
+}
+
+/**s
+ * 生成错误卡片
+ * @param message 错误信息
+ * @param theme 主题配置
+ * @returns SVG字符串
+ */
+export const generateErrorCard = (message: string, theme: ThemeOptions = activeTheme): string => {
+    return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"495\" height=\"120\" viewBox=\"0 0 495 120\">
+    <rect width=\"495\" height=\"120\" fill=\"${theme.colors.background}\" rx=\"${theme.card.borderRadius}\" ry=\"${theme.card.borderRadius}\" stroke=\"${theme.colors.border}\" stroke-width=\"1\"/>
+    <text x=\"247.5\" y=\"60\" font-family=\"${theme.fonts.family}\" font-size=\"${theme.fonts.size.normal}\" text-anchor=\"middle\" fill=\"#dc3545\">
+      ${message}
+    </text>
+  </svg>`;
+}

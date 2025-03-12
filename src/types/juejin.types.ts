@@ -20,3 +20,20 @@ export interface JuejinUserData {
     expireAt: Date;
     isValid: boolean;
 }
+
+export interface JuejinApiResponseData {
+    user_id: string,
+    user_name: string,
+    description: string,
+    follower_count: number,
+    got_digg_count: number,
+    article_count: number,
+    got_view_count: number,
+}
+
+export interface JuejinApiResponse {
+    err_no: number;
+    err_msg: string;
+    data: JuejinApiResponseData;
+    count?: number;
+}

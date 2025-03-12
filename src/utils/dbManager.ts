@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { dbConfig } from '../config';
+import {dbConfig} from '../config';
+
 type Operation<T> = (conn: mongoose.Connection) => Promise<T>;
 
 export class MongoDBManager {
@@ -9,7 +10,8 @@ export class MongoDBManager {
     private isConnected = false;
 
     // 修改构造函数为私有
-    private constructor() { }
+    private constructor() {
+    }
 
     public static getInstance() {
         if (!MongoDBManager.instance) {

@@ -3,7 +3,7 @@ import { fetchLeetCodeStats } from '../services/leetcode.service';
 import { getLeetCodeUserData, updateLeetCodeData } from '../services/mongodb.service';
 import { ILeetCodeUser } from '../types';
 import { generateCard, CardType } from '../services/svg.service';
-import { ThemeOptions, defaultTheme } from '../config/theme.config';
+import { ThemeOptions, defaultTheme } from '../config';
 
 // 获取LeetCode统计
 export const getLeetCodeStats = async (req: Request, res: Response): Promise<void> => {
@@ -16,7 +16,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
     console.debug(`处理LeetCode请求: 用户名=${username}, 区域=${useCN ? 'CN' : 'US'}`);
-    
+
 
     if (!username) {
       res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', theme));
@@ -47,7 +47,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
         };
 
         await updateLeetCodeData(username, leetcodeData, cacheTimeInSeconds);
-        
+
         // 返回SVG
         res.set('Content-Type', 'image/svg+xml');
         res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
@@ -68,4 +68,4 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     res.set('Content-Type', 'image/svg+xml');
     res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, theme));
   }
-}; 
+};
