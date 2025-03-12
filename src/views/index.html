@@ -111,6 +111,33 @@
     .param-table th {
       background-color: #f8f9fa;
     }
+
+    .notice {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    .warning {
+      background-color: #fff3cd;
+      border: 1px solid #ffeeba;
+      color: #856404;
+    }
+
+    .warning h4 {
+      color: #856404;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    .warning ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .warning li {
+      margin-bottom: 5px;
+    }
   </style>
 </head>
 <body>
@@ -139,6 +166,57 @@
     <div class="code-block">
       <p>在你的GitHub个人资料中添加掘金统计：</p>
       <code>![](BASE_URL/juejin/userId)</code>
+    </div>
+
+    <h2>哔哩哔哩统计卡片</h2>
+    <div class="code-block">
+      <p>在你的GitHub个人资料中添加哔哩哔哩统计：</p>
+      <code>![](BASE_URL/bilibili/uid)</code>
+    </div>
+
+    <div class="theme-switch">
+      <a href="bilibili/1574741?theme=light" class="theme-option light-theme">预览哔哩哔哩亮色主题</a>
+      <a href="bilibili/1574741?theme=dark" class="theme-option dark-theme">预览哔哩哔哩暗色主题</a>
+    </div>
+
+    <h3>数据展示</h3>
+    <table class="param-table">
+      <tr>
+        <th>数据项</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>用户名称</td>
+        <td>B站用户名</td>
+      </tr>
+      <tr>
+        <td>粉丝数</td>
+        <td>当前粉丝总数</td>
+      </tr>
+      <tr>
+        <td>关注数</td>
+        <td>关注的用户数量</td>
+      </tr>
+      <tr>
+        <td>获赞数</td>
+        <td>获得的点赞总数</td>
+      </tr>
+      <tr>
+        <td>播放量</td>
+        <td>视频总播放量</td>
+      </tr>
+      <tr>
+        <td>个人签名</td>
+        <td>用户设置的个性签名</td>
+      </tr>
+    </table>
+
+    <div class="notice warning">
+      <h4>⚠️ 已知问题</h4>
+      <ul>
+        <li>由于哔哩哔哩的等级是svg图片，用户等级信息可能无法正常获取</li>
+        <li>部分用户数据可能因为隐私设置而无法显示</li>
+      </ul>
     </div>
 
     <h2>参数选项</h2>
@@ -183,13 +261,6 @@
     <div class="code-block">
       <p>使用暗色主题和中国区数据：</p>
       <code>![](BASE_URL/leetcode/用户名?theme=dark&cn=true)</code>
-    </div>
-
-    <div class="theme-switch">
-      <a href="leetcode/lucky845?theme=light&cn=true" class="theme-option light-theme">预览LeetCode亮色主题</a>
-      <a href="leetcode/lucky845?theme=dark&cn=true" class="theme-option dark-theme">预览LeetCode暗色主题</a>
-      <a href="juejin/lucky845?theme=light" class="theme-option light-theme">预览掘金亮色主题</a>
-      <a href="juejin/lucky845?theme=dark" class="theme-option dark-theme">预览掘金暗色主题</a>
     </div>
 
     <h2>使用方法</h2>

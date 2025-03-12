@@ -1,23 +1,7 @@
-import axios, { AxiosError } from 'axios';
-import { IJuejinUserData, JuejinUserData } from '../types/juejin.types';
-import { getJuejinUserData, updateJuejinUserData } from './mongodb.service';
+import axios, {AxiosError} from 'axios';
+import {JuejinApiResponse, JuejinApiResponseData, JuejinUserData} from '../types';
+import {getJuejinUserData, updateJuejinUserData} from './mongodb.service';
 
-interface JuejinApiResponseData {
-    user_id: string,
-    user_name: string,
-    description: string,
-    follower_count: number,
-    got_digg_count: number,
-    article_count: number,
-    got_view_count: number,
-};
-
-interface JuejinApiResponse {
-    err_no: number;
-    err_msg: string;
-    data: JuejinApiResponseData;
-    count?: number;
-}
 
 async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promise<JuejinUserData> {
     if (!userId) {
@@ -27,7 +11,7 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
     let cachedUserData: any = null;
 
     try {
-        const { data, needsFetch } = await getJuejinUserData(userId, cacheTimeInSeconds);
+        const {data, needsFetch} = await getJuejinUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
         cachedUserData = data;
 
@@ -90,9 +74,9 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
         if (error instanceof AxiosError) {
             throw new Error(`获取掘金数据失败: ${error.message}`);
         }
-        
+
         // 判断是否存在缓存，存在缓存直接返回缓存即可
-        if(cachedUserData) {
+        if (cachedUserData) {
             return cachedUserData;
         }
 
@@ -112,4 +96,4 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
     }
 }
 
-export default getJuejinInfo; 
+export default getJuejinInfo;

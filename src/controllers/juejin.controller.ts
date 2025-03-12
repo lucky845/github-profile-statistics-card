@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import getJuejinInfo from '../services/juejin.service';
-import { JuejinUserData } from '../types/juejin.types';
-import { generateJuejinCard, generateErrorCard, generateCard, CardType } from '../services/svg.service';
-import { activeTheme, defaultTheme, ThemeOptions } from '../config/theme.config';
+import { JuejinUserData } from '../types';
+import { generateCard, CardType } from '../services/svg.service';
+import { defaultTheme, ThemeOptions } from '../config';
 
 // 获取掘金用户数据的控制器
 export const fetchJuejinUserData = async (req: Request, res: Response): Promise<void> => {
@@ -42,4 +42,4 @@ export const fetchJuejinUserData = async (req: Request, res: Response): Promise<
         username: stats.username,
         desc: stats.desc,
     } as JuejinUserData, theme));
-}; 
+};

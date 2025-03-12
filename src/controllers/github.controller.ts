@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { getGitHubUserStats } from '../services/github.service';
 import { generateCard, CardType } from '../services/svg.service';
-import { ThemeOptions, defaultTheme } from '../config/theme.config';
+import { ThemeOptions, defaultTheme } from '../config';
 
 // 生成访问者唯一标识
 const generateVisitorId = (req: Request): string => {
@@ -29,7 +29,7 @@ export const getGitHubStats = async (req: Request, res: Response): Promise<void>
 
     // 获取用户统计数据（包括头像和访问计数）
     const stats = await getGitHubUserStats(username);
-    
+
     if (!stats.isValid) {
       res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到GitHub用户', theme));
       return;
@@ -52,4 +52,4 @@ export const getGitHubStats = async (req: Request, res: Response): Promise<void>
     res.set('Content-Type', 'image/svg+xml');
     res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, theme));
   }
-}; 
+};

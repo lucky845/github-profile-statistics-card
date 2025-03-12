@@ -1,9 +1,9 @@
-import express, { Router } from 'express';
-import { getLeetCodeStats } from '../controllers/leetcode.controller';
+import express, {Router} from 'express';
+import {getLeetCodeStats} from '../controllers/leetcode.controller';
 
-const router: Router = express.Router();
+const leetcodeRouter: Router = express.Router();
 
 // LeetCode统计路由
-router.get('/:username', getLeetCodeStats);
+leetcodeRouter.get('/:username', getLeetCodeStats);
 
-export default router; 
+export {leetcodeRouter};
