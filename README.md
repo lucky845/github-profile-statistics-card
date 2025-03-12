@@ -220,6 +220,7 @@ CSDN 统计卡片包含以下数据：
 1. 在 Vercel 中导入你 fork 的项目
 2. 配置环境变量：
    - `MONGODB_URI`: MongoDB Atlas 的连接字符串
+   - `BILIBILI_SESSDATA`: 哔哩哔哩登录后获取的cookie里面的`SESSDATA`值
 3. 点击 "Deploy" 开始部署
 
 部署完成后，你可以通过 Vercel 分配的域名访问服务，格式如：
