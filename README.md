@@ -99,7 +99,7 @@ CSDN 统计卡片包含以下数据：
 ```markdown
 ![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/uid?theme=light)
 ```
-![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/1574741?theme=light)
+![哔哩哔哩统计](https://github-profile-views-plum.vercel.app/bilibili/89389361?theme=light)
 
 哔哩哔哩统计卡片包含以下数据：
 - 用户名称
