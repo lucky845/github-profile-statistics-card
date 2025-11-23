@@ -1,26 +1,6 @@
 import { createRequest } from '../utils/http.utils';
 import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
 
-// 将图片URL转换为base64
-async function getImageAsBase64(imageUrl: string): Promise<string> {
-  try {
-    const httpClient = createRequest(8000);
-    const response = await httpClient.get(imageUrl, {
-      responseType: 'arraybuffer',
-      headers: {
-        'User-Agent': 'GitHub-Stats-Card'
-      }
-    });
-    
-    const base64 = Buffer.from(response.data, 'binary').toString('base64');
-    const contentType = response.headers['content-type'];
-    return `data:${contentType};base64,${base64}`;
-  } catch (error) {
-    console.error(`获取图片base64失败: ${error}`);
-    return '';
-  }
-}
-
 // 获取GitHub用户数据（包括头像和访问计数）
 export async function getGitHubUserStats(username: string): Promise<{
   isValid: boolean;
@@ -69,12 +49,9 @@ export async function getGitHubUserStats(username: string): Promise<{
     // 获取更新后的用户数据以获取最新的访问计数
     const { userData: updatedData } = await getGitHubUserData(username);
 
-    // 在返回数据前将URL转换为base64,节省mongodb空间(使用的免费空间额度，牺牲性能)
-    const base64Avatar = await getImageAsBase64(avatarUrl);
-
     return {
       isValid: true,
-      avatarUrl: base64Avatar || null,
+      avatarUrl: avatarUrl || null,
       visitCount: updatedData?.visitCount || 1
     };
   } catch (error) {
@@ -111,7 +88,7 @@ export function generateCounterSVG(count: number, avatarUrl: string): string {
     <rect width="220" height="100" fill="${colors.bg}" rx="10" ry="10" stroke="${colors.border}" stroke-width="1"/>
     <text x="30" y="40" class="text">访问数:</text>
     <text x="190" y="50" text-anchor="end" class="count">${countDisplay}</text>
-    <image x="30" y="60" width="30" height="30" href="${avatarUrl}" />
+    <image x="30" y="60" width="30" height="30" xlink:href="${avatarUrl}" />
     <text x="70" y="80" class="small">GitHub: @</text>
   </svg>`;
 } 
