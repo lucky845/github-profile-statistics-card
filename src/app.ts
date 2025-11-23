@@ -3,7 +3,9 @@ import './polyfill';
 
 import express, {Request, Response} from 'express';
 import path from 'path';
-import {errorHandler, logger, mongoMiddleware} from './middleware';
+import {errorHandler, logger, mongoMiddleware, notFoundHandler} from './middleware';
+import {metricsMiddleware} from './middleware/metrics.middleware';
+import { generateCard, CardType, getThemeConfig } from './services/svg.service';
 import {
     appConfig,
     darkTheme,
@@ -15,9 +17,11 @@ import {
     tokyonightTheme
 } from './config';
 import {bilibiliRouter, csdnRouter, githubRouter, juejinRouter, leetcodeRouter} from './routes';
+import metricsRouter from './routes/metrics.routes';
 import fs from 'fs';
 import mongoose from 'mongoose';
 import {MongoDBManager} from './utils/dbManager';
+import prometheusService from './services/prometheus.service';
 
 // 初始化数据库连接管理器
 const dbManager = MongoDBManager.getInstance();
@@ -58,6 +62,9 @@ app.use(express.urlencoded({extended: true}));
 app.use(mongoMiddleware);
 app.use(themeMiddleware);
 
+// 性能监控中间件 - 放在所有路由之前以捕获所有请求
+app.use(metricsMiddleware);
+
 // 健康检查端点
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
@@ -83,6 +90,28 @@ app.use('/github', githubRouter);
 app.use('/csdn', csdnRouter);
 app.use('/juejin', juejinRouter);
 app.use('/bilibili', bilibiliRouter);
+
+// 监控相关路由
+app.use('/', metricsRouter);
+
+// 主题测试路由
+app.get('/api/theme/test', (req, res) => {
+  const themeName = req.query.theme as string;
+  const themeConfig = getThemeConfig(themeName);
+  
+  // 返回一个简单的测试卡片，展示主题样式
+  res.set('Content-Type', 'image/svg+xml');
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+    <rect width="400" height="200" fill="${themeConfig.colors.background}" rx="${themeConfig.card.borderRadius}" ry="${themeConfig.card.borderRadius}" stroke="${themeConfig.colors.border}" stroke-width="2"/>
+    <circle cx="70" cy="70" r="40" fill="${themeConfig.colors.accent.primary}"/>
+    <text x="230" y="60" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.title}" font-weight="bold" fill="${themeConfig.colors.text.title}">测试用户</text>
+    <text x="230" y="90" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.normal}" fill="${themeConfig.colors.text.secondary}">这是主题测试卡片</text>
+    <rect x="70" y="120" width="260" height="1" fill="${themeConfig.colors.border}"/>
+    <text x="130" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据1: 123</text>
+    <text x="250" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据2: 456</text>
+    <text x="200" y="180" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.small}" text-anchor="middle" fill="${themeConfig.colors.text.secondary}">主题: ${themeName || '默认'}</text>
+  </svg>`);
+});
 
 // 设置根路径展示页面
 app.get('/', (req: Request, res: Response) => {
@@ -246,13 +275,13 @@ app.get('/', (req: Request, res: Response) => {
     }
 });
 
-// 404处理
+// 捕获404错误的中间件，必须在所有路由后、错误处理前设置
+app.use(notFoundHandler);
+
+// 404处理（备用）
 app.use((req: Request, res: Response) => {
     res.status(404).send('找不到请求的资源');
 });
-
-// 错误处理中间件
-app.use(errorHandler);
 
 // 启动服务器
 let server: ReturnType<typeof app.listen>;
@@ -319,6 +348,9 @@ process.on('SIGINT', async () => {
     }
 });
 
+// 错误处理中间件应该放在所有路由和处理函数之后
+app.use(errorHandler);
+
 // 初始化并启动服务
 startServer().then(serverInstance => {
     // 处理其他关闭信号
@@ -326,4 +358,8 @@ startServer().then(serverInstance => {
         console.log('\n🛑 接收到SIGTERM信号');
         serverInstance.close();
     });
+    
+    // 初始化Prometheus服务
+    prometheusService.initialize();
+    console.log('📊 Prometheus监控已初始化');
 });

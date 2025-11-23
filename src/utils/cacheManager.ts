@@ -35,4 +35,15 @@ export const clearExpiredCache = (ttl: number = 86400) => {
 };
 
 // 启动定时清理任务
-setInterval(() => clearExpiredCache(), 3600000); // 每小时清理一次
+let cacheCleanupInterval: NodeJS.Timeout;
+
+if (process.env.NODE_ENV !== 'test') {
+  cacheCleanupInterval = setInterval(() => clearExpiredCache(), 3600000); // 每小时清理一次
+}
+
+// 导出用于测试的函数，允许清理定时器
+export const cleanupCacheManager = (): void => {
+  if (cacheCleanupInterval) {
+    clearInterval(cacheCleanupInterval);
+  }
+};

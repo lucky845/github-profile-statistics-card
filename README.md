@@ -1,6 +1,24 @@
 # GitHub Profile Statistics Card
 
-一个优雅的个人统计数据展示卡片生成服务，支持多个平台的数据统计展示。
+<div align="center">
+  <img src="https://img.shields.io/github/license/lucky845/github-profile-statistics-card?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/github/issues/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Issues">
+  <img src="https://img.shields.io/github/forks/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Forks">
+  <img src="https://img.shields.io/github/stars/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Stars">
+</div>
+
+## 🚀 项目简介
+
+GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生成个人统计数据的SVG卡片。支持多种平台的数据展示，可直接嵌入到GitHub个人资料页或任何支持图片的位置。
+
+### 🔥 核心功能
+
+- **多平台支持**：GitHub、LeetCode、CSDN、掘金、B站数据统计
+- **可定制主题**：多种精美主题可选，支持亮色/暗色模式
+- **高度优化**：多级缓存策略，确保快速响应
+- **安全可靠**：内置SVG内容过滤，防止XSS攻击
+- **实时监控**：集成Prometheus，全面的性能监控
+- **完整测试**：全面的单元测试和边界情况覆盖
 
 ## 🌟 特性
 

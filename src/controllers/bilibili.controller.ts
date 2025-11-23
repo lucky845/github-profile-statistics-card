@@ -1,21 +1,23 @@
 import {Request, Response} from 'express';
 import {IBilibiliUser} from '../types';
-import {CardType, generateCard} from '../services/svg.service';
-import {defaultTheme, ThemeOptions} from '../config';
+import {CardType, generateCard, getThemeConfig} from '../services/svg.service';
+import {activeTheme} from '../config/theme.config';
 import {getBilibiliInfo} from "../services/bilibili.service";
 
 // 获取Bilibilis用户数据的控制器
 export const fetchBilibiliUserData = async (req: Request, res: Response): Promise<void> => {
     const uid = req.params.uid;
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (res.locals.theme || defaultTheme) as ThemeOptions;
+    // 从查询参数获取主题名称，支持主题参数
+    const themeName = req.query.theme as string;
+    // 获取主题配置
+    const themeConfig = getThemeConfig(themeName);
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
     console.debug(`处理Bilibili请求: 用户ID=${uid}`);
 
     if (!uid) {
         res.status(400).set('Content-Type', 'image/svg+xml')
-            .send(generateCard(CardType.ERROR, '未提供用户UID', theme));
+            .send(generateCard(CardType.ERROR, '未提供用户UID', themeConfig));
         return;
     }
 
@@ -25,7 +27,7 @@ export const fetchBilibiliUserData = async (req: Request, res: Response): Promis
     if (!stats.isValid) {
         res.status(404)
             .set('Content-Type', 'image/svg+xml')
-            .send(generateCard(CardType.ERROR, '未找到哔哩哔哩用户', theme));
+            .send(generateCard(CardType.ERROR, '未找到哔哩哔哩用户', themeConfig));
         return;
     }
 
@@ -45,5 +47,5 @@ export const fetchBilibiliUserData = async (req: Request, res: Response): Promis
         views: stats?.views || 0,
         lastUpdated: stats.lastUpdated,
         expireAt: stats.expireAt,
-    } as IBilibiliUser, theme));
+    } as IBilibiliUser, themeConfig));
 };

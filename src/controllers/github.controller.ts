@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { getGitHubUserStats } from '../services/github.service';
-import { generateCard, CardType } from '../services/svg.service';
-import { ThemeOptions, defaultTheme } from '../config';
+import { generateCard, CardType, getThemeConfig } from '../services/svg.service';
+import { activeTheme } from '../config/theme.config';
 
 // 生成访问者唯一标识
 const generateVisitorId = (req: Request): string => {
@@ -19,11 +19,13 @@ const generateVisitorId = (req: Request): string => {
 export const getGitHubStats = async (req: Request, res: Response): Promise<void> => {
   try {
     const username = req.params.username;
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (res.locals.theme || defaultTheme) as ThemeOptions;
+    // 从查询参数获取主题名称，支持主题参数
+    const themeName = req.query.theme as string;
+    // 获取主题配置
+    const themeConfig = getThemeConfig(themeName);
 
     if (!username) {
-      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', theme));
+      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
       return;
     }
 
@@ -31,7 +33,7 @@ export const getGitHubStats = async (req: Request, res: Response): Promise<void>
     const stats = await getGitHubUserStats(username);
 
     if (!stats.isValid) {
-      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到GitHub用户', theme));
+      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到GitHub用户', themeConfig));
       return;
     }
 
@@ -43,13 +45,15 @@ export const getGitHubStats = async (req: Request, res: Response): Promise<void>
       count: stats.visitCount,
       avatarUrl: stats.avatarUrl,
       username
-    }, theme));
+    }, themeConfig));
 
   } catch (error: any) {
     console.error(`GitHub控制器错误: ${error.message}`);
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (res.locals.theme || defaultTheme) as ThemeOptions;
+    // 从查询参数获取主题名称
+    const themeName = req.query.theme as string;
+    // 获取主题配置
+    const themeConfig = getThemeConfig(themeName);
     res.set('Content-Type', 'image/svg+xml');
-    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, theme));
+    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, themeConfig));
   }
 };
