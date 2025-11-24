@@ -8,7 +8,7 @@ export enum CardType {
     GITHUB = 'github',
     CSDN = 'csdn',
     JUEJIN = 'juejin',
-    BILIBLI = 'bilibili',
+    BILIBILI = 'bilibili',
     ERROR = 'error'
 }
 
@@ -559,7 +559,7 @@ export const generateCard = (
             case CardType.JUEJIN:
                 return generateJuejinCard(data as JuejinUserData, themeConfig);
 
-            case CardType.BILIBLI:
+            case CardType.BILIBILI:
                 return generateBilibiliCard(data, themeConfig);
 
             case CardType.ERROR:

@@ -15,7 +15,7 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
 
     if (!userId) {
-      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户ID', themeConfig));
+      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
       return;
     }
 

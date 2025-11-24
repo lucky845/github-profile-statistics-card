@@ -6,7 +6,8 @@ import {getBilibiliInfo} from "../services/bilibili.service";
 
 // 获取Bilibilis用户数据的控制器
 export const fetchBilibiliUserData = async (req: Request, res: Response): Promise<void> => {
-    const uid = req.params.uid;
+    // 从请求参数获取用户ID
+    const uid = req.params.uid as string;
     // 从查询参数获取主题名称，支持主题参数
     const themeName = req.query.theme as string;
     // 获取主题配置
@@ -36,7 +37,7 @@ export const fetchBilibiliUserData = async (req: Request, res: Response): Promis
     res.set('Content-Type', 'image/svg+xml');
     // 使用较长的缓存时间，减少请求频率，但仍能保持较新的数据
     res.set('Cache-Control', 'public, max-age=600'); // 10分钟缓存
-    res.send(generateCard(CardType.BILIBLI, {
+    res.send(generateCard(CardType.BILIBILI, {
         uid,
         username: stats?.username || uid,
         level: stats?.level || 0,

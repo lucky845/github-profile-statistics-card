@@ -305,11 +305,11 @@ export const updateJuejinUserData = async (
 };
 
 // Bilibili服务
-export const getBilibiliUserData = async (userId: string, cacheTime: number = CACHE_TTL) => {
+export const getBilibiliUserData = async (uid: string, cacheTime: number = CACHE_TTL) => {
     try {
         // 尝试数据库查询
         const dbResult = await handleDbOperation(async () => {
-            const data = await BilibiliUser.findOne({userId}).lean();
+            const data = await BilibiliUser.findOne({uid}).lean();
             return validateCache(data, cacheTime);
         });
 
@@ -317,7 +317,7 @@ export const getBilibiliUserData = async (userId: string, cacheTime: number = CA
 
         // 回退到内存缓存
         const cacheResult = validateCache(
-            memoryCache.bilibili[userId],
+            memoryCache.bilibili[uid],
             cacheTime
         );
 
