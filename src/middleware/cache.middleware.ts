@@ -5,6 +5,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { cacheService, CacheKeyGenerator } from '../services/cache.service';
+import { secureLogger } from '../utils/logger';
 
 /**
  * 缓存中间件配置选项
@@ -70,16 +71,25 @@ export function createCacheMiddleware(options: CacheMiddlewareOptions = {}) {
           const headersToCache = getCacheableHeaders(res.getHeaders());
           
           // 异步缓存响应
-          cacheService.set(
-            cacheKey, 
-            { 
-              body: body, 
-              headers: headersToCache 
-            }, 
-            ttl
-          ).catch(err => {
-            console.error('Failed to cache response:', err);
-          });
+          // 避免缓存过大的响应体
+          const bodySize = typeof body === 'string' ? body.length : JSON.stringify(body).length;
+          if (bodySize < 1024 * 512) { // 小于 512KB 的响应才缓存
+            cacheService.set(
+              cacheKey, 
+              { 
+                body: body, 
+                headers: headersToCache 
+              }, 
+              ttl
+            ).catch(err => {
+              secureLogger.error('Failed to cache response:', { error: err.message, cacheKey });
+            });
+          } else {
+            secureLogger.debug('Skipping cache for large response:', { 
+              cacheKey, 
+              bodySize: `${(bodySize / 1024).toFixed(2)}KB` 
+            });
+          }
         }
 
         // 调用原始的send方法
@@ -150,15 +160,123 @@ export function clearCacheMiddleware(pattern: string | RegExp) {
       
       // 请求处理完成后清理缓存（异步，不阻塞响应）
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        // 这里简化处理，实际项目中可能需要更复杂的缓存清理逻辑
-        // 由于node-cache不支持模式匹配删除，我们记录日志提示手动清理
-        console.log(`Cache invalidation triggered for pattern: ${String(pattern)}`);
+        try {
+          const deletedCount = await cacheService.deleteByPattern(pattern);
+          secureLogger.info('Cache invalidation completed', { 
+            pattern: String(pattern), 
+            deletedCount 
+          });
+          
+          // 将删除的缓存数量添加到响应头
+          res.setHeader('X-Cache-Clear-Count', String(deletedCount));
+        } catch (err) {
+          secureLogger.error('Failed to clear cache pattern:', {
+                error: err instanceof Error ? err.message : String(err),
+                pattern: String(pattern)
+            });
+        }
       }
     } catch (error) {
-      console.error('Clear cache middleware error:', error);
+      secureLogger.error('Clear cache middleware error:', { error: error instanceof Error ? error.message : String(error) });
       next();
     }
   };
+}
+
+/**
+ * 清除指定组的缓存中间件
+ */
+export function clearCacheGroupMiddleware(group: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // 先处理请求
+      next();
+      
+      // 请求处理完成后清理缓存组（异步，不阻塞响应）
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        try {
+          const deletedCount = await cacheService.clearGroup(group);
+          secureLogger.info('Cache group cleared', { group, deletedCount });
+          res.setHeader('X-Cache-Group-Clear-Count', String(deletedCount));
+        } catch (err) {
+          secureLogger.error('Failed to clear cache group:', {
+                error: err instanceof Error ? err.message : String(err),
+                group
+            });
+        }
+      }
+    } catch (error) {
+      secureLogger.error('Clear cache group middleware error:', { error: error instanceof Error ? error.message : String(error) });
+      next();
+    }
+  };
+}
+
+/**
+ * 缓存统计端点处理器
+ */
+export function cacheStatsHandler(req: Request, res: Response): void {
+  try {
+    const stats = cacheService.getStats();
+    res.json({
+      status: 'success',
+      data: stats,
+      message: 'Cache statistics retrieved successfully'
+    });
+  } catch (error) {
+    secureLogger.error('Failed to retrieve cache stats:', { error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve cache statistics'
+    });
+  }
+}
+
+/**
+ * 手动清除缓存端点处理器
+ */
+export function manualCacheClearHandler(req: Request, res: Response): void {
+  const { pattern, group, all } = req.query;
+  
+  // 确保只允许管理员操作（实际项目中应该有更严格的权限控制）
+  // 这里简化处理，实际项目中应该检查认证令牌或IP地址
+  
+  (async () => {
+    try {
+      let deletedCount = 0;
+      let action = '';
+      
+      if (all === 'true') {
+        await cacheService.clear();
+        action = 'Cleared all cache';
+      } else if (group) {
+        deletedCount = await cacheService.clearGroup(String(group));
+        action = `Cleared cache group: ${group}`;
+      } else if (pattern) {
+        deletedCount = await cacheService.deleteByPattern(String(pattern));
+        action = `Cleared cache by pattern: ${pattern}`;
+      } else {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Must provide one of: pattern, group, or all=true'
+        });
+      }
+      
+      secureLogger.info(action, { deletedCount });
+      
+      res.json({
+        status: 'success',
+        message: action,
+        deletedCount: all === 'true' ? 'all' : deletedCount
+      });
+    } catch (error) {
+      secureLogger.error('Failed to clear cache manually:', { error: error instanceof Error ? error.message : String(error) });
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to clear cache'
+      });
+    }
+  })();
 }
 
 /**
@@ -202,8 +320,8 @@ export function leetcodeCacheMiddleware() {
 export function csdnCacheMiddleware() {
   return createCacheMiddleware({
     ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request) => {
-      const userId = req.params.userId;
+    keyGenerator: (req: Request): string => {
+      const userId = req.params.userId || 'unknown';
       const theme = req.query.theme as string || 'default';
       return CacheKeyGenerator.generateCSDNKey(userId, theme);
     },
@@ -219,8 +337,8 @@ export function csdnCacheMiddleware() {
 export function juejinCacheMiddleware() {
   return createCacheMiddleware({
     ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request) => {
-      const userId = req.params.userId;
+    keyGenerator: (req: Request): string => {
+      const userId = req.params.userId || 'unknown';
       const theme = req.query.theme as string || 'default';
       return CacheKeyGenerator.generateJuejinKey(userId, theme);
     },
@@ -236,8 +354,8 @@ export function juejinCacheMiddleware() {
 export function bilibiliCacheMiddleware() {
   return createCacheMiddleware({
     ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request) => {
-      const uid = req.params.uid;
+    keyGenerator: (req: Request): string => {
+      const uid = req.params.uid || 'unknown';
       const theme = req.query.theme as string || 'default';
       return CacheKeyGenerator.generateBilibiliKey(uid, theme);
     },

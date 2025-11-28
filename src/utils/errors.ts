@@ -6,18 +6,21 @@ export class AppError extends Error {
   isOperational: boolean;
   errorCode?: string;
   details?: any;
+  isPrivate: boolean;
 
   constructor(
     message: string,
     statusCode: number,
     errorCode?: string,
-    details?: any
+    details?: any,
+    isPrivate: boolean = true
   ) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = true; // 标记为可操作的错误（非程序bug）
     this.errorCode = errorCode;
     this.details = details;
+    this.isPrivate = isPrivate;
     
     // 捕获错误栈跟踪
     Error.captureStackTrace(this, this.constructor);

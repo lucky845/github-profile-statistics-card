@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getCSDNUserStats } from '../services/csdn.service';
-import { generateCard, CardType, getThemeConfig } from '../services/svg.service';
+import { generateCard, CardType } from '../services/svg.service';
 import { activeTheme } from '../config/theme.config';
 
 // 获取CSDN统计信息
@@ -8,14 +8,12 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
   try {
     const userId = req.params.userId;
     // 从查询参数获取主题名称，支持主题参数
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
+    const themeName = (req.query.theme as string) || 'default';
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
 
     if (!userId) {
-      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
+      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeName));
       return;
     }
 
@@ -23,7 +21,7 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
     const stats = await getCSDNUserStats(userId, cacheTimeInSeconds);
 
     if (!stats.isValid) {
-      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到CSDN用户', themeConfig));
+      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到CSDN用户', themeName));
       return;
     }
 
@@ -43,15 +41,13 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
       codeAge: stats.codeAge,
       level: stats.level,
       monthPoints: stats.monthPoints
-    }, themeConfig));
+    }, themeName));
 
   } catch (error: any) {
-    console.error(`CSDN控制器错误: ${error.message}`);
-    // 从查询参数获取主题名称，支持主题参数
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
-    res.set('Content-Type', 'image/svg+xml');
-    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, themeConfig));
-  }
+      console.error(`CSDN控制器错误: ${error instanceof Error ? error.message : String(error)}`);
+      // 从查询参数获取主题名称，支持主题参数
+      const themeName = (req.query.theme as string) || 'default';
+      res.set('Content-Type', 'image/svg+xml');
+      res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error instanceof Error ? error.message : String(error)}`, themeName));
+    }
 };

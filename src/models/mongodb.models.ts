@@ -1,18 +1,47 @@
 import mongoose from 'mongoose';
 import {IBilibiliUser, ICSDNUser, IGitHubUser, ILeetCodeUser} from '../types';
 
+// 通用时间戳插件
+const timestampPlugin = function(schema: mongoose.Schema) {
+    schema.add({
+        createdAt: {
+            type: Date,
+            default: Date.now,
+            index: true
+        },
+        updatedAt: {
+            type: Date,
+            default: Date.now,
+            index: true
+        }
+    });
+    
+    schema.pre('save', function(next) {
+        this.updatedAt = new Date();
+        next();
+    });
+};
+
 // GitHub用户数据模型
-export const GitHubUser = mongoose.model<IGitHubUser>('GitHubUser', new mongoose.Schema({
+const githubUserSchema = new mongoose.Schema<IGitHubUser>({
     username: {type: String, required: true, unique: true},
     visitCount: {type: Number, default: 0},
     lastVisited: {type: Date, default: Date.now},
     lastUpdated: {type: Date, default: Date.now},
     avatarUrl: {type: String, default: null},
     avatarUpdatedAt: {type: Date, default: Date.now},
-}));
+}, { timestamps: true });
+
+// 添加索引以优化查询性能
+githubUserSchema.index({ username: 1 }, { unique: true });
+githubUserSchema.index({ lastVisited: -1 });
+githubUserSchema.index({ visitCount: -1 });
+githubUserSchema.index({ avatarUpdatedAt: 1 });
+
+export const GitHubUser = mongoose.model<IGitHubUser>('GitHubUser', githubUserSchema);
 
 // LeetCode用户数据模型
-const leetCodeUserSchema = new mongoose.Schema({
+const leetCodeUserSchema = new mongoose.Schema<ILeetCodeUser>({
     username: {type: String, required: true, unique: true},
     totalSolved: {type: Number, default: 0},
     easySolved: {type: Number, default: 0},
@@ -22,15 +51,20 @@ const leetCodeUserSchema = new mongoose.Schema({
     lastUpdated: {type: Date, default: Date.now},
     region: {type: String, enum: ['US', 'CN'], default: 'US'},
     expireAt: {type: Date, default: null}
-});
+}, { timestamps: true });
 
-// 添加TTL索引
-leetCodeUserSchema.index({expireAt: 1}, {expireAfterSeconds: 0});
+// 添加索引以优化查询和过期处理
+leetCodeUserSchema.index({ username: 1 }, { unique: true });
+leetCodeUserSchema.index({ lastUpdated: 1 });
+leetCodeUserSchema.index({ totalSolved: -1 });
+leetCodeUserSchema.index({ acceptanceRate: 1 });
+leetCodeUserSchema.index({ region: 1 });
+leetCodeUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 export const LeetCodeUser = mongoose.model<ILeetCodeUser>('LeetCodeUser', leetCodeUserSchema);
 
 // CSDN用户数据模型
-const csdnUserSchema = new mongoose.Schema({
+const csdnUserSchema = new mongoose.Schema<ICSDNUser>({
     userId: {type: String, required: true, unique: true},
     username: {type: String, default: ''},
     articleCount: {type: Number, default: 0},
@@ -47,15 +81,22 @@ const csdnUserSchema = new mongoose.Schema({
     level: {type: Number, default: null},
     monthPoints: {type: Number, default: null},
     expireAt: {type: Date, default: null}
-});
+}, { timestamps: true });
 
-// 添加TTL索引
-csdnUserSchema.index({expireAt: 1}, {expireAfterSeconds: 0});
+// 添加索引以优化查询和过期处理
+csdnUserSchema.index({ userId: 1 }, { unique: true });
+csdnUserSchema.index({ username: 1 });
+csdnUserSchema.index({ articleCount: -1 });
+csdnUserSchema.index({ followers: -1 });
+csdnUserSchema.index({ visitCount: -1 });
+csdnUserSchema.index({ lastUpdated: 1 });
+csdnUserSchema.index({ rank: 1 });
+csdnUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 export const CSDNUser = mongoose.model<ICSDNUser>('CSDNUser', csdnUserSchema);
 
 // juejin 用户数据模型
-const juejinUserSchema = new mongoose.Schema({
+const juejinUserSchema = new mongoose.Schema<any>({
     userId: {type: String, required: true, unique: true},
     username: {type: String, default: ''},
     desc: {type: String, default: ''},
@@ -65,14 +106,19 @@ const juejinUserSchema = new mongoose.Schema({
     views: {type: Number, default: 0},
     lastUpdated: {type: Date, default: Date.now},
     expireAt: {type: Date, default: null}
-});
+}, { timestamps: true });
 
-// 添加TTL索引
-juejinUserSchema.index({expireAt: 1}, {expireAfterSeconds: 0});
+// 添加索引以优化查询和过期处理
+juejinUserSchema.index({ userId: 1 }, { unique: true });
+juejinUserSchema.index({ username: 1 });
+juejinUserSchema.index({ articleCount: -1 });
+juejinUserSchema.index({ followers: -1 });
+juejinUserSchema.index({ lastUpdated: 1 });
+juejinUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
-export const JueJinUser = mongoose.model<ICSDNUser>('JueJinUser', juejinUserSchema);
+export const JueJinUser = mongoose.model('JueJinUser', juejinUserSchema);
 
-const bilibiliUserSchema = new mongoose.Schema({
+const bilibiliUserSchema = new mongoose.Schema<IBilibiliUser>({
     uid: {type: String, required: true, unique: true},
     username: {type: String, required: true},
     level: {type: Number, required: true},
@@ -85,9 +131,14 @@ const bilibiliUserSchema = new mongoose.Schema({
 
     lastUpdated: {type: Date, default: Date.now},
     expireAt: {type: Date, default: null}
-});
+}, { timestamps: true });
 
-// 添加TTL索引
-bilibiliUserSchema.index({expireAt: 1}, {expireAfterSeconds: 0});
+// 添加索引以优化查询和过期处理
+bilibiliUserSchema.index({ uid: 1 }, { unique: true });
+bilibiliUserSchema.index({ username: 1 });
+bilibiliUserSchema.index({ level: -1 });
+bilibiliUserSchema.index({ followers: -1 });
+bilibiliUserSchema.index({ lastUpdated: 1 });
+bilibiliUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 export const BilibiliUser = mongoose.model<IBilibiliUser>('BilibiliUser', bilibiliUserSchema);

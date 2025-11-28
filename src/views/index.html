@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub Profile Statistics Card</title>
+  <title>GitHub & LeetCode Stats</title>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -42,13 +42,6 @@
       overflow-x: auto;
       font-family: monospace;
       border-left: 4px solid #3498db;
-    }
-
-    footer {
-      text-align: center;
-      margin-top: 30px;
-      color: #777;
-      font-size: 0.9em;
     }
 
     .theme-switch {
@@ -95,180 +88,49 @@
       background-color: #e74c3c;
       color: white;
     }
-
-    .param-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-
-    .param-table th, .param-table td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-
-    .param-table th {
-      background-color: #f8f9fa;
-    }
-
-    .notice {
-      padding: 15px;
-      border-radius: 8px;
-      margin: 20px 0;
-    }
-
-    .warning {
-      background-color: #fff3cd;
-      border: 1px solid #ffeeba;
-      color: #856404;
-    }
-
-    .warning h4 {
-      color: #856404;
-      margin-top: 0;
-      margin-bottom: 10px;
-    }
-
-    .warning ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-
-    .warning li {
-      margin-bottom: 5px;
-    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>GitHub Profile Statistics Card</h1>
+    <h1>GitHub & LeetCode Stats</h1>
     
     <h2>GitHub 访问统计</h2>
     <div class="code-block">
       <p>在你的GitHub个人资料中添加访问计数器：</p>
-      <code>![](BASE_URL/github/用户名)</code>
+      <code>![](${BASE_URL}/github/用户名)</code>
     </div>
     
     <h2>LeetCode 解题统计</h2>
     <div class="code-block">
       <p>在你的GitHub个人资料中添加LeetCode统计：</p>
-      <code>![](BASE_URL/leetcode/用户名)</code>
-    </div>
-
-    <h2>CSDN 统计卡片</h2>
-    <div class="code-block">
-      <p>在你的GitHub个人资料中添加CSDN统计：</p>
-      <code>![](BASE_URL/csdn/userId)</code>
-    </div>
-    
-    <h2>掘金统计卡片</h2>
-    <div class="code-block">
-      <p>在你的GitHub个人资料中添加掘金统计：</p>
-      <code>![](BASE_URL/juejin/userId)</code>
-    </div>
-
-    <h2>哔哩哔哩统计卡片</h2>
-    <div class="code-block">
-      <p>在你的GitHub个人资料中添加哔哩哔哩统计：</p>
-      <code>![](BASE_URL/bilibili/uid)</code>
-    </div>
-
-    <div class="theme-switch">
-      <a href="bilibili/1574741?theme=light" class="theme-option light-theme">预览哔哩哔哩亮色主题</a>
-      <a href="bilibili/1574741?theme=dark" class="theme-option dark-theme">预览哔哩哔哩暗色主题</a>
-    </div>
-
-    <h3>数据展示</h3>
-    <table class="param-table">
-      <tr>
-        <th>数据项</th>
-        <th>说明</th>
-      </tr>
-      <tr>
-        <td>用户名称</td>
-        <td>B站用户名</td>
-      </tr>
-      <tr>
-        <td>粉丝数</td>
-        <td>当前粉丝总数</td>
-      </tr>
-      <tr>
-        <td>关注数</td>
-        <td>关注的用户数量</td>
-      </tr>
-      <tr>
-        <td>获赞数</td>
-        <td>获得的点赞总数</td>
-      </tr>
-      <tr>
-        <td>播放量</td>
-        <td>视频总播放量</td>
-      </tr>
-      <tr>
-        <td>个人签名</td>
-        <td>用户设置的个性签名</td>
-      </tr>
-    </table>
-
-    <div class="notice warning">
-      <h4>⚠️ 已知问题</h4>
-      <ul>
-        <li>由于哔哩哔哩的等级是svg图片，用户等级信息可能无法正常获取</li>
-        <li>部分用户数据可能因为隐私设置而无法显示</li>
-      </ul>
+      <code>![](${BASE_URL}/leetcode/用户名)</code>
     </div>
 
     <h2>参数选项</h2>
     <p>你可以通过添加以下参数来自定义显示结果：</p>
 
-    <table class="param-table">
-      <tr>
-        <th>参数</th>
-        <th>值</th>
-        <th>说明</th>
-      </tr>
-      <tr>
-        <td>theme</td>
-        <td>light / dark</td>
-        <td>设置卡片的主题风格</td>
-      </tr>
-      <tr>
-        <td>cn</td>
-        <td>true / false</td>
-        <td>是否使用力扣中国区数据（默认false，使用美区数据）</td>
-      </tr>
-      <tr>
-        <td>cacheSeconds</td>
-        <td>数字</td>
-        <td>配置缓存的秒数（默认120秒）</td>
-      </tr>
-    </table>
-
     <h3>主题选择</h3>
     <div class="code-block">
       <p>使用暗色主题：</p>
-      <code>![](BASE_URL/leetcode/用户名?theme=dark)</code>
+      <code>![](${BASE_URL}/leetcode/用户名?theme=dark)</code>
     </div>
 
     <h3>LeetCode区域选择 <span class="pill us-pill">US</span> <span class="pill cn-pill">CN</span></h3>
     <div class="code-block">
       <p>使用中国区LeetCode数据：</p>
-      <code>![](BASE_URL/leetcode/用户名?cn=true)</code>
+      <code>![](${BASE_URL}/leetcode/用户名?cn=true)</code>
     </div>
 
     <h3>组合多个参数</h3>
     <div class="code-block">
       <p>使用暗色主题和中国区数据：</p>
-      <code>![](BASE_URL/leetcode/用户名?theme=dark&cn=true)</code>
+      <code>![](${BASE_URL}/leetcode/用户名?theme=dark&cn=true)</code>
     </div>
 
-    <h2>使用方法</h2>
-    <p>将上述代码添加到你的GitHub profile README.md文件中，将"用户名"或"userId"替换为你的相应平台的用户名或ID。</p>
+    <div class="theme-switch">
+      <a href="?theme=light" class="theme-option light-theme">亮色主题</a>
+      <a href="?theme=dark" class="theme-option dark-theme">暗色主题</a>
+    </div>
   </div>
-
-  <footer>
-    &copy; 2024 GitHub Profile Statistics Card. 开源项目 by <a href="https://github.com/lucky845">lucky845</a>
-  </footer>
 </body>
-</html> 
+</html>

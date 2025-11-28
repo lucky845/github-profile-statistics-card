@@ -4,12 +4,14 @@
  */
 
 import NodeCache from 'node-cache';
+import { secureLogger } from '../utils/logger';
 
 // 缓存配置类型
 export interface CacheConfig {
   ttl: number; // 过期时间（秒）
   checkperiod?: number; // 检查周期（秒）
   maxKeys?: number; // 最大键数量
+  maxMemory?: number; // 最大内存使用量（MB）
 }
 
 // 缓存策略枚举
@@ -24,6 +26,7 @@ export interface CacheStats {
   hits: number;
   misses: number;
   keys: number;
+  groups: number;
   hitsRate: number;
 }
 
@@ -35,6 +38,8 @@ export abstract class BaseCacheService {
   abstract set<T>(key: string, value: T, ttl?: number): Promise<boolean>;
   abstract delete(key: string): Promise<boolean>;
   abstract clear(): Promise<boolean>;
+  abstract deleteByPattern(pattern: string | RegExp): Promise<number>;
+  abstract clearGroup(group: string): Promise<number>;
   abstract getStats(): CacheStats;
 }
 
@@ -45,6 +50,7 @@ class MemoryCacheService extends BaseCacheService {
   private cache: NodeCache;
   private hits: number = 0;
   private misses: number = 0;
+  private keyGroups: Map<string, Set<string>> = new Map(); // 用于分组管理键
 
   constructor(config: CacheConfig) {
     super();
@@ -52,8 +58,43 @@ class MemoryCacheService extends BaseCacheService {
       stdTTL: config.ttl,
       checkperiod: config.checkperiod || 60,
       maxKeys: config.maxKeys || -1,
-      useClones: false
+      useClones: false,
+      // 移除不支持的maxMemorySize属性
     });
+    
+    // 定期清理不使用的键组
+    setInterval(() => this.cleanupEmptyKeyGroups(), 3600000); // 每小时清理一次
+  }
+  
+  /**
+   * 将键添加到指定的组
+   */
+  private addKeyToGroup(group: string, key: string): void {
+    if (!this.keyGroups.has(group)) {
+      this.keyGroups.set(group, new Set());
+    }
+    this.keyGroups.get(group)?.add(key);
+  }
+  
+  /**
+   * 从组中移除键
+   */
+  private removeKeyFromGroup(group: string, key: string): void {
+    const keys = this.keyGroups.get(group);
+    if (keys) {
+      keys.delete(key);
+    }
+  }
+  
+  /**
+   * 清理空的键组
+   */
+  private cleanupEmptyKeyGroups(): void {
+    for (const [group, keys] of this.keyGroups.entries()) {
+      if (keys.size === 0) {
+        this.keyGroups.delete(group);
+      }
+    }
   }
 
   async get<T>(key: string): Promise<T | undefined> {
@@ -67,16 +108,62 @@ class MemoryCacheService extends BaseCacheService {
   }
 
   async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    // 提取前缀作为分组标识符
+    const group = key.split(':')[0];
+    this.addKeyToGroup(group, key);
+    secureLogger.debug(`Cache set: ${key}`);
     return this.cache.set(key, value, ttl || 0);
   }
 
   async delete(key: string): Promise<boolean> {
+    // 从键组中移除
+    const group = key.split(':')[0];
+    this.removeKeyFromGroup(group, key);
     return this.cache.del(key) > 0;
   }
 
   async clear(): Promise<boolean> {
     this.cache.flushAll();
+    this.keyGroups.clear();
     return true;
+  }
+  
+  /**
+   * 根据模式删除缓存
+   */
+  async deleteByPattern(pattern: string | RegExp): Promise<number> {
+    let deletedCount = 0;
+    const keys = this.cache.keys();
+    
+    for (const key of keys) {
+      if (typeof pattern === 'string' && key.includes(pattern)) {
+        await this.delete(key);
+        deletedCount++;
+      } else if (pattern instanceof RegExp && pattern.test(key)) {
+        await this.delete(key);
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
+  }
+  
+  /**
+   * 清除指定组的所有缓存
+   */
+  async clearGroup(group: string): Promise<number> {
+    const keys = this.keyGroups.get(group);
+    if (!keys) return 0;
+    
+    let deletedCount = 0;
+    for (const key of keys) {
+      if (await this.delete(key)) {
+        deletedCount++;
+      }
+    }
+    
+    this.keyGroups.delete(group);
+    return deletedCount;
   }
 
   getStats(): CacheStats {
@@ -85,6 +172,7 @@ class MemoryCacheService extends BaseCacheService {
       hits: this.hits,
       misses: this.misses,
       keys: this.cache.keys().length,
+      groups: this.keyGroups.size,
       hitsRate: total > 0 ? (this.hits / total) * 100 : 0
     };
   }
@@ -109,9 +197,17 @@ class NoopCacheService extends BaseCacheService {
   async clear(): Promise<boolean> {
     return true;
   }
+  
+  async deleteByPattern(pattern: string | RegExp): Promise<number> {
+    return 0;
+  }
+  
+  async clearGroup(group: string): Promise<number> {
+    return 0;
+  }
 
   getStats(): CacheStats {
-    return { hits: 0, misses: 0, keys: 0, hitsRate: 0 };
+    return { hits: 0, misses: 0, keys: 0, groups: 0, hitsRate: 0 };
   }
 }
 
@@ -190,7 +286,8 @@ export class CacheKeyGenerator {
 const defaultCacheConfig: CacheConfig = {
   ttl: 300, // 5分钟
   checkperiod: 60,
-  maxKeys: 10000
+  maxKeys: 10000,
+  maxMemory: 512 // 最大使用 512MB 内存
 };
 
 // 导出单例缓存服务
@@ -217,19 +314,31 @@ export function Cacheable(
     descriptor.value = async function(...args: any[]) {
       const key = keyGenerator(...args);
       
-      // 尝试从缓存获取
-      const cachedValue = await cacheService.get(key);
-      if (cachedValue !== null) {
-        return cachedValue;
-      }
+      try {
+        // 尝试从缓存获取
+        const cachedValue = await cacheService.get(key);
+        if (cachedValue !== undefined && cachedValue !== null) {
+          return cachedValue;
+        }
 
-      // 执行原始方法
-      const result = await originalMethod.apply(this, args);
-      
-      // 缓存结果
-      await cacheService.set(key, result, ttl);
-      
-      return result;
+        // 执行原始方法
+        const result = await originalMethod.apply(this, args);
+        
+        // 只有在结果非空时才缓存
+        if (result !== undefined && result !== null) {
+          // 避免缓存过大的对象
+          const serializedSize = JSON.stringify(result).length;
+          if (serializedSize < 1024 * 1024) { // 小于 1MB 的结果才缓存
+            await cacheService.set(key, result, ttl);
+          }
+        }
+        
+        return result;
+      } catch (error) {
+        console.error(`Cache decorator error for key ${key}:`, error);
+        // 缓存错误不应该影响正常功能，继续执行原方法
+        return originalMethod.apply(this, args);
+      }
     };
 
     return descriptor;

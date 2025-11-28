@@ -1,12 +1,6 @@
 // 导入必要的测试和服务模块
 import { cacheService, CacheKeyGenerator } from '../services/cache.service';
-
-// Jest全局变量声明
-declare const jest: any;
-declare const describe: any;
-declare const it: any;
-declare const expect: any;
-declare const beforeEach: any;
+import { secureLogger } from '../utils/logger';
 
 
 // 模拟 node-cache
@@ -67,9 +61,15 @@ jest.mock('node-cache', () => {
 
 describe('Cache Service Tests', () => {
   beforeEach(() => {
-      // 使用全局的cacheService
-      // 清空缓存可以通过重新设置一个键来模拟
-    });
+    // 清空缓存
+    jest.spyOn(secureLogger, 'debug').mockImplementation((message: string) => secureLogger as any);
+    jest.spyOn(secureLogger, 'error').mockImplementation((message: string) => secureLogger as any);
+    jest.spyOn(secureLogger, 'info').mockImplementation((message: string) => secureLogger as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('Basic Cache Operations', () => {
     it('should set and get a value correctly', async () => {
@@ -80,6 +80,7 @@ describe('Cache Service Tests', () => {
       const retrievedValue = await cacheService.get(key);
       
       expect(retrievedValue).toEqual(value);
+      expect(secureLogger.debug).toHaveBeenCalledWith('Cache set: test_key');
     });
 
     it('should return undefined for non-existent keys', async () => {
@@ -97,6 +98,29 @@ describe('Cache Service Tests', () => {
       const retrievedValue = await cacheService.get(key);
       
       expect(retrievedValue).toBeUndefined();
+    });
+
+    it('should handle cache operations properly', async () => {
+      // 测试缓存设置和获取
+      await cacheService.set('key1', 'value1');
+      expect(await cacheService.get('key1')).toBe('value1');
+      
+      // 测试删除
+      await cacheService.delete('key1');
+      expect(await cacheService.get('key1')).toBeUndefined();
+      
+      // 验证日志调用
+      expect(secureLogger.debug).toHaveBeenCalled();
+    });
+
+    it('should handle cache operations with custom TTL', async () => {
+      const key = 'test_ttl_key';
+      const value = { data: 'ttl data' };
+      
+      await cacheService.set(key, value, 60); // 60秒TTL
+      const retrievedValue = await cacheService.get(key);
+      
+      expect(retrievedValue).toEqual(value);
     });
 
     it('should handle multiple cache entries', async () => {

@@ -19,6 +19,7 @@ yarn-error.log*
 .vscode/
 *.swp
 *.swo
+dist/
 
 # 操作系统文件
 .DS_Store

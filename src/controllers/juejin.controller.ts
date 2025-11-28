@@ -1,23 +1,21 @@
 import { Request, Response } from 'express';
 import getJuejinInfo from '../services/juejin.service';
 import { JuejinUserData } from '../types';
-import { generateCard, CardType, getThemeConfig } from '../services/svg.service';
+import { generateCard, CardType } from '../services/svg.service';
 import { activeTheme } from '../config/theme.config';
 
 // 获取掘金用户数据的控制器
 export const fetchJuejinUserData = async (req: Request, res: Response): Promise<void> => {
     const userId = req.params.user_id;
     // 从查询参数获取主题名称，支持主题参数
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
+    const themeName = (req.query.theme as string) || 'default';
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
     console.debug(`处理掘金请求: 用户ID=${userId}`);
 
     if (!userId) {
         res.status(400).set('Content-Type', 'image/svg+xml')
-            .send(generateCard(CardType.ERROR, '未提供用户ID', themeConfig));
+            .send(generateCard(CardType.ERROR, '未提供用户ID', themeName));
         return;
     }
 
@@ -27,7 +25,7 @@ export const fetchJuejinUserData = async (req: Request, res: Response): Promise<
     if (!stats.isValid) {
         res.status(404)
             .set('Content-Type', 'image/svg+xml')
-            .send(generateCard(CardType.ERROR, '未找到掘金用户', themeConfig));
+            .send(generateCard(CardType.ERROR, '未找到掘金用户', themeName));
         return;
     }
 
@@ -43,5 +41,5 @@ export const fetchJuejinUserData = async (req: Request, res: Response): Promise<
         views: stats.views,
         username: stats.username,
         desc: stats.desc,
-    } as JuejinUserData, themeConfig));
+    } as JuejinUserData, themeName));
 };
