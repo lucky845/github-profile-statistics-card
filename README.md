@@ -291,6 +291,18 @@ MONGODB_URI=your_mongodb_uri
 npm run dev
 ```
 
+5. 构建项目：
+```bash
+npm run build
+```
+
+6. 运行生产版本：
+```bash
+npm start
+```
+
+> 说明：本项目使用TypeScript开发，已优化编译配置，构建输出文件将存放在`dist`目录中，确保源代码与编译产物分离，提高项目结构清晰度。项目使用`tsc-alias`处理路径别名，确保编译后的代码能够正确解析模块引用。
+
 ### 提交规范
 
 提交信息请遵循以下格式：
