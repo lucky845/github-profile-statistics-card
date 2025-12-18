@@ -73,13 +73,12 @@ export class MongoDBManager {
             }
             
             // 尝试连接数据库，设置超时时间
-            const connectionTimeout = setTimeout(() => {
-                secureLogger.warn('⏱️ MongoDB connection timeout reached, will continue with memory cache');
-                // 不抛出错误，允许应用继续运行
-            }, this.config.serverSelectionTimeoutMS || 15000);
+            const connectPromise = mongoose.connect(dbConfig.mongoURI, this.config);
+            const timeoutPromise = new Promise<void>((_, reject) => 
+                setTimeout(() => reject(new Error('Database connection timeout')), this.config.connectTimeoutMS || 30000)
+            );
             
-            await mongoose.connect(dbConfig.mongoURI, this.config);
-            clearTimeout(connectionTimeout);
+            await Promise.race([connectPromise, timeoutPromise]);
             
             this.registerEventListeners();
             this.isConnected = true;
