@@ -8,7 +8,7 @@ export class MongoDBManager {
     private static instance: MongoDBManager;
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 5;
-    private isConnected = false;
+    public isConnected = false;
 
     // 修改构造函数为私有
     private constructor() {
@@ -22,15 +22,15 @@ export class MongoDBManager {
     }
 
     private readonly config: mongoose.ConnectOptions = {
-        maxPoolSize: 20,
-        minPoolSize: 5,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
+        maxPoolSize: dbConfig.options.maxPoolSize || 20,
+        minPoolSize: dbConfig.options.minPoolSize || 5,
+        serverSelectionTimeoutMS: dbConfig.options.serverSelectionTimeoutMS || 15000,
+        socketTimeoutMS: dbConfig.options.socketTimeoutMS || 60000,
         retryReads: true,
         retryWrites: true,
         heartbeatFrequencyMS: 10000,
-        connectTimeoutMS: 30000,
-        family: 4 // 优先使用IPv4
+        connectTimeoutMS: dbConfig.options.connectTimeoutMS || 30000,
+        family: 4, // 优先使用IPv4
     };
 
     async ensureConnection(): Promise<boolean> {
@@ -72,7 +72,15 @@ export class MongoDBManager {
                 return;
             }
             
+            // 尝试连接数据库，设置超时时间
+            const connectionTimeout = setTimeout(() => {
+                secureLogger.warn('⏱️ MongoDB connection timeout reached, will continue with memory cache');
+                // 不抛出错误，允许应用继续运行
+            }, this.config.serverSelectionTimeoutMS || 15000);
+            
             await mongoose.connect(dbConfig.mongoURI, this.config);
+            clearTimeout(connectionTimeout);
+            
             this.registerEventListeners();
             this.isConnected = true;
             secureLogger.info(`✅ MongoDB Connected: ${mongoose.connection.host}`);
@@ -129,9 +137,16 @@ export class MongoDBManager {
     }
 
     private handleDisconnection() {
-        // 禁用自动重新连接，减少不必要的网络请求
-        secureLogger.warn('🔄 MongoDB disconnected, reconnection disabled in current configuration');
-        this.isConnected = false;
+        if (!this.isConnected) {
+            secureLogger.info('🔄 Attempting to reconnect to MongoDB...');
+            // 使用指数退避策略进行重连
+            setTimeout(() => {
+                this.connect().catch(err => {
+                    secureLogger.warn(`⚠️ Reconnection attempt failed: ${err.message}`);
+                    this.handleDisconnection(); // 递归调用继续尝试重连
+                });
+            }, 1000);
+        }
     }
 
     private handleConnectionError(error: Error) {
