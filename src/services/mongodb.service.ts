@@ -58,11 +58,35 @@ const handleDbOperation = async <T>(
         return null as unknown as T;
     }
     
+    // 快速检查数据库连接状态，如果未连接且有fallback，直接使用fallback
+    if (fallback && !dbManager.isConnected) {
+        secureLogger.warn(`[${operationName}] 数据库未连接，直接使用fallback`);
+        return fallback();
+    }
+    
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt <= DB_RETRY_CONFIG.maxRetries; attempt++) {
         try {
-            await dbManager.ensureConnection();
+            // 快速检查连接状态，避免在每次尝试时都等待连接超时
+            if (!dbManager.isConnected) {
+                // 尝试建立连接，但设置一个短超时
+                const connectPromise = dbManager.ensureConnection();
+                const timeoutPromise = new Promise<boolean>((_, reject) => 
+                    setTimeout(() => reject(new Error('Database connection timeout')), 3000)
+                );
+                
+                try {
+                    await Promise.race([connectPromise, timeoutPromise]);
+                } catch (connectError) {
+                    secureLogger.warn(`[${operationName}] 数据库连接失败: ${(connectError as Error).message}`);
+                    if (fallback) {
+                        return fallback();
+                    }
+                    continue;
+                }
+            }
+            
             secureLogger.debug(`Executing ${operationName} operation, attempt ${attempt + 1}`);
             const result = await operation();
             return result;
@@ -101,7 +125,7 @@ export const getLeetCodeUserData = async (
             memoryCache.leetcode[username],
             cacheTime
         );
-        
+
         // 如果内存缓存有数据且未过期，直接返回
         if (cacheResult.data && !cacheResult.needsFetch) {
             return cacheResult;
@@ -120,7 +144,7 @@ export const getLeetCodeUserData = async (
                 }
                 
                 return dbValidation;
-            }, undefined, `getLeetCodeUserData for ${username}`);
+            }, () => cacheResult, `getLeetCodeUserData for ${username}`);
 
             if (dbResult.data) return dbResult;
         } catch (dbError) {
@@ -171,13 +195,16 @@ export const getGitHubUserData = async (username: string) => {
     try {
         // 先检查内存缓存
         const cachedData = memoryCache.github[username];
+        const fallbackResult = cachedData ? {
+            userData: {
+                ...cachedData,
+                avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
+            }
+        } : {userData: null};
+
+        // 如果内存缓存有数据，直接返回
         if (cachedData) {
-            return {
-                userData: {
-                    ...cachedData,
-                    avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
-                }
-            };
+            return fallbackResult;
         }
 
         // 尝试数据库查询（作为补充）
@@ -192,14 +219,14 @@ export const getGitHubUserData = async (username: string) => {
                 }
                 
                 return result;
-            }, undefined, `getGitHubUserData for ${username}`);
+            }, () => null, `getGitHubUserData for ${username}`);
 
             if (dbResult) return {userData: dbResult};
         } catch (dbError) {
             secureLogger.warn(`[GitHub] 数据库查询失败，将使用内存缓存: ${(dbError as Error).message}`);
         }
 
-        return {userData: null};
+        return fallbackResult;
 
     } catch (error: any) {
         secureLogger.error(`[GitHub] 获取数据失败: ${error.message}`);
@@ -282,17 +309,16 @@ export const getCSDNUserData = async (
         const dbResult = await handleDbOperation(async () => {
             const data = await CSDNUser.findOne({userId}).lean();
             return validateCache(data, cacheTime);
-        });
+        }, () => {
+            // 回退到内存缓存
+            const cacheResult = validateCache(
+                memoryCache.csdn[userId],
+                cacheTime
+            );
+            return cacheResult;
+        }, 'CSDNUserData');
 
-        if (dbResult.data) return dbResult;
-
-        // 回退到内存缓存
-        const cacheResult = validateCache(
-            memoryCache.csdn[userId],
-            cacheTime
-        );
-
-        return cacheResult;
+        return dbResult;
 
     } catch (error: any) {
         console.error(`[CSDN] 获取数据失败: ${error.message}`);
