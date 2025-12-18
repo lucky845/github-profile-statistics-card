@@ -4,7 +4,7 @@
   "description": "GitHub profile LeetCode stats display",
   "main": "src/app.ts",
   "scripts": {
-    "start": "node dist/app.js",
+    "start": "nodemon src/app.ts",
     "dev": "nodemon src/app.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
