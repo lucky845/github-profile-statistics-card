@@ -4,11 +4,11 @@
   "description": "GitHub profile LeetCode stats display",
   "main": "src/app.ts",
   "scripts": {
-    "start": "node dist/app.js",
+    "start": "node dist/src/app.js",
     "dev": "nodemon src/app.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
-    "build": "tsc && tsc-alias"
+    "build": "tsc && tsc-alias && mkdir -p dist/src && (find dist -type f -name '*.js' -o -name '*.js.map' | grep -v '/src/' | xargs -I {} mv {} dist/src/) && (find dist -type d -depth | grep -v '^dist$' | grep -v '/src/' | xargs -I {} mv {} dist/src/ || true)"
   },
   "keywords": [
     "github",
