@@ -17,7 +17,6 @@ dompurify.addHook('afterSanitizeAttributes', (node: any) => {
       // 允许的域名白名单
       const allowedDomains = [
         'avatars.githubusercontent.com',
-        'avatars.githubusercontent.com/u',
         'avatars0.githubusercontent.com',
         'avatars1.githubusercontent.com',
         'avatars2.githubusercontent.com',
@@ -31,7 +30,14 @@ dompurify.addHook('afterSanitizeAttributes', (node: any) => {
       
       // 检查是否为允许的URL格式
       const isAllowedUrl = src.startsWith('http://') || src.startsWith('https://');
-      const hasAllowedDomain = allowedDomains.some(domain => src.includes(domain));
+      const hasAllowedDomain = allowedDomains.some(domain => {
+        try {
+          const url = new URL(src);
+          return url.hostname === domain;
+        } catch {
+          return src.includes(domain);
+        }
+      });
       
       // 如果不是允许的URL格式或不包含允许的域名，则移除该属性
       if (!isAllowedUrl || !hasAllowedDomain) {
