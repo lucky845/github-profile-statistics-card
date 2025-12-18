@@ -14,8 +14,13 @@ export async function fetchLeetCodeStats(
   useCN: boolean = false
 ): Promise<{ success: boolean; data?: LeetCodeStats; error?: string }> {
   try {
-    // 增加超时时间到15秒，避免因网络延迟导致的请求失败
-    const httpClient = createRequest(15000);
+    // 增加超时时间到5秒，避免因网络延迟导致的请求失败
+    const request = createRequest(5000, {
+      headers: {
+        'Origin': useCN ? 'https://leetcode.cn' : 'https://leetcode.com',
+        'Referer': useCN ? `https://leetcode.cn/u/${username}/` : `https://leetcode.com/${username}/`
+      }
+    });
 
     // 如果指定了使用中国区，则使用中国区特定的查询
     if (useCN) {
@@ -43,7 +48,7 @@ export async function fetchLeetCodeStats(
       
       try {
         // 使用带重试机制的请求
-        const response = await createRequestWithRetry(() => httpClient.post(
+        const response = await createRequestWithRetry(() => request.post(
           "https://leetcode.cn/graphql",
           {
             query: cnQuery,
@@ -56,6 +61,8 @@ export async function fetchLeetCodeStats(
         }
         return { success: false, error: '未找到中国区LeetCode用户数据' };
       } catch (error: any) {
+        console.warn(`获取中国区LeetCode数据失败: ${error.message}`);
+        // API调用失败时返回错误
         return { 
           success: false, 
           error: `获取中国区LeetCode数据失败: ${error.message}` 
@@ -86,7 +93,7 @@ export async function fetchLeetCodeStats(
       
       try {
         // 使用带重试机制的请求
-        const response = await createRequestWithRetry(() => httpClient.post(
+        const response = await createRequestWithRetry(() => request.post(
           "https://leetcode.com/graphql",
           {
             query: usQuery,
@@ -99,6 +106,8 @@ export async function fetchLeetCodeStats(
         }
         return { success: false, error: '未找到美国区LeetCode用户数据' };
       } catch (error: any) {
+        console.warn(`获取美国区LeetCode数据失败: ${error.message}`);
+        // API调用失败时返回错误
         return { 
           success: false, 
           error: `获取美国区LeetCode数据失败: ${error.message}` 
@@ -107,9 +116,10 @@ export async function fetchLeetCodeStats(
     }
   } catch (error: any) {
     console.error(`获取LeetCode数据失败:`, error);
+    // 整体请求失败时返回错误
     return {
       success: false,
-      error: error.message || '获取LeetCode数据时出错',
+      error: `获取LeetCode数据失败: ${error instanceof Error ? error.message : '未知错误'}`
     };
   }
 }

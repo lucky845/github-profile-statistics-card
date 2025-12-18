@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import {createRequest, createRequestWithRetry} from '../utils/http.utils';
 import {getCSDNUserData, updateCSDNUserData} from './mongodb.service';
 import {CSDNUserStats} from "../types";
+import { asyncDbUpdate } from '../utils/db-update.utils';
 
 
 /**
@@ -206,8 +207,8 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
             expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
         };
 
-        // 更新数据库
-        await updateCSDNUserData(userId, csdnUserData);
+        // 异步更新数据库，不阻塞返回
+        asyncDbUpdate(updateCSDNUserData, [userId, csdnUserData], 'CSDN');
 
         return {
             ...csdnUserData,

@@ -1,4 +1,5 @@
 import axios, {AxiosRequestConfig} from 'axios';
+import https from 'https';
 
 // 随机用户代理列表
 const userAgents = [
@@ -32,6 +33,7 @@ export const createRequest = (timeout = 10000, config: AxiosRequestConfig = {}) 
             'User-Agent': getRandomUserAgent(),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Cache-Control': 'max-age=0',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
@@ -39,11 +41,17 @@ export const createRequest = (timeout = 10000, config: AxiosRequestConfig = {}) 
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
+            'DNT': '1',
+            'TE': 'Trailers',
             'X-Forwarded-For': randomIP,
             'X-Real-IP': randomIP,
-            'Referer': 'https://www.csdn.net/',
+            'Referer': 'https://www.baidu.com/',
             ...config.headers,
         },
+        // 添加代理支持（可选）
+        proxy: config.proxy,
+        // 禁用SSL验证（仅开发环境使用）
+        httpsAgent: new https.Agent({ rejectUnauthorized: config.httpsAgent?.rejectUnauthorized ?? true }),
         ...config
     });
 };

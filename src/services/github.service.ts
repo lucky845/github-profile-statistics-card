@@ -1,5 +1,6 @@
 import { createRequest } from '../utils/http.utils';
 import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
+import { asyncDbUpdate } from '../utils/db-update.utils';
 
 // 获取GitHub用户数据（包括头像和访问计数）
 export async function getGitHubUserStats(username: string): Promise<{
@@ -44,7 +45,7 @@ export async function getGitHubUserStats(username: string): Promise<{
     }
 
     // 更新访问计数和头像URL（如果有新的）
-    await updateGitHubUserData(username, userData, needFetchAvatar ? avatarUrl : undefined);
+    asyncDbUpdate(updateGitHubUserData, [username, userData, needFetchAvatar ? avatarUrl : undefined], 'GitHub');
 
     // 获取更新后的用户数据以获取最新的访问计数
     const { userData: updatedData } = await getGitHubUserData(username);

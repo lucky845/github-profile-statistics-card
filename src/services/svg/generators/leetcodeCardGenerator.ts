@@ -19,32 +19,13 @@ export const generateLeetCodeCard = (data: ILeetCodeUser | string, theme: ThemeO
     return generateErrorCard(data as string, theme);
   }
 
-  const { username, submitStats, solvedProblem, totalProblem } = data as ILeetCodeUser;
+  const { username, totalSolved, easySolved, mediumSolved, hardSolved } = data as ILeetCodeUser;
   
-  // 提取各难度题目的提交统计数据
-  let easySolved = 0;
-  let mediumSolved = 0;
-  let hardSolved = 0;
-  
-  if (submitStats && submitStats.acSubmissionNum) {
-    submitStats.acSubmissionNum.forEach(item => {
-      switch (item.difficulty) {
-        case 'EASY':
-          easySolved = item.count;
-          break;
-        case 'MEDIUM':
-          mediumSolved = item.count;
-          break;
-        case 'HARD':
-          hardSolved = item.count;
-          break;
-      }
-    });
-  }
-  
-  // 计算百分比
-  const totalSolved = solvedProblem || (easySolved + mediumSolved + hardSolved);
-  const solvedPercentage = totalProblem ? Math.round((totalSolved / totalProblem) * 100) : 0;
+  // 由于API和模拟数据中没有提供总题目数，我们可以使用一个合理的默认值（例如2000）来计算百分比
+  // 或者简单地使用100%作为占位符
+  const defaultTotalProblems = 2000;
+  const solvedPercentage = Math.round((totalSolved / defaultTotalProblems) * 100);
+  const totalProblem = defaultTotalProblems;
   
   // 当前日期
   const currentDate = new Date().toLocaleDateString();

@@ -347,20 +347,33 @@ export const getJuejinUserData = async (
     cacheTime = CACHE_TTL
 ) => {
     try {
-        // 尝试数据库查询
-        const dbResult = await handleDbOperation(async () => {
-            const data = await JueJinUser.findOne({userId}).lean();
-            // 使用类型断言确保数据符合validateCache的泛型约束
-            return validateCache(data as { lastUpdated: Date | number | string } | null, cacheTime);
-        });
-
-        if (dbResult.data) return dbResult;
-
-        // 回退到内存缓存
+        // 先尝试内存缓存（快速响应）
         const cacheResult = validateCache(
             memoryCache.juejin[userId],
             cacheTime
         );
+        
+        // 如果内存缓存有数据且未过期，直接返回
+        if (cacheResult.data && !cacheResult.needsFetch) {
+            return cacheResult;
+        }
+
+        // 尝试数据库查询（作为补充）
+        try {
+            const dbResult = await handleDbOperation(async () => {
+                const data = await JueJinUser.findOne({userId}).lean();
+                // 使用类型断言确保数据符合validateCache的泛型约束
+                return validateCache(data as { lastUpdated: Date | number | string } | null, cacheTime);
+            });
+
+            if (dbResult.data && !dbResult.needsFetch) {
+                // 如果数据库有更新的数据，同步到内存缓存
+                memoryCache.juejin[userId] = dbResult.data;
+                return dbResult;
+            }
+        } catch (dbError) {
+            secureLogger.warn(`[掘金] 数据库查询失败，将使用内存缓存: ${(dbError as Error).message}`);
+        }
 
         return cacheResult;
 
