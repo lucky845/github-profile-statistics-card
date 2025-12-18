@@ -74,8 +74,9 @@ const logger = createLogger({
   transports: [consoleTransport]
 });
 
-// 如果是生产环境，可以添加文件传输
-if (process.env.NODE_ENV === 'production') {
+// 如果是生产环境且不是Vercel环境，可以添加文件传输
+// Vercel环境是只读的，无法创建文件日志
+if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   const errorTransport = new transports.File({
     filename: 'logs/error.log',
     level: 'error',
@@ -178,8 +179,8 @@ export const createRequestLoggerMiddleware = () => {
   };
 };
 
-// 确保日志目录存在（如果使用文件传输）
-if (process.env.NODE_ENV === 'production') {
+// 确保日志目录存在（如果使用文件传输且不是Vercel环境）
+if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   const fs = require('fs');
   const path = require('path');
   
