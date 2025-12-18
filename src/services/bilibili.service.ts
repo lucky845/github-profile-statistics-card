@@ -3,6 +3,7 @@ import {getBilibiliUserData, updateBilibiliUserData} from "./mongodb.service";
 import axios from "axios";
 import {bilibiliConfig} from "../config/bilibili.config";
 import * as cheerio from 'cheerio';
+import { asyncDbUpdate } from '../utils/db-update.utils';
 // import {encWbi, getWbiKeys} from "../utils/bilibili.utils";
 
 // API 接口路径
@@ -56,8 +57,8 @@ export const getBilibiliInfo = async (
             throw new Error('获取哔哩哔哩数据失败');
         }
 
-        // 更新到缓存
-        await updateBilibiliUserData(uid, userData);
+        // 异步更新数据库，不阻塞返回
+        asyncDbUpdate(updateBilibiliUserData, [uid, userData], 'Bilibili');
 
         return {...userData, isValid: true};
     } catch (error: any) {

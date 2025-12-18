@@ -202,3 +202,11 @@ startServer().then(serverInstance => {
     const { secureLogger } = require('./utils/logger');
     secureLogger.info('📊 Prometheus监控已初始化');
 });
+
+// 导出Express应用，用于Vercel部署
+module.exports = app;
+
+// 额外导出一个请求处理函数，确保Vercel可以正确处理所有请求
+module.exports.default = async (req: Request, res: Response) => {
+  await app(req, res);
+};

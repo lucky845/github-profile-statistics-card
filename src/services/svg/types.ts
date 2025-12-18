@@ -71,15 +71,14 @@ export interface ThemeOptions {
  */
 export interface ILeetCodeUser {
   username: string;
-  submitStats: {
-    acSubmissionNum: Array<{
-      difficulty: string;
-      count: number;
-      submissions: number;
-    }>;
-  };
-  solvedProblem: number;
-  totalProblem: number;
+  totalSolved: number;
+  easySolved: number;
+  mediumSolved: number;
+  hardSolved: number;
+  acceptanceRate: string;
+  lastUpdated: Date;
+  region: "US" | "CN";
+  expireAt?: Date;
 }
 
 /**
