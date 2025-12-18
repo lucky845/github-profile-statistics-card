@@ -58,11 +58,35 @@ const handleDbOperation = async <T>(
         return null as unknown as T;
     }
     
+    // 快速检查数据库连接状态，如果未连接且有fallback，直接使用fallback
+    if (fallback && !dbManager.isConnected) {
+        secureLogger.warn(`[${operationName}] 数据库未连接，直接使用fallback`);
+        return fallback();
+    }
+    
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt <= DB_RETRY_CONFIG.maxRetries; attempt++) {
         try {
-            await dbManager.ensureConnection();
+            // 快速检查连接状态，避免在每次尝试时都等待连接超时
+            if (!dbManager.isConnected) {
+                // 尝试建立连接，但设置一个短超时
+                const connectPromise = dbManager.ensureConnection();
+                const timeoutPromise = new Promise<boolean>((_, reject) => 
+                    setTimeout(() => reject(new Error('Database connection timeout')), 3000)
+                );
+                
+                try {
+                    await Promise.race([connectPromise, timeoutPromise]);
+                } catch (connectError) {
+                    secureLogger.warn(`[${operationName}] 数据库连接失败: ${(connectError as Error).message}`);
+                    if (fallback) {
+                        return fallback();
+                    }
+                    continue;
+                }
+            }
+            
             secureLogger.debug(`Executing ${operationName} operation, attempt ${attempt + 1}`);
             const result = await operation();
             return result;
