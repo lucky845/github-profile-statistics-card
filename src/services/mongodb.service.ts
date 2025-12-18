@@ -4,6 +4,7 @@ import {memoryCache} from '../utils/cacheManager';
 import {MongoDBManager} from '../utils/dbManager';
 import {secureLogger} from '../utils/logger';
 import mongoose from 'mongoose';
+import {dbConfig} from '../config/db.config';
 
 // 初始化数据库管理器
 const dbManager = MongoDBManager.getInstance();
@@ -47,6 +48,16 @@ const handleDbOperation = async <T>(
     fallback?: () => T,
     operationName: string = 'database'
 ): Promise<T> => {
+    // 检查是否配置了使用内存缓存，如果是，直接使用fallback或者返回默认值
+    if (dbConfig.useMemoryCache) {
+        secureLogger.info(`[${operationName}] 使用内存缓存模式，跳过数据库操作`);
+        if (fallback) {
+            return fallback();
+        }
+        // 如果没有fallback，返回适当的默认值
+        return null as unknown as T;
+    }
+    
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt <= DB_RETRY_CONFIG.maxRetries; attempt++) {
@@ -85,19 +96,36 @@ export const getLeetCodeUserData = async (
     cacheTime = CACHE_TTL
 ): Promise<{ data: ILeetCodeUser | null; needsFetch: boolean }> => {
     try {
-        // 尝试数据库查询
-        const dbResult: any = await handleDbOperation(async () => {
-            const data = await LeetCodeUser.findOne({username}).lean();
-            return validateCache(data, cacheTime);
-        }, undefined, `getLeetCodeUserData for ${username}`);
-
-        if (dbResult.data) return dbResult;
-
-        // 回退到内存缓存
+        // 先尝试内存缓存
         const cacheResult = validateCache(
             memoryCache.leetcode[username],
             cacheTime
         );
+        
+        // 如果内存缓存有数据且未过期，直接返回
+        if (cacheResult.data && !cacheResult.needsFetch) {
+            return cacheResult;
+        }
+
+        // 尝试数据库查询（作为补充）
+        try {
+            const dbResult: any = await handleDbOperation(async () => {
+                const data = await LeetCodeUser.findOne({username}).lean();
+                const dbValidation = validateCache(data, cacheTime);
+                
+                // 如果数据库有更新的数据，同步到内存缓存
+                if (dbValidation.data && !dbValidation.needsFetch) {
+                    memoryCache.leetcode[username] = dbValidation.data;
+                    return dbValidation;
+                }
+                
+                return dbValidation;
+            }, undefined, `getLeetCodeUserData for ${username}`);
+
+            if (dbResult.data) return dbResult;
+        } catch (dbError) {
+            secureLogger.warn(`[LeetCode] 数据库查询失败，将使用内存缓存: ${(dbError as Error).message}`);
+        }
 
         return cacheResult;
 
@@ -113,20 +141,22 @@ export const updateLeetCodeData = async (
     cacheTime = CACHE_TTL
 ) => {
     try {
-        // 优先更新数据库
-        await handleDbOperation(async () => {
+        // 先更新内存缓存（确保响应迅速）
+        memoryCache.leetcode[username] = {
+            ...userData,
+            lastUpdated: new Date()
+        };
+
+        // 尝试更新数据库（异步，不阻塞）
+        handleDbOperation(async () => {
             await LeetCodeUser.findOneAndUpdate(
                 {username},
                 {...userData, lastUpdated: new Date()},
                 {upsert: true, new: true}
             );
+        }, undefined, `updateLeetCodeData for ${username}`).catch(dbError => {
+            secureLogger.warn(`[LeetCode] 数据库更新失败，仅内存缓存已更新: ${dbError.message}`);
         });
-
-        // 更新缓存
-        memoryCache.leetcode[username] = {
-            ...userData,
-            lastUpdated: new Date()
-        };
 
         return true;
 
@@ -139,22 +169,37 @@ export const updateLeetCodeData = async (
 // GitHub 服务
 export const getGitHubUserData = async (username: string) => {
     try {
-        // 尝试数据库查询
-        const dbResult = await handleDbOperation(async () => {
-            const data = await GitHubUser.findOne({username}).lean();
-            return data ? {...data, avatarUpdatedAt: data.avatarUpdatedAt || new Date()} : null;
-        }, undefined, `getGitHubUserData for ${username}`);
-
-        if (dbResult) return {userData: dbResult};
-
-        // 回退到内存缓存
+        // 先检查内存缓存
         const cachedData = memoryCache.github[username];
-        return {
-            userData: cachedData ? {
-                ...cachedData,
-                avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
-            } : null
-        };
+        if (cachedData) {
+            return {
+                userData: {
+                    ...cachedData,
+                    avatarUpdatedAt: cachedData.avatarUpdatedAt || new Date()
+                }
+            };
+        }
+
+        // 尝试数据库查询（作为补充）
+        try {
+            const dbResult = await handleDbOperation(async () => {
+                const data = await GitHubUser.findOne({username}).lean();
+                const result = data ? {...data, avatarUpdatedAt: data.avatarUpdatedAt || new Date()} : null;
+                
+                // 如果数据库有数据，同步到内存缓存
+                if (result) {
+                    memoryCache.github[username] = result;
+                }
+                
+                return result;
+            }, undefined, `getGitHubUserData for ${username}`);
+
+            if (dbResult) return {userData: dbResult};
+        } catch (dbError) {
+            secureLogger.warn(`[GitHub] 数据库查询失败，将使用内存缓存: ${(dbError as Error).message}`);
+        }
+
+        return {userData: null};
 
     } catch (error: any) {
         secureLogger.error(`[GitHub] 获取数据失败: ${error.message}`);
@@ -168,51 +213,62 @@ export const updateGitHubUserData = async (
     avatarUrl?: string
 ) => {
     const now = new Date();
-    const newUserData = oldUserData ? {
-        $inc: {visitCount: 1},
-        $set: {
-            lastVisited: now,
-            lastUpdated: now,
-            ...(avatarUrl && {
-                avatarUrl,
-                avatarUpdatedAt: now
-            })
-        }
-    } : {
+    
+    // 先更新内存缓存
+    const currentCacheData = memoryCache.github[username] || oldUserData;
+    const newCacheData = {
+        ...(currentCacheData || {}),
         username,
-        visitCount: 1,
+        visitCount: (currentCacheData?.visitCount || 0) + 1,
         lastVisited: now,
         lastUpdated: now,
-        avatarUrl: avatarUrl || '',
-        avatarUpdatedAt: now
+        avatarUrl: avatarUrl || (currentCacheData?.avatarUrl || ''),
+        avatarUpdatedAt: avatarUrl ? now : (currentCacheData?.avatarUpdatedAt || now)
     };
+    
+    memoryCache.github[username] = newCacheData;
 
     try {
-        // 数据库操作
-        await handleDbOperation(async () => {
+        // 尝试更新数据库（异步，不阻塞）
+        const dbUserData = oldUserData ? {
+            $inc: {visitCount: 1},
+            $set: {
+                lastVisited: now,
+                lastUpdated: now,
+                ...(avatarUrl && {
+                    avatarUrl,
+                    avatarUpdatedAt: now
+                })
+            }
+        } : {
+            username,
+            visitCount: 1,
+            lastVisited: now,
+            lastUpdated: now,
+            avatarUrl: avatarUrl || '',
+            avatarUpdatedAt: now
+        };
+        
+        handleDbOperation(async () => {
             if (oldUserData) {
                 await GitHubUser.findOneAndUpdate(
                     {username},
-                    newUserData,
+                    dbUserData,
                     {upsert: true, new: true}
                 );
             } else {
-                await GitHubUser.create(newUserData);
+                await GitHubUser.create(dbUserData);
             }
+        }, undefined, `updateGitHubUserData for ${username}`).catch(dbError => {
+            secureLogger.warn(`[GitHub] 数据库更新失败，仅内存缓存已更新: ${dbError.message}`);
         });
-
-        // 更新缓存
-        memoryCache.github[username] = {
-            ...(oldUserData || {}),
-            ...(oldUserData ? newUserData.$set : newUserData),
-            visitCount: oldUserData ? oldUserData.visitCount + 1 : 1
-        };
 
         return true;
 
     } catch (error: any) {
         console.error(`[GitHub] 更新失败: ${error.message}`);
-        return false;
+        // 即使数据库更新失败，内存缓存已经更新，所以仍然返回true
+        return true;
     }
 };
 
