@@ -1,90 +1,86 @@
 // 导入 polyfill，确保在所有其他导入之前
 import './polyfill';
 
-import express, {Request, Response} from 'express';
+import express, { Request, Response } from 'express';
 import path from 'path';
-import {errorHandler, logger, mongoMiddleware, notFoundHandler} from './middleware';
-import {metricsMiddleware} from './middleware/metrics.middleware';
-import { generateCard, CardType, getThemeConfig } from './services/svg.service';
+import { 
+  errorHandler, 
+  logger, 
+  mongoMiddleware, 
+  notFoundHandler,
+  themeMiddleware,
+  metricsMiddleware,
+  cacheMiddleware,
+  cacheStatsHandler,
+  manualCacheClearHandler,
+  securityHeaders,
+  corsMiddleware,
+  xssProtection,
+  hppProtection,
+  apiRateLimiter
+} from './middleware';
 import {
-    appConfig,
-    darkTheme,
-    defaultTheme,
-    gruvboxLightTheme,
-    gruvboxTheme,
-    merkoTheme,
-    onedarkTheme,
-    tokyonightTheme
+  appConfig
 } from './config';
-import {bilibiliRouter, csdnRouter, githubRouter, juejinRouter, leetcodeRouter} from './routes';
+import { 
+  bilibiliRouter, 
+  csdnRouter, 
+  githubRouter, 
+  juejinRouter, 
+  leetcodeRouter 
+} from './routes';
 import metricsRouter from './routes/metrics.routes';
-import fs from 'fs';
 import mongoose from 'mongoose';
-import {MongoDBManager} from './utils/dbManager';
+import { MongoDBManager } from './utils/dbManager';
 import prometheusService from './services/prometheus.service';
+import { handleHomePage, handleHealthCheck, handleThemeTest } from './controllers/home.controller';
 
 // 初始化数据库连接管理器
 const dbManager = MongoDBManager.getInstance();
-
-// 全局主题设置
-const themes = {
-    light: defaultTheme,
-    dark: darkTheme,
-    merko: merkoTheme,
-    gruvbox: gruvboxTheme,
-    gruvbox_light: gruvboxLightTheme,
-    tokyonight: tokyonightTheme,
-    onedark: onedarkTheme,
-};
-
-// 中间件: 设置主题
-const themeMiddleware = (req: Request, res: Response, next: Function) => {
-    // 从查询参数获取主题
-    const themeName = req.query.theme as string;
-    if (themeName && themes[themeName as keyof typeof themes]) {
-        // 临时设置响应本地变量
-        res.locals.theme = themes[themeName as keyof typeof themes];
-    } else {
-        // 使用默认主题
-        res.locals.theme = defaultTheme;
-    }
-    next();
-};
 
 // 初始化Express应用
 const app = express();
 const port = appConfig.port;
 
-// 应用中间件
+// 应用安全中间件 - 尽早应用以保护所有后续处理
+app.use(securityHeaders);
+app.use(corsMiddleware);
+app.use(xssProtection);
+app.use(hppProtection);
+
+// 应用日志和数据处理中间件
 app.use(logger);
 app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+app.use(express.urlencoded({ extended: true }));
+
+// 应用业务中间件
 app.use(mongoMiddleware);
 app.use(themeMiddleware);
+app.use(cacheMiddleware);
 
 // 性能监控中间件 - 放在所有路由之前以捕获所有请求
 app.use(metricsMiddleware);
 
-// 健康检查端点
-app.get('/health', (req, res) => {
-    const dbStatus = mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
-    const poolStats = (mongoose.connection as any).poolMetrics || {};
-
-    res.json({
-        status: dbStatus,
-        uptime: process.uptime(),
-        database: {
-            status: dbStatus,
-            pool: poolStats
-        },
-        memory: process.memoryUsage()
-    });
-});
+// API路由使用更严格的速率限制
+app.use('/leetcode', apiRateLimiter);
+app.use('/github', apiRateLimiter);
+app.use('/csdn', apiRateLimiter);
+app.use('/juejin', apiRateLimiter);
+app.use('/bilibili', apiRateLimiter);
 
 // 设置静态文件目录
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 使用路由
+// 基本路由
+app.get('/', handleHomePage);
+app.get('/health', handleHealthCheck);
+app.get('/api/theme/test', handleThemeTest);
+
+// 缓存管理API（建议在生产环境中添加访问控制）
+app.get('/api/cache/stats', cacheStatsHandler);
+app.delete('/api/cache/clear', manualCacheClearHandler);
+
+// 平台相关路由
 app.use('/leetcode', leetcodeRouter);
 app.use('/github', githubRouter);
 app.use('/csdn', csdnRouter);
@@ -93,187 +89,6 @@ app.use('/bilibili', bilibiliRouter);
 
 // 监控相关路由
 app.use('/', metricsRouter);
-
-// 主题测试路由
-app.get('/api/theme/test', (req, res) => {
-  const themeName = req.query.theme as string;
-  const themeConfig = getThemeConfig(themeName);
-  
-  // 返回一个简单的测试卡片，展示主题样式
-  res.set('Content-Type', 'image/svg+xml');
-  res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
-    <rect width="400" height="200" fill="${themeConfig.colors.background}" rx="${themeConfig.card.borderRadius}" ry="${themeConfig.card.borderRadius}" stroke="${themeConfig.colors.border}" stroke-width="2"/>
-    <circle cx="70" cy="70" r="40" fill="${themeConfig.colors.accent.primary}"/>
-    <text x="230" y="60" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.title}" font-weight="bold" fill="${themeConfig.colors.text.title}">测试用户</text>
-    <text x="230" y="90" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.normal}" fill="${themeConfig.colors.text.secondary}">这是主题测试卡片</text>
-    <rect x="70" y="120" width="260" height="1" fill="${themeConfig.colors.border}"/>
-    <text x="130" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据1: 123</text>
-    <text x="250" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据2: 456</text>
-    <text x="200" y="180" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.small}" text-anchor="middle" fill="${themeConfig.colors.text.secondary}">主题: ${themeName || '默认'}</text>
-  </svg>`);
-});
-
-// 设置根路径展示页面
-app.get('/', (req: Request, res: Response) => {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    try {
-        // 尝试读取首页HTML文件
-        const indexPath = path.join(__dirname, 'views/index.html');
-        let indexHtml: string;
-
-        if (fs.existsSync(indexPath)) {
-            indexHtml = fs.readFileSync(indexPath, 'utf8');
-            // 替换基础URL
-            indexHtml = indexHtml.replace(/BASE_URL/g, baseUrl);
-        } else {
-            // 如果文件不存在，则使用内联HTML
-            indexHtml = `
-        <!DOCTYPE html>
-        <html lang="zh-CN">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>GitHub & LeetCode Stats</title>
-          <style>
-            body {
-              font-family: 'Arial', sans-serif;
-              line-height: 1.6;
-              color: #333;
-              max-width: 800px;
-              margin: 0 auto;
-              padding: 20px;
-              background-color: #f5f5f5;
-            }
-            
-            .container {
-              background-color: #fff;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-              padding: 30px;
-              margin-bottom: 30px;
-            }
-            
-            h1, h2 {
-              color: #2c3e50;
-            }
-            
-            h1 {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #eee;
-              padding-bottom: 15px;
-            }
-            
-            .code-block {
-              background-color: #f8f9fa;
-              border-radius: 4px;
-              padding: 15px;
-              margin: 15px 0;
-              overflow-x: auto;
-              font-family: monospace;
-              border-left: 4px solid #3498db;
-            }
-
-            .theme-switch {
-              margin-top: 30px;
-              text-align: center;
-            }
-
-            .theme-option {
-              display: inline-block;
-              margin: 0 10px;
-              padding: 8px 15px;
-              border-radius: 4px;
-              text-decoration: none;
-              font-weight: bold;
-            }
-
-            .light-theme {
-              background-color: #ffffff;
-              color: #333;
-              border: 1px solid #ddd;
-            }
-
-            .dark-theme {
-              background-color: #1e1e2e;
-              color: #fff;
-              border: 1px solid #333;
-            }
-
-            .pill {
-              display: inline-block;
-              padding: 3px 8px;
-              border-radius: 12px;
-              font-size: 12px;
-              margin-left: 8px;
-              font-weight: bold;
-            }
-
-            .us-pill {
-              background-color: #3498db;
-              color: white;
-            }
-
-            .cn-pill {
-              background-color: #e74c3c;
-              color: white;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>GitHub & LeetCode Stats</h1>
-            
-            <h2>GitHub 访问统计</h2>
-            <div class="code-block">
-              <p>在你的GitHub个人资料中添加访问计数器：</p>
-              <code>![](${baseUrl}/github/用户名)</code>
-            </div>
-            
-            <h2>LeetCode 解题统计</h2>
-            <div class="code-block">
-              <p>在你的GitHub个人资料中添加LeetCode统计：</p>
-              <code>![](${baseUrl}/leetcode/用户名)</code>
-            </div>
-
-            <h2>参数选项</h2>
-            <p>你可以通过添加以下参数来自定义显示结果：</p>
-
-            <h3>主题选择</h3>
-            <div class="code-block">
-              <p>使用暗色主题：</p>
-              <code>![](${baseUrl}/leetcode/用户名?theme=dark)</code>
-            </div>
-
-            <h3>LeetCode区域选择 <span class="pill us-pill">US</span> <span class="pill cn-pill">CN</span></h3>
-            <div class="code-block">
-              <p>使用中国区LeetCode数据：</p>
-              <code>![](${baseUrl}/leetcode/用户名?cn=true)</code>
-            </div>
-
-            <h3>组合多个参数</h3>
-            <div class="code-block">
-              <p>使用暗色主题和中国区数据：</p>
-              <code>![](${baseUrl}/leetcode/用户名?theme=dark&cn=true)</code>
-            </div>
-
-            <div class="theme-switch">
-              <a href="?theme=light" class="theme-option light-theme">亮色主题</a>
-              <a href="?theme=dark" class="theme-option dark-theme">暗色主题</a>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-        }
-
-        res.send(indexHtml);
-    } catch (error) {
-        console.error('读取首页错误:', error);
-        res.status(500).send('服务器错误');
-    }
-});
 
 // 捕获404错误的中间件，必须在所有路由后、错误处理前设置
 app.use(notFoundHandler);
@@ -288,62 +103,74 @@ let server: ReturnType<typeof app.listen>;
 
 const startServer = async () => {
     try {
-        // 初始化数据库连接
-        await dbManager.connect();
+        // 尝试初始化数据库连接（即使失败也继续启动服务器）
+        await dbManager.connect().catch(error => {
+            // 导入需要在运行时动态导入，避免循环依赖
+            const { secureLogger } = require('./utils/logger');
+            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
+        });
 
         server = app.listen(port, () => {
-            console.log(`
-      🚀 服务已启动于端口 ${port}
-      📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}
-      `);
+            // 导入需要在运行时动态导入，避免循环依赖
+            const { secureLogger } = require('./utils/logger');
+            secureLogger.info(`🚀 服务已启动于端口 ${port}`);
+            secureLogger.info(`📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}`);
         });
 
         return server;
     } catch (error) {
-        console.error('服务启动失败:', error);
+        // 导入需要在运行时动态导入，避免循环依赖
+        const { secureLogger } = require('./utils/logger');
+        secureLogger.error('🔴 服务启动失败:', error);
         process.exit(1);
     }
 };
 
 // 处理未捕获的异常
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('未处理的Promise拒绝:', reason);
+    // 导入需要在运行时动态导入，避免循环依赖
+    const { secureLogger } = require('./utils/logger');
+    secureLogger.error('🔴 未处理的Promise拒绝:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('未捕获的异常:', error);
+    // 导入需要在运行时动态导入，避免循环依赖
+    const { secureLogger } = require('./utils/logger');
+    secureLogger.error('🔴 未捕获的异常:', error);
     // 对于严重错误，可能需要优雅地关闭应用
     process.exit(1);
 });
 
 // 优雅终止
 process.on('SIGINT', async () => {
-    console.log('\n🛑 接收到终止信号');
+    // 导入需要在运行时动态导入，避免循环依赖
+    const { secureLogger } = require('./utils/logger');
+    secureLogger.info('🛑 接收到终止信号');
 
     try {
         // 1. 停止接受新请求
         server.close(() => {
-            console.log('🚫 已停止接受新请求');
+            secureLogger.info('🚫 已停止接受新请求');
         });
 
         // 2. 关闭数据库连接
         await dbManager.disconnect();
-        console.log('✅ MongoDB连接已关闭');
+        secureLogger.info('✅ MongoDB连接已关闭');
 
         // 3. 关闭现有连接
         server.close(() => {
-            console.log('🛑 HTTP服务完全停止');
+            secureLogger.info('🛑 HTTP服务完全停止');
             process.exit(0);
         });
 
         // 强制退出保护
         setTimeout(() => {
-            console.error('⏰ 关闭超时，强制退出');
+            secureLogger.error('⏰ 关闭超时，强制退出');
             process.exit(1);
         }, 10000); // 10秒超时
 
     } catch (error) {
-        console.error('关闭资源失败:', error);
+        secureLogger.error('❌ 关闭资源失败:', error);
         process.exit(1);
     }
 });
@@ -355,11 +182,15 @@ app.use(errorHandler);
 startServer().then(serverInstance => {
     // 处理其他关闭信号
     process.on('SIGTERM', () => {
-        console.log('\n🛑 接收到SIGTERM信号');
+        // 导入需要在运行时动态导入，避免循环依赖
+        const { secureLogger } = require('./utils/logger');
+        secureLogger.info('🛑 接收到SIGTERM信号');
         serverInstance.close();
     });
     
     // 初始化Prometheus服务
     prometheusService.initialize();
-    console.log('📊 Prometheus监控已初始化');
+    // 导入需要在运行时动态导入，避免循环依赖
+    const { secureLogger } = require('./utils/logger');
+    secureLogger.info('📊 Prometheus监控已初始化');
 });

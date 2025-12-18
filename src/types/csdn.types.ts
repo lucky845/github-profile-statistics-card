@@ -14,6 +14,7 @@ export interface ICSDNUser {
     codeAge?: number;
     level?: number;
     monthPoints?: number;
+    expireAt?: Date | null;
 }
 
 // CSDN用户数据接口

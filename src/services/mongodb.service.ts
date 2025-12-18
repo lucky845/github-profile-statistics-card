@@ -2,10 +2,24 @@ import {IBilibiliUser, ICSDNUser, IGitHubUser, ILeetCodeUser, JuejinUserData} fr
 import {BilibiliUser, CSDNUser, GitHubUser, JueJinUser, LeetCodeUser} from '../models/mongodb.models';
 import {memoryCache} from '../utils/cacheManager';
 import {MongoDBManager} from '../utils/dbManager';
+import {secureLogger} from '../utils/logger';
+import mongoose from 'mongoose';
 
 // 初始化数据库管理器
 const dbManager = MongoDBManager.getInstance();
 const CACHE_TTL = 86400; // 默认缓存24小时
+
+// 数据库操作重试配置
+const DB_RETRY_CONFIG = {
+    maxRetries: 3,
+    baseDelay: 100, // 基础延迟时间（毫秒）
+    maxDelay: 2000 // 最大延迟时间（毫秒）
+};
+
+// 计算重试延迟时间
+const calculateRetryDelay = (attempt: number): number => {
+    return Math.min(DB_RETRY_CONFIG.baseDelay * Math.pow(2, attempt), DB_RETRY_CONFIG.maxDelay);
+};
 
 // 统一缓存验证方法
 const validateCache = <T extends { lastUpdated: Date | number | string }>(
@@ -27,19 +41,42 @@ const validateCache = <T extends { lastUpdated: Date | number | string }>(
     };
 };
 
-// 统一数据库操作处理器
+// 统一数据库操作处理器（支持重试）
 const handleDbOperation = async <T>(
     operation: () => Promise<T>,
-    fallback?: () => T
+    fallback?: () => T,
+    operationName: string = 'database'
 ): Promise<T> => {
-    try {
-        await dbManager.ensureConnection();
-        return await operation();
-    } catch (error: any) {
-        console.warn(`Database operation failed: ${error.message}`);
-        if (fallback) return fallback();
-        throw error;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= DB_RETRY_CONFIG.maxRetries; attempt++) {
+        try {
+            await dbManager.ensureConnection();
+            secureLogger.debug(`Executing ${operationName} operation, attempt ${attempt + 1}`);
+            const result = await operation();
+            return result;
+        } catch (error: any) {
+            lastError = error;
+            secureLogger.error(`Database operation error (attempt ${attempt + 1}/${DB_RETRY_CONFIG.maxRetries + 1}): ${error.message}`);
+            
+            // 如果是最后一次尝试，或者有fallback函数，不进行重试
+            if (attempt >= DB_RETRY_CONFIG.maxRetries || fallback) break;
+            
+            // 计算重试延迟并等待
+            const delay = calculateRetryDelay(attempt);
+            secureLogger.info(`Retrying ${operationName} operation in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
+    
+    // 如果有fallback函数，使用fallback
+    if (fallback) {
+        secureLogger.warn(`Using fallback for ${operationName} operation`);
+        return fallback();
+    }
+    
+    // 所有重试都失败，抛出最后一个错误
+    throw lastError || new Error('Database operation failed without error information');
 };
 
 // LeetCode 服务
@@ -52,7 +89,7 @@ export const getLeetCodeUserData = async (
         const dbResult: any = await handleDbOperation(async () => {
             const data = await LeetCodeUser.findOne({username}).lean();
             return validateCache(data, cacheTime);
-        });
+        }, undefined, `getLeetCodeUserData for ${username}`);
 
         if (dbResult.data) return dbResult;
 
@@ -65,7 +102,7 @@ export const getLeetCodeUserData = async (
         return cacheResult;
 
     } catch (error: any) {
-        console.error(`[LeetCode] 获取数据失败: ${error.message}`);
+        secureLogger.error(`[LeetCode] 获取数据失败: ${error.message}`);
         return {data: null, needsFetch: true};
     }
 };
@@ -106,7 +143,7 @@ export const getGitHubUserData = async (username: string) => {
         const dbResult = await handleDbOperation(async () => {
             const data = await GitHubUser.findOne({username}).lean();
             return data ? {...data, avatarUpdatedAt: data.avatarUpdatedAt || new Date()} : null;
-        });
+        }, undefined, `getGitHubUserData for ${username}`);
 
         if (dbResult) return {userData: dbResult};
 
@@ -120,7 +157,7 @@ export const getGitHubUserData = async (username: string) => {
         };
 
     } catch (error: any) {
-        console.error(`[GitHub] 获取数据失败: ${error.message}`);
+        secureLogger.error(`[GitHub] 获取数据失败: ${error.message}`);
         return {userData: null};
     }
 };
@@ -257,7 +294,8 @@ export const getJuejinUserData = async (
         // 尝试数据库查询
         const dbResult = await handleDbOperation(async () => {
             const data = await JueJinUser.findOne({userId}).lean();
-            return validateCache(data, cacheTime);
+            // 使用类型断言确保数据符合validateCache的泛型约束
+            return validateCache(data as { lastUpdated: Date | number | string } | null, cacheTime);
         });
 
         if (dbResult.data) return dbResult;

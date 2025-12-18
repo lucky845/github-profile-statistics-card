@@ -114,9 +114,8 @@ export const validateGenericUsername = (req: Request, res: Response, next: NextF
         req.path.includes('/leetcode/')) {
         // 返回SVG格式的错误卡片
         const themeName = req.query.theme as string;
-        const themeConfig = getThemeConfig(themeName);
         res.status(400).set('Content-Type', 'image/svg+xml')
-          .send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
+          .send(generateCard(CardType.ERROR, '未提供用户名', themeName));
         return;
       }
       res.status(400).send('未提供用户名');

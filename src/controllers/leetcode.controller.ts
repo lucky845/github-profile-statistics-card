@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { fetchLeetCodeStats } from '../services/leetcode.service';
 import { getLeetCodeUserData, updateLeetCodeData } from '../services/mongodb.service';
 import { ILeetCodeUser } from '../types';
-import { generateCard, CardType, getThemeConfig } from '../services/svg.service';
+import { generateCard, CardType } from '../services/svg.service';
 import { activeTheme } from '../config/theme.config';
 
 // 获取LeetCode统计
@@ -10,9 +10,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
   try {
     const username = req.params.username;
     // 从查询参数获取主题名称，支持主题参数
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
+    const themeName = (req.query.theme as string) || 'default';
     // 获取区域参数，默认为非中国区
     const useCN = req.query.cn === 'true';
     // 获取缓存时间
@@ -21,7 +19,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
 
 
     if (!username) {
-      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
+      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeName));
       return;
     }
 
@@ -53,7 +51,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
         // 返回SVG
         res.set('Content-Type', 'image/svg+xml');
         res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
-        res.send(generateCard(CardType.LEETCODE, leetcodeData, themeConfig));
+        res.send(generateCard(CardType.LEETCODE, leetcodeData, themeName));
         return;
       }
     }
@@ -61,15 +59,13 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
     // 如果已有缓存数据或无法获取新数据，使用缓存数据
     res.set('Content-Type', 'image/svg+xml');
     res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
-    res.send(generateCard(CardType.LEETCODE, data, themeConfig));
+    res.send(generateCard(CardType.LEETCODE, data, themeName));
 
   } catch (error: any) {
-    console.error(`LeetCode控制器错误: ${error.message}`);
-    // 从查询参数获取主题名称
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
+    console.error(`LeetCode控制器错误: ${error instanceof Error ? error.message : String(error)}`);
+    // 从查询参数获取主题名称，支持主题参数
+    const themeName = (req.query.theme as string) || 'default';
     res.set('Content-Type', 'image/svg+xml');
-    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, themeConfig));
+    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error instanceof Error ? error.message : String(error)}`, themeName));
   }
 };

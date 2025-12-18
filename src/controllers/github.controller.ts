@@ -1,59 +1,72 @@
 import { Request, Response } from 'express';
-import crypto from 'crypto';
+import { generateCard, CardType } from '../services/svg.service';
+import { secureLogger } from '../utils/logger';
+import { SvgSanitizerService } from '../services/svg-sanitizer.service';
 import { getGitHubUserStats } from '../services/github.service';
-import { generateCard, CardType, getThemeConfig } from '../services/svg.service';
-import { activeTheme } from '../config/theme.config';
 
-// 生成访问者唯一标识
-const generateVisitorId = (req: Request): string => {
-  const userAgent = req.headers['user-agent'] || '';
-  const ip = req.headers['x-forwarded-for'] ||
-    req.socket.remoteAddress || '';
-
-  // 使用用户代理和IP创建哈希
-  const data = userAgent + ip;
-  return crypto.createHash('md5').update(data).digest('hex');
-};
-
-// 获取GitHub访问统计
+/**
+ * 获取GitHub用户统计信息并生成SVG卡片
+ */
 export const getGitHubStats = async (req: Request, res: Response): Promise<void> => {
   try {
+    // 从请求参数中获取用户名
     const username = req.params.username;
-    // 从查询参数获取主题名称，支持主题参数
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
+    const theme = req.query.theme as string || 'default';
 
-    if (!username) {
-      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeConfig));
+    // 验证用户名是否存在
+    if (!username || typeof username !== 'string' || username.trim() === '') {
+      res.status(400).json({ error: '无效的用户名', message: '用户名不能为空' });
       return;
     }
 
-    // 获取用户统计数据（包括头像和访问计数）
-    const stats = await getGitHubUserStats(username);
+    // 记录日志
+    secureLogger.info(`Generating GitHub stats card`);
 
-    if (!stats.isValid) {
-      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到GitHub用户', themeConfig));
-      return;
-    }
+    // 净化用户输入
+    const svgSanitizerService = new SvgSanitizerService();
+    const sanitizedUsername = svgSanitizerService.sanitizeUserContent(username.trim());
 
-    // 返回统计卡片SVG
+    // 获取GitHub用户统计信息
+    const userData = await getGitHubUserStats(sanitizedUsername);
+
+    // 生成SVG卡片
+    const svg = await generateCard(CardType.GITHUB, {
+      username: sanitizedUsername,
+      count: userData.visitCount,
+      avatarUrl: userData.avatarUrl
+    }, theme);
+    const sanitizedSvg = svgSanitizerService.sanitize(svg);
+
+    // 设置响应头并发送SVG内容
     res.set('Content-Type', 'image/svg+xml');
-    // 使用较长的缓存时间，减少请求频率，但仍能保持较新的数据
-    res.set('Cache-Control', 'public, max-age=600'); // 10分钟缓存
-    res.send(generateCard(CardType.GITHUB, {
-      count: stats.visitCount,
-      avatarUrl: stats.avatarUrl,
-      username
-    }, themeConfig));
-
+    res.send(sanitizedSvg);
   } catch (error: any) {
-    console.error(`GitHub控制器错误: ${error.message}`);
-    // 从查询参数获取主题名称
-    const themeName = req.query.theme as string;
-    // 获取主题配置
-    const themeConfig = getThemeConfig(themeName);
-    res.set('Content-Type', 'image/svg+xml');
-    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, themeConfig));
+    // 处理GitHub API错误
+    if (error.message === 'User not found') {
+      secureLogger.error('User not found');
+      res.status(404).json({
+        error: 'GitHub 用户不存在或无法访问',
+        message: 'User not found'
+      });
+      return;
+    }
+
+    // 处理数据库连接错误
+    if (error.message === 'Database connection failed') {
+      secureLogger.error('Database connection failed');
+      res.status(500).json({
+        error: '服务器内部错误',
+        message: 'Database connection failed'
+      });
+      return;
+    }
+
+    // 处理其他错误
+    secureLogger.error(`Error generating GitHub stats card: ${error.message}`);
+    res.status(500).json({
+      error: '服务器内部错误',
+      message: 'An unexpected error occurred'
+    });
+    return;
   }
 };

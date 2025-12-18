@@ -1,4 +1,4 @@
-import { createRequest } from '../utils/http.utils';
+import { createRequest, createRequestWithRetry } from '../utils/http.utils';
 import { LeetCodeStats } from '../types';
 
 // 定义类型
@@ -14,7 +14,8 @@ export async function fetchLeetCodeStats(
   useCN: boolean = false
 ): Promise<{ success: boolean; data?: LeetCodeStats; error?: string }> {
   try {
-    const httpClient = createRequest();
+    // 增加超时时间到15秒，避免因网络延迟导致的请求失败
+    const httpClient = createRequest(15000);
 
     // 如果指定了使用中国区，则使用中国区特定的查询
     if (useCN) {
@@ -41,13 +42,14 @@ export async function fetchLeetCodeStats(
       const cnVariables = { userSlug: username };
       
       try {
-        const response = await httpClient.post(
+        // 使用带重试机制的请求
+        const response = await createRequestWithRetry(() => httpClient.post(
           "https://leetcode.cn/graphql",
           {
             query: cnQuery,
             variables: cnVariables,
           }
-        );
+        ), 3, 1000);
 
         if (response?.data?.data?.userProfileUserQuestionProgress) {
           return processCNLeetCodeResponse(response.data.data.userProfileUserQuestionProgress, username);
@@ -83,13 +85,14 @@ export async function fetchLeetCodeStats(
       const usVariables = { username };
       
       try {
-        const response = await httpClient.post(
+        // 使用带重试机制的请求
+        const response = await createRequestWithRetry(() => httpClient.post(
           "https://leetcode.com/graphql",
           {
             query: usQuery,
             variables: usVariables,
           }
-        );
+        ), 3, 1000);
 
         if (response?.data?.data?.matchedUser) {
           return processUSLeetCodeResponse(response.data.data.matchedUser, username);

@@ -17,7 +17,6 @@ dompurify.addHook('afterSanitizeAttributes', (node: any) => {
       // 允许的域名白名单
       const allowedDomains = [
         'avatars.githubusercontent.com',
-        'avatars.githubusercontent.com/u',
         'avatars0.githubusercontent.com',
         'avatars1.githubusercontent.com',
         'avatars2.githubusercontent.com',
@@ -31,7 +30,14 @@ dompurify.addHook('afterSanitizeAttributes', (node: any) => {
       
       // 检查是否为允许的URL格式
       const isAllowedUrl = src.startsWith('http://') || src.startsWith('https://');
-      const hasAllowedDomain = allowedDomains.some(domain => src.includes(domain));
+      const hasAllowedDomain = allowedDomains.some(domain => {
+        try {
+          const url = new URL(src);
+          return url.hostname === domain;
+        } catch {
+          return src.includes(domain);
+        }
+      });
       
       // 如果不是允许的URL格式或不包含允许的域名，则移除该属性
       if (!isAllowedUrl || !hasAllowedDomain) {
@@ -63,12 +69,53 @@ export class SvgSanitizerService {
    * 净化SVG内容（静态方法，供其他服务调用）
    * @param svgContent 原始SVG内容
    * @param options 过滤选项
-   * @returns 净化后的SVG内容（临时禁用净化，直接返回原始内容）
+   * @returns 净化后的SVG内容
    */
   static sanitize(svgContent: string, options: SvgSanitizerOptions = {}): string {
-    // ⚠️ 临时禁用SVG净化，直接返回原始内容
-    console.log('⚠️ SVG净化已临时禁用 - 返回原始SVG内容');
-    return svgContent;
+    // 配置DOMPurify选项
+    const dompurifyOptions = {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ALLOWED_TAGS: options.allowedTags || [
+        'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
+        'text', 'tspan', 'textPath', 'linearGradient', 'radialGradient', 'stop',
+        'defs', 'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feColorMatrix',
+        'feComponentTransfer', 'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA',
+        'feBlend', 'feOffset', 'feMerge', 'feMergeNode', 'feTurbulence',
+        'feDisplacementMap', 'feComposite', 'feMorphology', 'feConvolveMatrix',
+        'feSpecularLighting', 'fePointLight', 'feSpotLight', 'feDistantLight',
+        'marker', 'symbol', 'use', 'image'
+      ],
+      ALLOWED_ATTR: options.allowedAttributes || [
+        'xmlns', 'xmlns:xlink', 'version', 'baseProfile', 'width', 'height',
+        'viewBox', 'preserveAspectRatio', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry',
+        'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width',
+        'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
+        'stroke-dasharray', 'stroke-dashoffset', 'stroke-opacity', 'opacity',
+        'transform', 'patternTransform', 'gradientTransform', 'text-anchor',
+        'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing',
+        'word-spacing', 'text-decoration', 'text-rendering', 'textLength',
+        'startOffset', 'd', 'pathLength', 'marker-start', 'marker-mid',
+        'marker-end', 'markerWidth', 'markerHeight', 'refX', 'refY', 'orient',
+        'overflow', 'filter', 'clip-path', 'mask', 'id', 'class', 'style',
+        'href', 'xlink:href', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color',
+        'stop-opacity', 'stdDeviation', 'in', 'in2', 'result', 'operator',
+        'mode', 'type', 'values', 'scale', 'kernelMatrix', 'kernelUnitLength',
+        'preserveAlpha', 'surfaceScale', 'specularConstant', 'specularExponent',
+        'azimuth', 'elevation', 'pointsAtX', 'pointsAtY', 'pointsAtZ', 'limitingConeAngle'
+      ],
+      ALLOW_DATA_ATTR: false,
+      ALLOW_UNKNOWN_PROTOCOLS: false
+    };
+
+    try {
+      // 净化SVG内容
+      const sanitized = dompurify.sanitize(svgContent, dompurifyOptions);
+      return sanitized;
+    } catch (error: any) {
+      console.error(`SVG净化失败: ${error.message}`);
+      // 如果净化失败，返回空字符串以避免潜在的安全风险
+      return '';
+    }
   }
 
   /**
