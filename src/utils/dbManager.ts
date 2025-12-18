@@ -1,5 +1,5 @@
 import mongoose, { Connection } from 'mongoose';
-import {dbConfig} from '../config';
+import {dbConfig} from '../config/db.config';
 import {secureLogger} from './logger';
 
 type Operation<T> = (conn: mongoose.Connection) => Promise<T>;
@@ -33,16 +33,42 @@ export class MongoDBManager {
         family: 4 // 优先使用IPv4
     };
 
-    async ensureConnection(): Promise<void> {
-        if (this.isConnected && mongoose.connection.readyState === 1) return;
-        return this.connect();
+    async ensureConnection(): Promise<boolean> {
+        // 如果配置了使用内存缓存，直接返回false表示不使用数据库
+        if (dbConfig.useMemoryCache) {
+            secureLogger.info('📊 使用内存缓存模式，跳过数据库连接检查');
+            return false;
+        }
+        
+        if (this.isConnected && mongoose.connection.readyState === 1) return true;
+        try {
+            await this.connect();
+            return true;
+        } catch (error) {
+            secureLogger.warn('⚠️ MongoDB connection not available, will use memory cache only');
+            return false;
+        }
     }
 
     public async connect(): Promise<void> {
+        // 如果配置了使用内存缓存，直接返回
+        if (dbConfig.useMemoryCache) {
+            secureLogger.info('📊 使用内存缓存模式，跳过数据库连接');
+            this.isConnected = false;
+            return;
+        }
+        
         try {
             // 防止重复连接
             if (mongoose.connection.readyState === 1) {
                 this.isConnected = true;
+                return;
+            }
+            
+            // 检查连接字符串是否存在
+            if (!dbConfig.mongoURI) {
+                secureLogger.warn('⚠️ MongoDB URI not configured, skipping connection');
+                this.isConnected = false;
                 return;
             }
             
@@ -52,8 +78,9 @@ export class MongoDBManager {
             secureLogger.info(`✅ MongoDB Connected: ${mongoose.connection.host}`);
         } catch (error: any) {
             this.handleConnectionError(error);
-            // 抛出错误，让调用者决定如何处理
-            throw new Error(`Database connection failed: ${error.message}`);
+            this.isConnected = false;
+            // 不再抛出错误，允许应用继续运行
+            secureLogger.warn('⚠️ MongoDB connection failed, application will continue with memory cache only');
         }
     }
 
@@ -102,55 +129,71 @@ export class MongoDBManager {
     }
 
     private handleDisconnection() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-            secureLogger.warn(`🔄 MongoDB reconnection attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts} in ${delay}ms`);
-
-            setTimeout(() => {
-                this.reconnectAttempts++;
-                // 不抛出错误，避免中断程序
-                this.connect().catch(error => {
-                    secureLogger.error(`❌ Reconnection failed: ${error.message}`);
-                });
-            }, delay);
-        } else {
-            secureLogger.error('❌ Max MongoDB reconnection attempts reached');
-            // 不直接退出程序，让应用能够继续运行（使用缓存或降级策略）
-            this.isConnected = false;
-        }
+        // 禁用自动重新连接，减少不必要的网络请求
+        secureLogger.warn('🔄 MongoDB disconnected, reconnection disabled in current configuration');
+        this.isConnected = false;
     }
 
     private handleConnectionError(error: Error) {
         secureLogger.error(`❌ MongoDB connection error: ${error.message}`);
-        this.handleDisconnection();
+        // 不再自动尝试重新连接，减少不必要的网络请求
+        this.isConnected = false;
     }
 
-    async executeOperation<T>(operation: Operation<T>): Promise<T> {
+    async executeOperation<T>(operation: Operation<T>, fallback?: () => Promise<T>): Promise<T> {
         try {
-            await this.ensureConnection();
-            return await operation(mongoose.connection);
+            const isConnected = await this.ensureConnection();
+            if (isConnected) {
+                return await operation(mongoose.connection);
+            } else if (fallback) {
+                secureLogger.warn('⚠️ MongoDB not available, using fallback operation');
+                return await fallback();
+            } else {
+                throw new Error('MongoDB not available and no fallback provided');
+            }
         } catch (error) {
             secureLogger.error('❌ Database operation failed:', error);
+            if (fallback) {
+                secureLogger.warn('⚠️ Using fallback operation after database error');
+                return await fallback();
+            }
             throw error;
         }
     }
 
-    async transactionalOperation<T>(operation: Operation<T>): Promise<T> {
-        return this.executeOperation(async (conn) => {
-            const session = await conn.startSession();
-            session.startTransaction();
-            try {
-                const result = await operation(conn);
-                await session.commitTransaction();
-                return result;
-            } catch (error) {
-                await session.abortTransaction();
-                secureLogger.error('❌ Transaction aborted:', error);
-                throw error;
-            } finally {
-                session.endSession();
+    async transactionalOperation<T>(operation: Operation<T>, fallback?: () => Promise<T>): Promise<T> {
+        try {
+            const isConnected = await this.ensureConnection();
+            if (isConnected) {
+                return await this.executeOperation(async (conn) => {
+                    const session = await conn.startSession();
+                    session.startTransaction();
+                    try {
+                        const result = await operation(conn);
+                        await session.commitTransaction();
+                        return result;
+                    } catch (error) {
+                        await session.abortTransaction();
+                        secureLogger.error('❌ Transaction aborted:', error);
+                        throw error;
+                    } finally {
+                        session.endSession();
+                    }
+                });
+            } else if (fallback) {
+                secureLogger.warn('⚠️ MongoDB not available, using fallback operation instead of transaction');
+                return await fallback();
+            } else {
+                throw new Error('MongoDB not available and no fallback provided for transaction');
             }
-        });
+        } catch (error) {
+            secureLogger.error('❌ Transactional operation failed:', error);
+            if (fallback) {
+                secureLogger.warn('⚠️ Using fallback operation after transaction error');
+                return await fallback();
+            }
+            throw error;
+        }
     }
     
     // 检查数据库连接状态

@@ -20,7 +20,8 @@ import {
   apiRateLimiter
 } from './middleware';
 import {
-  appConfig
+  appConfig,
+  dbConfig
 } from './config';
 import { 
   bilibiliRouter, 
@@ -103,18 +104,25 @@ let server: ReturnType<typeof app.listen>;
 
 const startServer = async () => {
     try {
-        // 尝试初始化数据库连接（即使失败也继续启动服务器）
-        await dbManager.connect().catch(error => {
+        // 检查是否配置了使用内存缓存，如果是，不尝试连接MongoDB
+        if (dbConfig.useMemoryCache) {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
-            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
-        });
+            secureLogger.info('📊 使用内存缓存模式，跳过MongoDB连接');
+        } else {
+            // 尝试初始化数据库连接（即使失败也继续启动服务器）
+            await dbManager.connect().catch(error => {
+                // 导入需要在运行时动态导入，避免循环依赖
+                const { secureLogger } = require('./utils/logger');
+                secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
+            });
+        }
 
         server = app.listen(port, () => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
             secureLogger.info(`🚀 服务已启动于端口 ${port}`);
-            secureLogger.info(`📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}`);
+            secureLogger.info(`📊 数据库状态: ${dbConfig.useMemoryCache ? '内存缓存模式' : (mongoose.connection.readyState === 1 ? '已连接' : '未连接')}`);
         });
 
         return server;

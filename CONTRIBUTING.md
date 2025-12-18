@@ -14,7 +14,9 @@
 
 1. 克隆你fork的仓库
 2. 安装依赖：`npm install`
-3. 创建`.env`文件并添加MongoDB连接字符串
+3. 创建`.env`文件并添加必要的环境变量：
+   - `MONGODB_URI`: MongoDB Atlas 的连接字符串
+   - `USE_MEMORY_CACHE`: 可选，设置为true使用内存缓存（适用于本地开发，无需MongoDB连接）
 4. 运行开发服务器：`npm run dev`
 
 ## 代码风格
