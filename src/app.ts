@@ -103,8 +103,12 @@ let server: ReturnType<typeof app.listen>;
 
 const startServer = async () => {
     try {
-        // 初始化数据库连接
-        await dbManager.connect();
+        // 尝试初始化数据库连接（即使失败也继续启动服务器）
+        await dbManager.connect().catch(error => {
+            // 导入需要在运行时动态导入，避免循环依赖
+            const { secureLogger } = require('./utils/logger');
+            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
+        });
 
         server = app.listen(port, () => {
             // 导入需要在运行时动态导入，避免循环依赖

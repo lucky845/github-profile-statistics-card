@@ -88,11 +88,11 @@ export const generateGitHubCounterCard = (
       <!-- 标题 -->
       <text x="0" y="35" class="header">访问统计</text>
       
-      <!-- 用户名 -->
-      ${username ? `<text x="0" y="${usernameY}" class="small">@${safeUsername}</text>` : ''}
-      
       <!-- 访问计数 -->
-      <text x="0" y="90" class="value" fill="url(#${gradientId})")>${formatCount(count)}</text>
+      <text x="0" y="75" class="value" fill="url(#${gradientId})">${formatCount(count)}</text>
+      
+      <!-- 用户名 -->
+      ${username ? `<text x="0" y="95" class="small">@${safeUsername}</text>` : ''}
     </g>
     
     <!-- 底部信息 -->

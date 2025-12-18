@@ -88,9 +88,8 @@ const generateGitHubCounterCard = (
         <image x="0" y="0" width="36" height="36" href="${imageUrl}" clip-path="url(#userAvatarClip)" />
       </g>
         
-        <!-- 用户名和标题 -->
+        <!-- 标题 -->
         <text x="70" y="45" class="title">GitHub 访问</text>
-        <text x="70" y="65" class="small">@${safeUsername}</text>
 
       <!-- 分隔线 -->
       <rect x="25" y="110" width="285" height="1" fill="${themeConfig.colors.border}"/>
@@ -115,8 +114,11 @@ const generateGitHubCounterCard = (
       <!-- 计数 -->
       <text x="160" y="95" text-anchor="middle" class="count">${countDisplay}</text>
       
+      <!-- 用户名 -->
+      <text x="160" y="115" text-anchor="middle" class="small">@${safeUsername}</text>
+      
       <!-- 分隔线 -->
-      <line x1="40" y1="110" x2="280" y2="110" stroke="${themeConfig.colors.border}" stroke-width="0.5" opacity="0.5"/>
+      <line x1="40" y1="125" x2="280" y2="125" stroke="${themeConfig.colors.border}" stroke-width="0.5" opacity="0.5"/>
       
     </g>
   </svg>`;
