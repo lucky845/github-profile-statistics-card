@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/78</span>
+                <span class='fraction'>0/79</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>0/78</span>
             </div>
         
             
@@ -314,10 +314,12 @@
 <a name='L249'></a><a href='#L249'>249</a>
 <a name='L250'></a><a href='#L250'>250</a>
 <a name='L251'></a><a href='#L251'>251</a>
-<a name='L252'></a><a href='#L252'>252</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -568,7 +570,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import * as cheerio from 'cheerio';</span>
 <span class="cstat-no" title="statement not covered" >import {createRequest, createRequestWithRetry} from '../utils/http.utils';</span>
 <span class="cstat-no" title="statement not covered" >import {getCSDNUserData, updateCSDNUserData} from './mongodb.service';</span>
-import {CSDNUserStats} from "../types";
+import {CSDNUserStats, ICSDNUser} from "../types";
+<span class="cstat-no" title="statement not covered" >import { asyncDbUpdate } from '../utils/db-update.utils';</span>
 &nbsp;
 &nbsp;
 /**
@@ -697,30 +700,30 @@ function <span class="fstat-no" title="function not covered" >parseCSDNUserPage(
  */
 <span class="cstat-no" title="statement not covered" >export async function <span class="fstat-no" title="function not covered" >g</span>etCSDNUserStats(</span>userId: string, cacheTimeInSeconds: number): Promise&lt;CSDNUserStats&gt; {
     // 声明userData变量，以便在catch块中可以访问
-    let cachedUserData: any = <span class="cstat-no" title="statement not covered" >null;</span>
+    let cachedUserData: ICSDNUser | null = <span class="cstat-no" title="statement not covered" >null;</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
         // 先从MongoDB中获取缓存的数据
-        const {data, needsFetch} = <span class="cstat-no" title="statement not covered" >await getCSDNUserData(userId, cacheTimeInSeconds);</span>
+        const {userData, needsFetch} = <span class="cstat-no" title="statement not covered" >await getCSDNUserData(userId, cacheTimeInSeconds);</span>
         // 保存缓存数据，以便在catch块中可以访问
-<span class="cstat-no" title="statement not covered" >        cachedUserData = data;</span>
+<span class="cstat-no" title="statement not covered" >        cachedUserData = userData;</span>
 &nbsp;
         // 如果有有效的缓存数据且不需要刷新，直接返回
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (data &amp;&amp; !needsFetch) {</span>
+<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (userData &amp;&amp; !needsFetch) {</span>
 <span class="cstat-no" title="statement not covered" >            console.log(`使用缓存的CSDN用户数据: ${userId}`);</span>
 <span class="cstat-no" title="statement not covered" >            return {</span>
                 userId,
-                username: data.username || userId,
-                articleCount: data.articleCount || 0,
-                followers: data.followers || 0,
-                likes: data.likes || 0,
-                views: data.views || 0,
-                comments: data.comments || 0,
-                points: data.points || 0,
-                rank: data.rank || 0,
-                codeAge: data.codeAge || 0,
-                level: data.level !== undefined ? data.level : 'N/A',
-                monthPoints: data.monthPoints || 0,
+                username: userData.username || userId,
+                articleCount: userData.articleCount || 0,
+                followers: userData.followers || 0,
+                likes: userData.likes || 0,
+                views: userData.views || 0,
+                comments: userData.comments || 0,
+                points: userData.points || 0,
+                rank: userData.rank || 0,
+                codeAge: userData.codeAge || 0,
+                level: userData.level !== undefined ? userData.level : 'N/A',
+                monthPoints: userData.monthPoints || 0,
                 isValid: true,
                 expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
             };
@@ -773,8 +776,8 @@ function <span class="fstat-no" title="function not covered" >parseCSDNUserPage(
             expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
         };
 &nbsp;
-        // 更新数据库
-<span class="cstat-no" title="statement not covered" >        await updateCSDNUserData(userId, csdnUserData);</span>
+        // 异步更新数据库，不阻塞返回
+<span class="cstat-no" title="statement not covered" >        asyncDbUpdate(updateCSDNUserData, [userId, csdnUserData], 'CSDN');</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        return {</span>
             ...csdnUserData,
@@ -823,7 +826,7 @@ function <span class="fstat-no" title="function not covered" >parseCSDNUserPage(
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-28T03:09:46.501Z
+                at 2025-12-19T01:19:35.762Z
             </div>
         <script src="../prettify.js"></script>
         <script>

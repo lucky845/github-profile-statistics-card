@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">61.53% </span>
+                <span class="strong">86.66% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>16/26</span>
+                <span class='fraction'>13/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">40% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>6/15</span>
+                <span class='fraction'>2/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">50% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/2</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">60% </span>
+                <span class="strong">85.71% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>15/25</span>
+                <span class='fraction'>12/14</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line medium'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -164,26 +164,7 @@
 <a name='L99'></a><a href='#L99'>99</a>
 <a name='L100'></a><a href='#L100'>100</a>
 <a name='L101'></a><a href='#L101'>101</a>
-<a name='L102'></a><a href='#L102'>102</a>
-<a name='L103'></a><a href='#L103'>103</a>
-<a name='L104'></a><a href='#L104'>104</a>
-<a name='L105'></a><a href='#L105'>105</a>
-<a name='L106'></a><a href='#L106'>106</a>
-<a name='L107'></a><a href='#L107'>107</a>
-<a name='L108'></a><a href='#L108'>108</a>
-<a name='L109'></a><a href='#L109'>109</a>
-<a name='L110'></a><a href='#L110'>110</a>
-<a name='L111'></a><a href='#L111'>111</a>
-<a name='L112'></a><a href='#L112'>112</a>
-<a name='L113'></a><a href='#L113'>113</a>
-<a name='L114'></a><a href='#L114'>114</a>
-<a name='L115'></a><a href='#L115'>115</a>
-<a name='L116'></a><a href='#L116'>116</a>
-<a name='L117'></a><a href='#L117'>117</a>
-<a name='L118'></a><a href='#L118'>118</a>
-<a name='L119'></a><a href='#L119'>119</a>
-<a name='L120'></a><a href='#L120'>120</a>
-<a name='L121'></a><a href='#L121'>121</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L102'></a><a href='#L102'>102</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -207,27 +188,8 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -324,32 +286,13 @@ export const generateLeetCodeCard = (data: ILeetCodeUser | string, theme: ThemeO
 <span class="cstat-no" title="statement not covered" >    return generateErrorCard(data as string, theme);</span>
   }
 &nbsp;
-  const { username, submitStats, solvedProblem, totalProblem } = data as ILeetCodeUser;
+  const { username, totalSolved, easySolved, mediumSolved, hardSolved } = data as ILeetCodeUser;
   
-  // 提取各难度题目的提交统计数据
-  let easySolved = 0;
-  let mediumSolved = 0;
-  let hardSolved = 0;
-  
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (submitStats &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >submitStats.acSubmissionNum)</span> {
-<span class="cstat-no" title="statement not covered" >    submitStats.acSubmissionNum.forEach(<span class="fstat-no" title="function not covered" >item </span>=&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      switch (item.difficulty) {</span>
-        case 'EASY':
-<span class="cstat-no" title="statement not covered" >          easySolved = item.count;</span>
-<span class="cstat-no" title="statement not covered" >          break;</span>
-        case 'MEDIUM':
-<span class="cstat-no" title="statement not covered" >          mediumSolved = item.count;</span>
-<span class="cstat-no" title="statement not covered" >          break;</span>
-        case 'HARD':
-<span class="cstat-no" title="statement not covered" >          hardSolved = item.count;</span>
-<span class="cstat-no" title="statement not covered" >          break;</span>
-      }
-    });
-  }
-  
-  // 计算百分比
-  const totalSolved = solvedProblem || (easySolved + mediumSolved + hardSolved);
-  const solvedPercentage = totalProblem ? <span class="branch-0 cbranch-no" title="branch not covered" >Math.round((totalSolved / totalProblem) * 100) </span>: 0;
+  // 由于API和模拟数据中没有提供总题目数，我们可以使用一个合理的默认值（例如2000）来计算百分比
+  // 或者简单地使用100%作为占位符
+  const defaultTotalProblems = 2000;
+  const solvedPercentage = Math.round((totalSolved / defaultTotalProblems) * 100);
+  const totalProblem = defaultTotalProblems;
   
   // 当前日期
   const currentDate = new Date().toLocaleDateString();
@@ -430,7 +373,7 @@ import { generateErrorCard } from './errorCardGenerator';
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-28T03:09:46.501Z
+                at 2025-12-19T01:19:35.762Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

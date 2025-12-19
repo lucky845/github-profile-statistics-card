@@ -1,5 +1,6 @@
 import axios, {AxiosRequestConfig} from 'axios';
 import https from 'https';
+import { secureLogger } from './logger';
 
 // 随机用户代理列表
 const userAgents = [
@@ -69,7 +70,7 @@ export const createRequestWithRetry = async (
             return await requestFn();
         } catch (error: any) {
             lastError = error;
-            console.warn(`请求失败，尝试重试 (${attempt + 1}/${maxRetries}): ${error.message}`);
+            secureLogger.warn(`请求失败，尝试重试 (${attempt + 1}/${maxRetries}): ${error.message}`);
 
             // 如果不是最后一次尝试，则等待一段时间后重试
             if (attempt < maxRetries - 1) {

@@ -3,7 +3,7 @@
  * 提供统一的缓存接口，支持多种缓存策略
  */
 
-import NodeCache from 'node-cache';
+import { createClient, RedisClientType } from 'redis';
 import { secureLogger } from '../utils/logger';
 
 // 缓存配置类型
@@ -16,8 +16,7 @@ export interface CacheConfig {
 
 // 缓存策略枚举
 export enum CacheStrategy {
-  MEMORY = 'memory',
-  REDIS = 'redis', // 预留用于未来扩展
+  REDIS = 'redis',
   NOOP = 'noop' // 无操作缓存，用于开发或测试
 }
 
@@ -43,140 +42,7 @@ export abstract class BaseCacheService {
   abstract getStats(): CacheStats;
 }
 
-/**
- * 内存缓存服务实现
- */
-class MemoryCacheService extends BaseCacheService {
-  private cache: NodeCache;
-  private hits: number = 0;
-  private misses: number = 0;
-  private keyGroups: Map<string, Set<string>> = new Map(); // 用于分组管理键
 
-  constructor(config: CacheConfig) {
-    super();
-    this.cache = new NodeCache({
-      stdTTL: config.ttl,
-      checkperiod: config.checkperiod || 60,
-      maxKeys: config.maxKeys || -1,
-      useClones: false,
-      // 移除不支持的maxMemorySize属性
-    });
-    
-    // 定期清理不使用的键组
-    setInterval(() => this.cleanupEmptyKeyGroups(), 3600000); // 每小时清理一次
-  }
-  
-  /**
-   * 将键添加到指定的组
-   */
-  private addKeyToGroup(group: string, key: string): void {
-    if (!this.keyGroups.has(group)) {
-      this.keyGroups.set(group, new Set());
-    }
-    this.keyGroups.get(group)?.add(key);
-  }
-  
-  /**
-   * 从组中移除键
-   */
-  private removeKeyFromGroup(group: string, key: string): void {
-    const keys = this.keyGroups.get(group);
-    if (keys) {
-      keys.delete(key);
-    }
-  }
-  
-  /**
-   * 清理空的键组
-   */
-  private cleanupEmptyKeyGroups(): void {
-    for (const [group, keys] of this.keyGroups.entries()) {
-      if (keys.size === 0) {
-        this.keyGroups.delete(group);
-      }
-    }
-  }
-
-  async get<T>(key: string): Promise<T | undefined> {
-    const value = this.cache.get<T>(key);
-    if (value === undefined) {
-      this.misses++;
-      return undefined;
-    }
-    this.hits++;
-    return value;
-  }
-
-  async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
-    // 提取前缀作为分组标识符
-    const group = key.split(':')[0];
-    this.addKeyToGroup(group, key);
-    secureLogger.debug(`Cache set: ${key}`);
-    return this.cache.set(key, value, ttl || 0);
-  }
-
-  async delete(key: string): Promise<boolean> {
-    // 从键组中移除
-    const group = key.split(':')[0];
-    this.removeKeyFromGroup(group, key);
-    return this.cache.del(key) > 0;
-  }
-
-  async clear(): Promise<boolean> {
-    this.cache.flushAll();
-    this.keyGroups.clear();
-    return true;
-  }
-  
-  /**
-   * 根据模式删除缓存
-   */
-  async deleteByPattern(pattern: string | RegExp): Promise<number> {
-    let deletedCount = 0;
-    const keys = this.cache.keys();
-    
-    for (const key of keys) {
-      if (typeof pattern === 'string' && key.includes(pattern)) {
-        await this.delete(key);
-        deletedCount++;
-      } else if (pattern instanceof RegExp && pattern.test(key)) {
-        await this.delete(key);
-        deletedCount++;
-      }
-    }
-    
-    return deletedCount;
-  }
-  
-  /**
-   * 清除指定组的所有缓存
-   */
-  async clearGroup(group: string): Promise<number> {
-    const keys = this.keyGroups.get(group);
-    if (!keys) return 0;
-    
-    let deletedCount = 0;
-    for (const key of keys) {
-      if (await this.delete(key)) {
-        deletedCount++;
-      }
-    }
-    
-    this.keyGroups.delete(group);
-    return deletedCount;
-  }
-
-  getStats(): CacheStats {
-    const total = this.hits + this.misses;
-    return {
-      hits: this.hits,
-      misses: this.misses,
-      keys: this.cache.keys().length,
-      groups: this.keyGroups.size,
-      hitsRate: total > 0 ? (this.hits / total) * 100 : 0
-    };
-  }
-}
 
 /**
  * 无操作缓存服务实现（用于开发或测试）
@@ -212,21 +78,210 @@ class NoopCacheService extends BaseCacheService {
 }
 
 /**
+ * Redis缓存服务实现
+ */
+class RedisCacheService extends BaseCacheService {
+  private client: RedisClientType;
+  private hits: number = 0;
+  private misses: number = 0;
+  private ttl: number;
+  private isConnected: boolean = false;
+
+  constructor(config: CacheConfig) {
+    super();
+    this.ttl = config.ttl;
+    
+    // 创建Redis客户端
+    this.client = createClient({
+      username: process.env.REDIS_USERNAME || 'default',
+      password: process.env.REDIS_PASSWORD,
+      socket: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379')
+      }
+    });
+
+    // 连接Redis
+    this.connect();
+  }
+
+  private async connect(): Promise<void> {
+    try {
+      await this.client.connect();
+      this.isConnected = true;
+      secureLogger.info('✅ Redis connected');
+    } catch (error) {
+      secureLogger.error(`❌ Redis connection error: ${(error as Error).message}`);
+      this.isConnected = false;
+    }
+  }
+
+  async get<T>(key: string): Promise<T | undefined> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis get error: ${(error as Error).message}`);
+        this.misses++;
+        return undefined;
+      }
+    }
+
+    try {
+      const value = await this.client.get(key);
+      if (value === null) {
+        this.misses++;
+        return undefined;
+      }
+      this.hits++;
+      return JSON.parse(value) as T;
+    } catch (error) {
+      secureLogger.error(`❌ Redis get error for key ${key}: ${(error as Error).message}`);
+      this.misses++;
+      return undefined;
+    }
+  }
+
+  async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis set error: ${(error as Error).message}`);
+        return false;
+      }
+    }
+
+    try {
+      const serializedValue = JSON.stringify(value);
+      await this.client.set(key, serializedValue, { 
+        EX: ttl || this.ttl 
+      });
+      secureLogger.debug(`Cache set: ${key}`);
+      return true;
+    } catch (error) {
+      secureLogger.error(`❌ Redis set error for key ${key}: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  async delete(key: string): Promise<boolean> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis delete error: ${(error as Error).message}`);
+        return false;
+      }
+    }
+
+    try {
+      const result = await this.client.del(key);
+      return result > 0;
+    } catch (error) {
+      secureLogger.error(`❌ Redis delete error for key ${key}: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  async clear(): Promise<boolean> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis clear error: ${(error as Error).message}`);
+        return false;
+      }
+    }
+
+    try {
+      await this.client.flushAll();
+      return true;
+    } catch (error) {
+      secureLogger.error(`❌ Redis clear error: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  async deleteByPattern(pattern: string | RegExp): Promise<number> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis deleteByPattern error: ${(error as Error).message}`);
+        return 0;
+      }
+    }
+
+    try {
+      let patternStr: string;
+      if (typeof pattern === 'string') {
+        patternStr = pattern;
+      } else {
+        patternStr = pattern.source;
+      }
+      
+      const keys = await this.client.keys(patternStr);
+      if (keys.length === 0) return 0;
+      
+      const result = await this.client.del(keys);
+      return result;
+    } catch (error) {
+      secureLogger.error(`❌ Redis deleteByPattern error: ${(error as Error).message}`);
+      return 0;
+    }
+  }
+
+  async clearGroup(group: string): Promise<number> {
+    if (!this.isConnected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        secureLogger.error(`❌ Redis clearGroup error: ${(error as Error).message}`);
+        return 0;
+      }
+    }
+
+    try {
+      const keys = await this.client.keys(`${group}:*`);
+      if (keys.length === 0) return 0;
+      
+      const result = await this.client.del(keys);
+      return result;
+    } catch (error) {
+      secureLogger.error(`❌ Redis clearGroup error for group ${group}: ${(error as Error).message}`);
+      return 0;
+    }
+  }
+
+  getStats(): CacheStats {
+    const total = this.hits + this.misses;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      keys: 0, // Redis不支持直接获取键数量，需要单独实现
+      groups: 0, // Redis不支持直接获取分组数量
+      hitsRate: total > 0 ? (this.hits / total) * 100 : 0
+    };
+  }
+}
+
+/**
  * 缓存服务工厂
  */
 export class CacheServiceFactory {
   static createCacheService(
-    strategy: CacheStrategy = CacheStrategy.MEMORY,
+    strategy: CacheStrategy = CacheStrategy.REDIS, // 默认使用Redis
     config: CacheConfig = { ttl: 300 }
   ): BaseCacheService {
     switch (strategy) {
-      case CacheStrategy.MEMORY:
-        return new MemoryCacheService(config);
+      case CacheStrategy.REDIS:
+        return new RedisCacheService(config);
       case CacheStrategy.NOOP:
         return new NoopCacheService();
       default:
-        console.warn(`Unknown cache strategy: ${strategy}, using memory cache`);
-        return new MemoryCacheService(config);
+        secureLogger.warn(`Unknown cache strategy: ${strategy}, using redis cache`);
+        return new RedisCacheService(config);
     }
   }
 }
@@ -292,7 +347,7 @@ const defaultCacheConfig: CacheConfig = {
 
 // 导出单例缓存服务
 export const cacheService = CacheServiceFactory.createCacheService(
-  CacheStrategy.MEMORY,
+  CacheStrategy.REDIS,
   defaultCacheConfig
 );
 
@@ -335,7 +390,7 @@ export function Cacheable(
         
         return result;
       } catch (error) {
-        console.error(`Cache decorator error for key ${key}:`, error);
+        secureLogger.error(`Cache decorator error for key ${key}:`, { error: error instanceof Error ? error.message : String(error) });
         // 缓存错误不应该影响正常功能，继续执行原方法
         return originalMethod.apply(this, args);
       }

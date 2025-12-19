@@ -1,6 +1,13 @@
 import { createRequest } from '../utils/http.utils';
 import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
 import { asyncDbUpdate } from '../utils/db-update.utils';
+import { IGitHubUser } from '../types';
+import { secureLogger } from '../utils/logger';
+
+// 扩展全局变量类型
+declare global {
+  var githubApiCallCount: number;
+}
 
 // 获取GitHub用户数据（包括头像和访问计数）
 export async function getGitHubUserStats(username: string): Promise<{
@@ -27,6 +34,9 @@ export async function getGitHubUserStats(username: string): Promise<{
     if (needFetchAvatar) {
       const httpClient = createRequest(8000);
       try {
+        // 增加GitHub API调用计数
+        global.githubApiCallCount = (global.githubApiCallCount || 0) + 1;
+        
         const response = await httpClient.get(`https://api.github.com/users/${username}`, {
           headers: {
             'Accept': 'application/vnd.github.v3+json',
@@ -40,12 +50,21 @@ export async function getGitHubUserStats(username: string): Promise<{
           avatarUrl = response.data.avatar_url;
         }
       } catch (error) {
-        console.error(`获取GitHub头像失败: ${error}`);
+        secureLogger.error(`获取GitHub头像失败: ${error}`);
       }
     }
 
     // 更新访问计数和头像URL（如果有新的）
-    asyncDbUpdate(updateGitHubUserData, [username, userData, needFetchAvatar ? avatarUrl : undefined], 'GitHub');
+    // 构造要更新的数据对象
+    const updateData: Partial<IGitHubUser> = {
+      ...(userData || {}),
+      visitCount: (userData?.visitCount || 0) + 1,
+      lastVisited: new Date(),
+      lastUpdated: new Date(),
+      ...(needFetchAvatar && avatarUrl ? { avatarUrl, avatarUpdatedAt: new Date() } : {})
+    };
+    
+    asyncDbUpdate(updateGitHubUserData, [username, updateData], 'GitHub');
 
     // 获取更新后的用户数据以获取最新的访问计数
     const { userData: updatedData } = await getGitHubUserData(username);
@@ -56,7 +75,7 @@ export async function getGitHubUserStats(username: string): Promise<{
       visitCount: updatedData?.visitCount || 1
     };
   } catch (error) {
-    console.error(`获取GitHub用户统计失败: ${error}`);
+    secureLogger.error(`获取GitHub用户统计失败: ${error}`);
     return {
       isValid: true,
       avatarUrl: null,

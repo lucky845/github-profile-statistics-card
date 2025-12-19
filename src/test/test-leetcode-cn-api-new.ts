@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { secureLogger } = require('../utils/logger');
 
 async function testLeetCodeCNAPI() {
   try {
@@ -23,7 +24,7 @@ async function testLeetCodeCNAPI() {
     `;
 
     const variables = { userSlug: 'lucky845' };
-    console.log('Testing LeetCode CN API with new structure...');
+    secureLogger.info('Testing LeetCode CN API with new structure...');
     const response = await axios.post('https://leetcode.cn/graphql/', {
       query,
       variables
@@ -36,12 +37,12 @@ async function testLeetCodeCNAPI() {
       timeout: 10000
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response data:', JSON.stringify(response.data, null, 2));
+    secureLogger.info('Response status:', response.status);
+    secureLogger.info('Response data:', JSON.stringify(response.data, null, 2));
   } catch (error: any) {
-    console.error('Error testing API:', error.message);
+    secureLogger.error('Error testing API:', error.message);
     if (error.response) {
-      console.error('Error response:', JSON.stringify(error.response.data, null, 2));
+      secureLogger.error('Error response:', JSON.stringify(error.response.data, null, 2));
     }
   }
 }

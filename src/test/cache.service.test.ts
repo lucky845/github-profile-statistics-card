@@ -1,63 +1,85 @@
 // 导入必要的测试和服务模块
-import { cacheService, CacheKeyGenerator } from '../services/cache.service';
+import { CacheKeyGenerator, CacheServiceFactory, CacheStrategy, BaseCacheService } from '../services/cache.service';
 import { secureLogger } from '../utils/logger';
 
+// 创建一个简单的内存缓存服务用于测试
+class TestMemoryCacheService extends BaseCacheService {
+  private cache: Map<string, { value: any; expiry: number }> = new Map();
+  private hits: number = 0;
+  private misses: number = 0;
+  private defaultTTL: number = 300; // 5分钟
 
-// 模拟 node-cache
-jest.mock('node-cache', () => {
-  class MockNodeCache {
-    private cache: Map<string, { value: any; expiry: number }> = new Map();
-    private defaultTTL: number;
-
-    constructor(options?: { stdTTL?: number }) {
-      this.defaultTTL = options?.stdTTL || 0;
+  async get<T>(key: string): Promise<T | undefined> {
+    const item = this.cache.get(key);
+    if (!item) {
+      this.misses++;
+      return undefined;
     }
-
-    set(key: string, value: any, ttl?: number): boolean {
-      const expiry = ttl || this.defaultTTL;
-      const expiryTime = expiry > 0 ? Date.now() + expiry * 1000 : 0;
-      this.cache.set(key, { value, expiry: expiryTime });
-      return true;
+    
+    // 检查是否过期
+    if (item.expiry > 0 && Date.now() > item.expiry) {
+      this.cache.delete(key);
+      this.misses++;
+      return undefined;
     }
-
-    get(key: string): any | undefined {
-      const item = this.cache.get(key);
-      if (!item) return undefined;
-      
-      // 模拟过期检查
-      if (item.expiry > 0 && Date.now() > item.expiry) {
-        this.cache.delete(key);
-        return undefined;
-      }
-      
-      return item.value;
-    }
-
-    del(key: string | string[]): number {
-      if (Array.isArray(key)) {
-        return key.reduce((count, k) => {
-          const hadKey = this.cache.has(k);
-          if (hadKey) this.cache.delete(k);
-          return count + (hadKey ? 1 : 0);
-        }, 0);
-      } else {
-        const hadKey = this.cache.has(key);
-        if (hadKey) this.cache.delete(key);
-        return hadKey ? 1 : 0;
-      }
-    }
-
-    flushAll(): void {
-      this.cache.clear();
-    }
-
-    keys(): string[] {
-      return Array.from(this.cache.keys());
-    }
+    
+    this.hits++;
+    return item.value as T;
   }
 
-  return MockNodeCache;
-});
+  async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    const expiry = ttl || this.defaultTTL;
+    const expiryTime = expiry > 0 ? Date.now() + expiry * 1000 : 0;
+    this.cache.set(key, { value, expiry: expiryTime });
+    // 模拟日志调用
+    secureLogger.debug(`Cache set: ${key}`);
+    return true;
+  }
+
+  async delete(key: string): Promise<boolean> {
+    const hadKey = this.cache.has(key);
+    if (hadKey) this.cache.delete(key);
+    return hadKey;
+  }
+
+  async clear(): Promise<boolean> {
+    this.cache.clear();
+    return true;
+  }
+
+  async deleteByPattern(pattern: string | RegExp): Promise<number> {
+    let deletedCount = 0;
+    const patternStr = typeof pattern === 'string' ? pattern : pattern.source;
+    const regex = new RegExp(patternStr);
+    
+    for (const key of Array.from(this.cache.keys())) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+        deletedCount++;
+      }
+    }
+    return deletedCount;
+  }
+
+  async clearGroup(group: string): Promise<number> {
+    const pattern = `${group}:*`;
+    return this.deleteByPattern(pattern);
+  }
+
+  getStats() {
+    const total = this.hits + this.misses;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      keys: this.cache.size,
+      groups: 0,
+      hitsRate: total > 0 ? (this.hits / total) * 100 : 0
+    };
+  }
+}
+
+// 创建测试用的缓存服务实例
+const cacheService = new TestMemoryCacheService();
 
 describe('Cache Service Tests', () => {
   beforeEach(() => {

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getCSDNUserStats } from '../services/csdn.service';
 import { generateCard, CardType } from '../services/svg.service';
 import { activeTheme } from '../config/theme.config';
+import { secureLogger } from '../utils/logger';
 
 // 获取CSDN统计信息
 export const getCSDNStats = async (req: Request, res: Response): Promise<void> => {
@@ -44,7 +45,7 @@ export const getCSDNStats = async (req: Request, res: Response): Promise<void> =
     }, themeName));
 
   } catch (error: any) {
-      console.error(`CSDN控制器错误: ${error instanceof Error ? error.message : String(error)}`);
+      secureLogger.error(`CSDN控制器错误: ${error instanceof Error ? error.message : String(error)}`, { error });
       // 从查询参数获取主题名称，支持主题参数
       const themeName = (req.query.theme as string) || 'default';
       res.set('Content-Type', 'image/svg+xml');

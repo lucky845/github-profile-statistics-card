@@ -143,7 +143,7 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
   
   // 仅在非生产环境记录完整错误堆栈
   if (process.env.NODE_ENV !== 'production') {
-    console.error('Error stack trace:', err.stack);
+    secureLogger.error('Error stack trace:', { stack: err.stack });
   }
 
 /**

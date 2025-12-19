@@ -1,27 +1,6 @@
 import mongoose from 'mongoose';
 import {IBilibiliUser, ICSDNUser, IGitHubUser, ILeetCodeUser} from '../types';
 
-// 通用时间戳插件
-const timestampPlugin = function(schema: mongoose.Schema) {
-    schema.add({
-        createdAt: {
-            type: Date,
-            default: Date.now,
-            index: true
-        },
-        updatedAt: {
-            type: Date,
-            default: Date.now,
-            index: true
-        }
-    });
-    
-    schema.pre('save', function(next) {
-        this.updatedAt = new Date();
-        next();
-    });
-};
-
 // GitHub用户数据模型
 const githubUserSchema = new mongoose.Schema<IGitHubUser>({
     username: {type: String, required: true, unique: true},
@@ -142,3 +121,28 @@ bilibiliUserSchema.index({ lastUpdated: 1 });
 bilibiliUserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 export const BilibiliUser = mongoose.model<IBilibiliUser>('BilibiliUser', bilibiliUserSchema);
+
+// 通用键值对存储模型
+const keyValueSchema = new mongoose.Schema({
+    key: {type: String, required: true, unique: true, index: true},
+    value: {type: mongoose.Schema.Types.Mixed, required: true},
+    ttl: {type: Number, default: null}, // 过期时间（秒）
+    expireAt: {type: Date, default: null, index: {expireAfterSeconds: 0}}, // 自动过期时间
+    createdAt: {type: Date, default: Date.now},
+    updatedAt: {type: Date, default: Date.now}
+}, { timestamps: true });
+
+// 添加中间件自动设置过期时间
+keyValueSchema.pre('save', function(next) {
+    if (this.ttl && this.ttl > 0) {
+        this.expireAt = new Date(Date.now() + this.ttl * 1000);
+    }
+    this.updatedAt = new Date();
+    next();
+});
+
+// 添加索引
+keyValueSchema.index({ key: 1 }, { unique: true });
+keyValueSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+export const KeyValueStore = mongoose.model('KeyValueStore', keyValueSchema);

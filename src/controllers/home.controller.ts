@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { secureLogger } from '../utils/logger';
 
 /**
  * 处理首页请求
@@ -27,7 +28,7 @@ export const handleHomePage = (req: Request, res: Response): void => {
     res.set('Content-Type', 'text/html');
     res.send(indexHtml);
   } catch (error) {
-    console.error('读取首页错误:', error);
+    secureLogger.error('读取首页错误:', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).send('服务器错误');
   }
 };

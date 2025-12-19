@@ -3,6 +3,7 @@ import {IBilibiliUser} from '../types';
 import {CardType, generateCard} from '../services/svg.service';
 import {activeTheme} from '../config/theme.config';
 import {getBilibiliInfo} from "../services/bilibili.service";
+import { secureLogger } from '../utils/logger';
 
 // 获取Bilibilis用户数据的控制器
 export const fetchBilibiliUserData = async (req: Request, res: Response): Promise<void> => {
@@ -12,7 +13,7 @@ export const fetchBilibiliUserData = async (req: Request, res: Response): Promis
     const themeName = (req.query.theme as string) || 'default';
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
-    console.debug(`处理Bilibili请求: 用户ID=${uid}`);
+    secureLogger.debug(`处理Bilibili请求: 用户ID=${uid}`);
 
     if (!uid) {
         res.status(400).set('Content-Type', 'image/svg+xml')

@@ -1,16 +1,18 @@
 // 导入 polyfill，确保在所有其他导入之前
 import './polyfill';
 
-import express, { Request, Response } from 'express';
+// 初始化全局变量
+import './global-init';
+
 import path from 'path';
+import express, { Request, Response } from 'express';
 import { 
   errorHandler, 
   logger, 
-  mongoMiddleware, 
+  mongoConnectionMiddleware, 
   notFoundHandler,
   themeMiddleware,
   metricsMiddleware,
-  cacheMiddleware,
   cacheStatsHandler,
   manualCacheClearHandler,
   securityHeaders,
@@ -19,9 +21,9 @@ import {
   hppProtection,
   apiRateLimiter
 } from './middleware';
+import { createCacheMiddleware } from './middleware/cache.middleware';
 import {
   appConfig,
-  dbConfig
 } from './config';
 import { 
   bilibiliRouter, 
@@ -55,9 +57,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 应用业务中间件
-app.use(mongoMiddleware);
+app.use(mongoConnectionMiddleware);
 app.use(themeMiddleware);
-app.use(cacheMiddleware);
+app.use(createCacheMiddleware());
 
 // 性能监控中间件 - 放在所有路由之前以捕获所有请求
 app.use(metricsMiddleware);
@@ -104,25 +106,18 @@ let server: ReturnType<typeof app.listen>;
 
 const startServer = async () => {
     try {
-        // 检查是否配置了使用内存缓存，如果是，不尝试连接MongoDB
-        if (dbConfig.useMemoryCache) {
+        // 尝试初始化数据库连接（即使失败也继续启动服务器）
+        await dbManager.connect().catch(error => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
-            secureLogger.info('📊 使用内存缓存模式，跳过MongoDB连接');
-        } else {
-            // 尝试初始化数据库连接（即使失败也继续启动服务器）
-            await dbManager.connect().catch(error => {
-                // 导入需要在运行时动态导入，避免循环依赖
-                const { secureLogger } = require('./utils/logger');
-                secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
-            });
-        }
+            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
+        });
 
         server = app.listen(port, () => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
             secureLogger.info(`🚀 服务已启动于端口 ${port}`);
-            secureLogger.info(`📊 数据库状态: ${dbConfig.useMemoryCache ? '内存缓存模式' : (mongoose.connection.readyState === 1 ? '已连接' : '未连接')}`);
+            secureLogger.info(`📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}`);
         });
 
         return server;
@@ -202,16 +197,3 @@ startServer().then(serverInstance => {
     const { secureLogger } = require('./utils/logger');
     secureLogger.info('📊 Prometheus监控已初始化');
 });
-
-// 导出Express应用，用于部署
-export default app;
-
-// 额外导出一个请求处理函数，确保部署平台可以正确处理所有请求
-export const handler = async (req: Request, res: Response) => {
-  await app(req, res);
-};
-
-// 保留CommonJS导出以保持向后兼容性
-module.exports = app;
-module.exports.default = app;
-module.exports.handler = handler;

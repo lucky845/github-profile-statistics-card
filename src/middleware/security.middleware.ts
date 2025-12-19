@@ -1,12 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-// @ts-ignore - xss-clean 没有类型声明文件
 import xss from 'xss-clean';
 import hpp from 'hpp';
-import { appConfig } from '../config/app.config';
-import { secureLogger, createRequestLoggerMiddleware } from '../utils/logger';
+import { createRequestLoggerMiddleware } from '../utils/logger';
 
 /**
  * 安全HTTP头配置

@@ -3,6 +3,7 @@ import getJuejinInfo from '../services/juejin.service';
 import { JuejinUserData } from '../types';
 import { generateCard, CardType } from '../services/svg.service';
 import { activeTheme } from '../config/theme.config';
+import { secureLogger } from '../utils/logger';
 
 // 获取掘金用户数据的控制器
 export const fetchJuejinUserData = async (req: Request, res: Response): Promise<void> => {
@@ -11,7 +12,7 @@ export const fetchJuejinUserData = async (req: Request, res: Response): Promise<
     const themeName = (req.query.theme as string) || 'default';
     // 获取缓存时间
     const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
-    console.debug(`处理掘金请求: 用户ID=${userId}`);
+    secureLogger.debug(`处理掘金请求: 用户ID=${userId}`);
 
     if (!userId) {
         res.status(400).set('Content-Type', 'image/svg+xml')

@@ -1,19 +1,33 @@
-import { MongoDBManager } from '../utils/dbManager';
-import { secureLogger } from '../utils/logger';
+import {Request, Response, NextFunction} from 'express';
+import {MongoDBManager} from '../utils/dbManager';
+import {secureLogger} from '../utils/logger';
 
-export const mongoMiddleware = async (req: any, res: any, next: any) => {
+/**
+ * MongoDB连接中间件
+ * 检查MongoDB连接状态，如果连接失败则使用备用缓存机制
+ */
+export const mongoConnectionMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // 尝试确保连接可用，但即使失败也继续处理请求
-        const isConnected = await MongoDBManager.getInstance().ensureConnection();
+        // 检查数据库连接状态，设置更长的超时时间
+        const dbManager = MongoDBManager.getInstance();
+        const isConnected = await Promise.race([
+            dbManager.ensureConnection(),
+            new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000)) // 5秒超时
+        ]);
         
         if (!isConnected) {
-            secureLogger.warn('⚠️  数据库连接不可用，将使用内存缓存');
+            secureLogger.warn('MongoDB connection failed or timed out, using memory cache as fallback');
+            // 设置标志表示使用备用缓存
+            (req as any).useFallbackCache = true;
+        } else {
+            (req as any).useFallbackCache = false;
         }
         
         next();
     } catch (error) {
-        secureLogger.error('数据库连接检查失败:', error);
-        // 即使发生错误，也继续处理请求
+        secureLogger.error('MongoDB connection check failed:', error);
+        // 即使数据库连接检查失败，也继续处理请求
+        (req as any).useFallbackCache = true;
         next();
     }
 };

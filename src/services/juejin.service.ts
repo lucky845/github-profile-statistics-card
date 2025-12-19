@@ -1,8 +1,9 @@
 import {AxiosError} from 'axios';
 import {JuejinApiResponse, JuejinApiResponseData, JuejinUserData} from '../types';
-import {getJuejinUserData, updateJuejinUserData} from './mongodb.service';
+import {getJuejinUserData, updateJuejinUserData} from './juejin-storage.service';
 import {createRequestWithRetry, createRequest} from '../utils/http.utils';
 import { asyncDbUpdate } from '../utils/db-update.utils';
+import { secureLogger } from '../utils/logger';
 
 
 async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promise<JuejinUserData> {
@@ -10,17 +11,17 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
         throw new Error('用户ID不能为空');
     }
 
-    let cachedUserData: any = null;
+    let cachedUserData: JuejinUserData | null = null;
 
     try {
-        const {data, needsFetch} = await getJuejinUserData(userId, cacheTimeInSeconds);
+        const {userData, needsFetch} = await getJuejinUserData(userId, cacheTimeInSeconds);
         // 保存缓存数据，以便在catch块中可以访问
-        cachedUserData = data;
+        cachedUserData = userData;
 
         // 如果有有效的缓存数据且不需要刷新，直接返回
-        if (data && !needsFetch) {
-            console.log(`使用缓存的掘金用户数据: ${userId}`);
-            return {...data, isValid: true};
+        if (userData && !needsFetch) {
+            secureLogger.info(`使用缓存的掘金用户数据: ${userId}`);
+            return {...userData, isValid: true};
         }
 
         // 创建带有反爬虫措施的请求实例
@@ -62,7 +63,7 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
         const newUserData: JuejinApiResponseData = userResponse.data.data;
         
         cachedUserData = {
-            ...cachedUserData,
+            ...(cachedUserData || {}), // 确保有一个基础对象
             userId: newUserData.user_id,
             username: newUserData.user_name,
             desc: newUserData.description || '',
@@ -72,10 +73,13 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
             articleCount: articlesResponse.data.count || 0,
             lastUpdated: new Date(),
             expireAt: new Date(new Date().getTime() + cacheTimeInSeconds * 1000), // 设置过期时间
+            isValid: true // 确保isValid属性存在且为布尔值
         };
 
         // 异步更新数据库，不阻塞返回
-        asyncDbUpdate(updateJuejinUserData, [cachedUserData.userId, cachedUserData], 'Juejin');
+        if (cachedUserData && cachedUserData.userId) {
+            asyncDbUpdate(updateJuejinUserData, [cachedUserData.userId, cachedUserData], 'Juejin');
+        }
 
         return {
             ...cachedUserData,
@@ -88,7 +92,7 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
 
         // 判断是否存在缓存，存在缓存直接返回缓存即可
         if (cachedUserData) {
-            return cachedUserData;
+            return {...cachedUserData, isValid: true};
         }
 
         // 没有缓存，抛出错误
