@@ -22,6 +22,7 @@ flowchart TD
     SvgGenerator --> SvgSanitizer[SVG净化服务]
     Service --> MongoDB[(MongoDB数据库)]
     Service --> MemoryCache[(内存缓存)]
+    Service --> Redis[(Redis缓存)]
     Metrics --> Prometheus[Prometheus指标收集]
 ```
 
@@ -40,10 +41,11 @@ flowchart TD
 - **限流保护**：防止恶意请求和DDoS攻击
 
 #### 2.3 缓存优化
-- **多级缓存策略**：MongoDB持久化缓存 + Node-Cache内存缓存
+- **多级缓存策略**：MongoDB持久化缓存 + Node-Cache内存缓存 + Redis高性能缓存
 - **智能缓存键生成**：基于用户ID、请求参数和主题的唯一缓存键
 - **可配置TTL**：针对不同数据源设置合理的缓存过期时间
 - **缓存命中率监控**：实时跟踪缓存效果并提供优化依据
+- **Redis缓存支持**：使用Redis作为主要缓存系统，提供更高的性能和可扩展性
 
 #### 2.4 监控与可观测性
 - **Prometheus集成**：全面的指标收集，包括请求计数、响应时间、错误率等
@@ -64,6 +66,7 @@ flowchart TD
 - Node.js 16.x 或更高版本
 - npm 8.x 或更高版本
 - MongoDB 5.x 或更高版本（可选，用于持久化缓存）
+- Redis 6.x 或更高版本（可选，用于高性能缓存）
 - 服务器推荐配置：2GB RAM，1个CPU核心（支持中等流量）
 
 ### 2. 安装步骤
@@ -94,6 +97,12 @@ NODE_ENV=production
 MONGODB_URI=mongodb://localhost:27017/github-stats-card
 MONGODB_USERNAME=<your_mongodb_username>
 MONGODB_PASSWORD=<your_mongodb_password>
+
+# Redis连接信息（可选，用于高性能缓存）
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USERNAME=default
+REDIS_PASSWORD=<your_redis_password>
 
 # API限流配置
 RATE_LIMIT_WINDOW_MS=60000
@@ -164,9 +173,12 @@ services:
     environment:
       - PORT=3000
       - MONGODB_URI=mongodb://mongodb:27017/github-stats-card
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - NODE_ENV=production
     depends_on:
       - mongodb
+      - redis
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -185,6 +197,16 @@ services:
       timeout: 10s
       retries: 3
 
+  redis:
+    image: redis:6
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: redis-server --appendonly yes
+
 volumes:
   mongo-data:
 ```
@@ -194,6 +216,32 @@ volumes:
 ```bash
 docker-compose up -d
 ```
+
+### 3.4 Redis Cloud配置
+
+为了提升应用性能和响应速度，推荐使用Redis Cloud服务。Redis Cloud提供了简单易用的云托管Redis解决方案。
+
+1. 注册 [Redis Cloud](https://redis.com/try-free/) 账户（提供30天免费试用）
+2. 创建新的Redis数据库实例
+3. 获取连接信息：
+   - Redis主机地址（Endpoint）
+   - Redis端口（Port）
+   - Redis密码（Password）
+4. 将这些信息配置到环境变量中：
+
+```dotenv
+REDIS_HOST=your-redis-host.redislabs.com
+REDIS_PORT=12345
+REDIS_USERNAME=default
+REDIS_PASSWORD=your-redis-password
+```
+
+Redis Cloud的优势：
+- 无需自行维护Redis服务器
+- 自动备份和故障恢复
+- 可视化监控面板
+- 多区域部署支持
+- 自动扩缩容能力
 
 ### 4. 反向代理配置
 
@@ -257,6 +305,8 @@ server {
 - **水平扩展**：配置Redis等分布式缓存，支持多实例部署
 - **监控告警**：集成Grafana和Alertmanager，设置性能和可用性告警
 - **自动扩缩容**：在Kubernetes环境中配置HPA，根据负载自动调整实例数
+- **Redis优化**：使用Redis Cloud等托管服务获得更好的性能和可靠性
+- **缓存策略调优**：根据不同数据源的特点调整缓存TTL和淘汰策略
 
 ## API文档
 
