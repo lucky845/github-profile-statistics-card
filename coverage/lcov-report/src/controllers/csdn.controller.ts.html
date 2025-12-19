@@ -32,7 +32,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>0/12</span>
             </div>
         
             
@@ -116,9 +116,11 @@
 <a name='L51'></a><a href='#L51'>51</a>
 <a name='L52'></a><a href='#L52'>52</a>
 <a name='L53'></a><a href='#L53'>53</a>
-<a name='L54'></a><a href='#L54'>54</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -172,19 +174,20 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { Request, Response } from 'express';
 <span class="cstat-no" title="statement not covered" >import { getCSDNUserStats } from '../services/csdn.service';</span>
 <span class="cstat-no" title="statement not covered" >import { generateCard, CardType } from '../services/svg.service';</span>
-<span class="cstat-no" title="statement not covered" >import { ThemeOptions, defaultTheme } from '../config';</span>
+import { activeTheme } from '../config/theme.config';
+<span class="cstat-no" title="statement not covered" >import { secureLogger } from '../utils/logger';</span>
 &nbsp;
 // 获取CSDN统计信息
 export const <span class="cstat-no" title="statement not covered" >getCSDNStats = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >a</span>sync (r</span>eq: Request, res: Response): Promise&lt;void&gt; =&gt;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" > {</span></span></span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const userId = <span class="cstat-no" title="statement not covered" >req.params.userId;</span>
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (<span class="cstat-no" title="statement not covered" >res.locals.theme || defaultTheme)</span> as ThemeOptions;
+    // 从查询参数获取主题名称，支持主题参数
+    const themeName = (<span class="cstat-no" title="statement not covered" >req.query.theme as string) || 'default';</span>
     // 获取缓存时间
     const cacheTimeInSeconds = <span class="cstat-no" title="statement not covered" >req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!userId) {</span>
-<span class="cstat-no" title="statement not covered" >      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户ID', theme));</span>
+<span class="cstat-no" title="statement not covered" >      res.status(400).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未提供用户名', themeName));</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -192,7 +195,7 @@ export const <span class="cstat-no" title="statement not covered" >getCSDNStats 
     const stats = <span class="cstat-no" title="statement not covered" >await getCSDNUserStats(userId, cacheTimeInSeconds);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!stats.isValid) {</span>
-<span class="cstat-no" title="statement not covered" >      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到CSDN用户', theme));</span>
+<span class="cstat-no" title="statement not covered" >      res.status(404).set('Content-Type', 'image/svg+xml').send(generateCard(CardType.ERROR, '未找到CSDN用户', themeName));</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
@@ -212,15 +215,15 @@ export const <span class="cstat-no" title="statement not covered" >getCSDNStats 
       codeAge: stats.codeAge,
       level: stats.level,
       monthPoints: stats.monthPoints
-    }, theme));
+    }, themeName));
 &nbsp;
   } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >    console.error(`CSDN控制器错误: ${error.message}`);</span>
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (<span class="cstat-no" title="statement not covered" >res.locals.theme || defaultTheme)</span> as ThemeOptions;
-<span class="cstat-no" title="statement not covered" >    res.set('Content-Type', 'image/svg+xml');</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error.message}`, theme));</span>
-  }
+<span class="cstat-no" title="statement not covered" >      secureLogger.error(`CSDN控制器错误: ${error instanceof Error ? error.message : String(error)}`, { error });</span>
+      // 从查询参数获取主题名称，支持主题参数
+      const themeName = (<span class="cstat-no" title="statement not covered" >req.query.theme as string) || 'default';</span>
+<span class="cstat-no" title="statement not covered" >      res.set('Content-Type', 'image/svg+xml');</span>
+<span class="cstat-no" title="statement not covered" >      res.status(500).send(generateCard(CardType.ERROR, `处理请求时出错: ${error instanceof Error ? error.message : String(error)}`, themeName));</span>
+    }
 };
 &nbsp;</pre></td></tr></table></pre>
 
@@ -229,7 +232,7 @@ export const <span class="cstat-no" title="statement not covered" >getCSDNStats 
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-23T10:31:11.792Z
+                at 2025-12-19T10:08:09.117Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

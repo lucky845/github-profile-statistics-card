@@ -112,14 +112,18 @@
 <a name='L47'></a><a href='#L47'>47</a>
 <a name='L48'></a><a href='#L48'>48</a>
 <a name='L49'></a><a href='#L49'>49</a>
-<a name='L50'></a><a href='#L50'>50</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -164,21 +168,23 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import {Request, Response} from 'express';
 import {IBilibiliUser} from '../types';
 <span class="cstat-no" title="statement not covered" >import {CardType, generateCard} from '../services/svg.service';</span>
-<span class="cstat-no" title="statement not covered" >import {defaultTheme, ThemeOptions} from '../config';</span>
+import {activeTheme} from '../config/theme.config';
 <span class="cstat-no" title="statement not covered" >import {getBilibiliInfo} from "../services/bilibili.service";</span>
+<span class="cstat-no" title="statement not covered" >import { secureLogger } from '../utils/logger';</span>
 &nbsp;
 // 获取Bilibilis用户数据的控制器
 export const <span class="cstat-no" title="statement not covered" >fetchBilibiliUserData = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >a</span>sync (r</span>eq: Request, res: Response): Promise&lt;void&gt; =&gt;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" > {</span></span></span>
-    const uid = <span class="cstat-no" title="statement not covered" >req.params.uid;</span>
-    // 获取主题（从中间件或使用默认主题）
-    const theme = (<span class="cstat-no" title="statement not covered" >res.locals.theme || defaultTheme)</span> as ThemeOptions;
+    // 从请求参数获取用户ID
+    const uid = <span class="cstat-no" title="statement not covered" >req.params.uid as string;</span>
+    // 从查询参数获取主题名称，支持主题参数
+    const themeName = (<span class="cstat-no" title="statement not covered" >req.query.theme as string) || 'default';</span>
     // 获取缓存时间
     const cacheTimeInSeconds = <span class="cstat-no" title="statement not covered" >req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;</span>
-<span class="cstat-no" title="statement not covered" >    console.debug(`处理Bilibili请求: 用户ID=${uid}`);</span>
+<span class="cstat-no" title="statement not covered" >    secureLogger.debug(`处理Bilibili请求: 用户ID=${uid}`);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!uid) {</span>
 <span class="cstat-no" title="statement not covered" >        res.status(400).set('Content-Type', 'image/svg+xml')</span>
-            .send(generateCard(CardType.ERROR, '未提供用户UID', theme));
+            .send(generateCard(CardType.ERROR, '未提供用户UID', themeName));
 <span class="cstat-no" title="statement not covered" >        return;</span>
     }
 &nbsp;
@@ -188,7 +194,7 @@ export const <span class="cstat-no" title="statement not covered" >fetchBilibili
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!stats.isValid) {</span>
 <span class="cstat-no" title="statement not covered" >        res.status(404)</span>
             .set('Content-Type', 'image/svg+xml')
-            .send(generateCard(CardType.ERROR, '未找到哔哩哔哩用户', theme));
+            .send(generateCard(CardType.ERROR, '未找到哔哩哔哩用户', themeName));
 <span class="cstat-no" title="statement not covered" >        return;</span>
     }
 &nbsp;
@@ -197,7 +203,7 @@ export const <span class="cstat-no" title="statement not covered" >fetchBilibili
 <span class="cstat-no" title="statement not covered" >    res.set('Content-Type', 'image/svg+xml');</span>
     // 使用较长的缓存时间，减少请求频率，但仍能保持较新的数据
 <span class="cstat-no" title="statement not covered" >    res.set('Cache-Control', 'public, max-age=600'); </span>// 10分钟缓存
-<span class="cstat-no" title="statement not covered" >    res.send(generateCard(CardType.BILIBLI, {</span>
+<span class="cstat-no" title="statement not covered" >    res.send(generateCard(CardType.BILIBILI, {</span>
         uid,
         username: stats?.username || uid,
         level: stats?.level || 0,
@@ -208,7 +214,7 @@ export const <span class="cstat-no" title="statement not covered" >fetchBilibili
         views: stats?.views || 0,
         lastUpdated: stats.lastUpdated,
         expireAt: stats.expireAt,
-    } as IBilibiliUser, theme));
+    } as IBilibiliUser, themeName));
 };
 &nbsp;</pre></td></tr></table></pre>
 
@@ -217,7 +223,7 @@ export const <span class="cstat-no" title="statement not covered" >fetchBilibili
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-23T10:31:11.792Z
+                at 2025-12-19T10:08:09.117Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

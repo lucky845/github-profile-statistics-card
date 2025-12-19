@@ -3,15 +3,9 @@
 // 导入新的模块化服务和类型
 import { CardType, ThemeOptions } from './svg/types';
 import { generateCard, getThemeConfig } from './svg/svgService';
-// activeTheme is imported elsewhere or defined locally
 import { generateErrorCard } from './svg/generators/errorCardGenerator';
 import { generateLeetCodeCard } from './svg/generators/leetcodeCardGenerator';
 import { SvgSanitizerService } from './svg-sanitizer.service';
-// 移除与本地函数冲突的导入
-// import { generateGitHubCounterCard } from './svg/generators/githubCardGenerator';
-// import { generateCSDNCard } from './svg/generators/csdnCardGenerator';
-// import { generateJuejinCard } from './svg/generators/juejinCardGenerator';
-// import { generateBilibiliCard } from './svg/generators/bilibiliCardGenerator';
 
 // 保留原有函数名称以保持向后兼容性，但内部调用新模块的实现
 

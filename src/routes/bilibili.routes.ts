@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { fetchBilibiliUserData } from '../controllers/bilibili.controller';
 import { validateGenericUsername, validateTheme, validateCacheTime } from '../middleware/validation.middleware';
+import { secureLogger } from '../utils/logger';
 
 // 自定义B站缓存中间件，适配uid参数
 const bilibiliCacheMiddleware = () => {
@@ -17,7 +18,7 @@ const bilibiliCacheMiddleware = () => {
       
       next();
     } catch (error) {
-      console.error('Bilibili cache middleware error:', error);
+      secureLogger.error('Bilibili cache middleware error:', error);
       next();
     }
   };

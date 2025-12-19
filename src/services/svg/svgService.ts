@@ -9,6 +9,7 @@ import { generateCSDNCard } from './generators/csdnCardGenerator';
 import { generateJuejinCard } from './generators/juejinCardGenerator';
 import { generateBilibiliCard } from './generators/bilibiliCardGenerator';
 import { themes, activeTheme } from './themes';
+import { secureLogger } from '../../utils/logger';
 
 /**
  * 获取主题配置
@@ -49,7 +50,7 @@ export const generateCard = (
         return generateErrorCard(`不支持的卡片类型: ${cardType}`, theme);
     }
   } catch (error) {
-    console.error(`生成${cardType}卡片时出错:`, error);
+    secureLogger.error(`生成${cardType}卡片时出错:`, error);
     return generateErrorCard('卡片生成失败', theme);
   }
 };

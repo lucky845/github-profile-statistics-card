@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { themes, defaultTheme } from '../config';
+import { secureLogger } from '../utils/logger';
 
 /**
  * 主题中间件
@@ -20,7 +21,7 @@ export const themeMiddleware = (req: Request, res: Response, next: NextFunction)
     
     next();
   } catch (error) {
-    console.error('主题中间件错误:', error);
+    secureLogger.error('主题中间件错误:', error);
     // 出错时使用默认主题
     res.locals.theme = defaultTheme;
     next();

@@ -1,4 +1,4 @@
-import mongoose, { Connection } from 'mongoose';
+import mongoose from 'mongoose';
 import {dbConfig} from '../config/db.config';
 import {secureLogger} from './logger';
 
@@ -22,46 +22,34 @@ export class MongoDBManager {
     }
 
     private readonly config: mongoose.ConnectOptions = {
-        maxPoolSize: dbConfig.options.maxPoolSize || 20,
+        maxPoolSize: dbConfig.options.maxPoolSize || 10,
         minPoolSize: dbConfig.options.minPoolSize || 5,
-        serverSelectionTimeoutMS: dbConfig.options.serverSelectionTimeoutMS || 15000,
-        socketTimeoutMS: dbConfig.options.socketTimeoutMS || 60000,
-        retryReads: true,
-        retryWrites: true,
-        heartbeatFrequencyMS: 10000,
-        connectTimeoutMS: dbConfig.options.connectTimeoutMS || 30000,
+        serverSelectionTimeoutMS: dbConfig.options.serverSelectionTimeoutMS || 30000,
+        socketTimeoutMS: dbConfig.options.socketTimeoutMS || 120000,
+        retryReads: dbConfig.options.retryReads || true,
+        retryWrites: dbConfig.options.retryWrites || true,
+        heartbeatFrequencyMS: dbConfig.options.heartbeatFrequencyMS || 10000,
+        connectTimeoutMS: dbConfig.options.connectTimeoutMS || 60000,
         family: 4, // 优先使用IPv4
     };
 
     async ensureConnection(): Promise<boolean> {
-        // 如果配置了使用内存缓存，直接返回false表示不使用数据库
-        if (dbConfig.useMemoryCache) {
-            secureLogger.info('📊 使用内存缓存模式，跳过数据库连接检查');
-            return false;
-        }
-        
         if (this.isConnected && mongoose.connection.readyState === 1) return true;
         try {
             await this.connect();
             return true;
         } catch (error) {
-            secureLogger.warn('⚠️ MongoDB connection not available, will use memory cache only');
+            secureLogger.warn('⚠️ MongoDB connection not available, will use Redis cache only');
             return false;
         }
     }
 
     public async connect(): Promise<void> {
-        // 如果配置了使用内存缓存，直接返回
-        if (dbConfig.useMemoryCache) {
-            secureLogger.info('📊 使用内存缓存模式，跳过数据库连接');
-            this.isConnected = false;
-            return;
-        }
-        
         try {
             // 防止重复连接
             if (mongoose.connection.readyState === 1) {
                 this.isConnected = true;
+                secureLogger.debug('MongoDB already connected');
                 return;
             }
             
@@ -71,6 +59,8 @@ export class MongoDBManager {
                 this.isConnected = false;
                 return;
             }
+            
+            secureLogger.info('🔄 Attempting to connect to MongoDB...');
             
             // 尝试连接数据库，设置超时时间
             const connectPromise = mongoose.connect(dbConfig.mongoURI, this.config);
@@ -82,12 +72,14 @@ export class MongoDBManager {
             
             this.registerEventListeners();
             this.isConnected = true;
+            this.reconnectAttempts = 0; // 重置重连尝试次数
             secureLogger.info(`✅ MongoDB Connected: ${mongoose.connection.host}`);
         } catch (error: any) {
             this.handleConnectionError(error);
             this.isConnected = false;
             // 不再抛出错误，允许应用继续运行
             secureLogger.warn('⚠️ MongoDB connection failed, application will continue with memory cache only');
+            throw error; // 重新抛出错误，让调用者知道连接失败
         }
     }
 
@@ -136,20 +128,28 @@ export class MongoDBManager {
     }
 
     private handleDisconnection() {
-        if (!this.isConnected) {
-            secureLogger.info('🔄 Attempting to reconnect to MongoDB...');
+        if (!this.isConnected && this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            secureLogger.info(`🔄 Attempting to reconnect to MongoDB... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             // 使用指数退避策略进行重连
+            const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000); // 最大30秒延迟
             setTimeout(() => {
                 this.connect().catch(err => {
-                    secureLogger.warn(`⚠️ Reconnection attempt failed: ${err.message}`);
+                    secureLogger.warn(`⚠️ Reconnection attempt ${this.reconnectAttempts} failed: ${err.message}`);
                     this.handleDisconnection(); // 递归调用继续尝试重连
                 });
-            }, 1000);
+            }, delay);
+        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            secureLogger.error('❌ Maximum reconnection attempts reached. Giving up.');
+            this.reconnectAttempts = 0; // 重置尝试次数，允许在下次断开连接时重新尝试
         }
     }
 
     private handleConnectionError(error: Error) {
-        secureLogger.error(`❌ MongoDB connection error: ${error.message}`);
+        secureLogger.error(`❌ MongoDB connection error: ${error.message}`, {
+            stack: error.stack,
+            name: error.name
+        });
         // 不再自动尝试重新连接，减少不必要的网络请求
         this.isConnected = false;
     }

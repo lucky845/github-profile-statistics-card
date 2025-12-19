@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import prometheusService from '../services/prometheus.service';
 
+// 扩展全局变量类型
+declare global {
+  var requestCount: number;
+  var requestCountLastHour: number;
+}
+
 /**
  * 性能监控中间件
  * 用于收集API请求相关的指标并发送到Prometheus
@@ -42,6 +48,12 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
 
   const endpoint = normalizeEndpoint();
   const method = req.method;
+  
+  // 增加请求计数器
+  global.requestCount = (global.requestCount || 0) + 1;
+  
+  // 增加最近一小时请求计数器
+  global.requestCountLastHour = (global.requestCountLastHour || 0) + 1;
   
   // 增加活跃请求计数
   prometheusService.incrementActiveRequests(method, endpoint);

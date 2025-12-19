@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/67</span>
+                <span class='fraction'>0/68</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/61</span>
+                <span class='fraction'>0/63</span>
             </div>
         
             
@@ -228,31 +228,13 @@
 <a name='L163'></a><a href='#L163'>163</a>
 <a name='L164'></a><a href='#L164'>164</a>
 <a name='L165'></a><a href='#L165'>165</a>
-<a name='L166'></a><a href='#L166'>166</a>
-<a name='L167'></a><a href='#L167'>167</a>
-<a name='L168'></a><a href='#L168'>168</a>
-<a name='L169'></a><a href='#L169'>169</a>
-<a name='L170'></a><a href='#L170'>170</a>
-<a name='L171'></a><a href='#L171'>171</a>
-<a name='L172'></a><a href='#L172'>172</a>
-<a name='L173'></a><a href='#L173'>173</a>
-<a name='L174'></a><a href='#L174'>174</a>
-<a name='L175'></a><a href='#L175'>175</a>
-<a name='L176'></a><a href='#L176'>176</a>
-<a name='L177'></a><a href='#L177'>177</a>
-<a name='L178'></a><a href='#L178'>178</a>
-<a name='L179'></a><a href='#L179'>179</a>
-<a name='L180'></a><a href='#L180'>180</a>
-<a name='L181'></a><a href='#L181'>181</a>
-<a name='L182'></a><a href='#L182'>182</a>
-<a name='L183'></a><a href='#L183'>183</a>
-<a name='L184'></a><a href='#L184'>184</a>
-<a name='L185'></a><a href='#L185'>185</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L166'></a><a href='#L166'>166</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -340,26 +322,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -432,11 +394,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import {IBilibiliUser} from '../types';
-<span class="cstat-no" title="statement not covered" >import {getBilibiliUserData, updateBilibiliUserData} from "./mongodb.service";</span>
+<span class="cstat-no" title="statement not covered" >import {getBilibiliUserData, updateBilibiliUserData} from "./bilibili-storage.service";</span>
 <span class="cstat-no" title="statement not covered" >import axios from "axios";</span>
 <span class="cstat-no" title="statement not covered" >import {bilibiliConfig} from "../config/bilibili.config";</span>
 <span class="cstat-no" title="statement not covered" >import * as cheerio from 'cheerio';</span>
-// import {encWbi, getWbiKeys} from "../utils/bilibili.utils";
+<span class="cstat-no" title="statement not covered" >import { asyncDbUpdate } from '../utils/db-update.utils';</span>
+<span class="cstat-no" title="statement not covered" >import { secureLogger } from '../utils/logger';</span>
 &nbsp;
 // API 接口路径
 const API_PATHS = <span class="cstat-no" title="statement not covered" >{</span>
@@ -468,7 +431,7 @@ export const <span class="cstat-no" title="statement not covered" >getBilibiliIn
 <span class="cstat-no" title="statement not covered" >        throw new Error('用户ID不能为空');</span>
     }
 &nbsp;
-    let cachedUserData: any = <span class="cstat-no" title="statement not covered" >null;</span>
+    let cachedUserData: IBilibiliUser | null = <span class="cstat-no" title="statement not covered" >null;</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
         const {data, needsFetch} = <span class="cstat-no" title="statement not covered" >await getBilibiliUserData(uid, cacheTimeInSeconds);</span>
@@ -478,7 +441,7 @@ export const <span class="cstat-no" title="statement not covered" >getBilibiliIn
 &nbsp;
         // 如果有有效的缓存数据且不需要刷新，直接返回
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (data &amp;&amp; !needsFetch) {</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`使用缓存的Bilibili用户数据: ${uid}`);</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.info(`使用缓存的Bilibili用户数据: ${uid}`);</span>
 <span class="cstat-no" title="statement not covered" >            return {...data, isValid: true};</span>
         }
 &nbsp;
@@ -489,61 +452,41 @@ export const <span class="cstat-no" title="statement not covered" >getBilibiliIn
 <span class="cstat-no" title="statement not covered" >            throw new Error('获取哔哩哔哩数据失败');</span>
         }
 &nbsp;
-        // 更新到缓存
-<span class="cstat-no" title="statement not covered" >        await updateBilibiliUserData(uid, userData);</span>
+        // 异步更新数据库，不阻塞返回
+<span class="cstat-no" title="statement not covered" >        asyncDbUpdate(updateBilibiliUserData, [uid, userData], 'Bilibili');</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        return {...userData, isValid: true};</span>
     } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >        console.error(`获取哔哩哔哩数据出错: ${error.message}`);</span>
+<span class="cstat-no" title="statement not covered" >    secureLogger.error(`获取哔哩哔哩数据出错: ${error.message}`);</span>
 &nbsp;
-        // 判断是否存在缓存，存在缓存直接返回缓存即可
-<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (cachedUserData) {</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`使用过期的缓存数据: ${uid}`);</span>
-<span class="cstat-no" title="statement not covered" >            return {...cachedUserData, isValid: false};</span>
-        }
-&nbsp;
-        // 没有缓存，返回默认数据
-<span class="cstat-no" title="statement not covered" >        console.log(`无法获取数据，返回默认数据: ${uid}`);</span>
-<span class="cstat-no" title="statement not covered" >        return {</span>
-            uid,
-            username: uid,
-            level: 0,
-            sign: '',
-            followers: 0,
-            following: 0,
-            likes: 0,
-            views: 0,
-            lastUpdated: new Date(),
-            isValid: false,
-        };
+    // 判断是否存在缓存，存在缓存直接返回缓存即可
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (cachedUserData) {</span>
+<span class="cstat-no" title="statement not covered" >      secureLogger.info(`使用过期的缓存数据: ${uid}`);</span>
+<span class="cstat-no" title="statement not covered" >      return {...cachedUserData, isValid: false};</span>
     }
+&nbsp;
+    // 没有缓存，返回默认数据
+<span class="cstat-no" title="statement not covered" >    secureLogger.info(`无法获取数据，返回默认数据: ${uid}`);</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
+      uid,
+      username: uid,
+      level: 0,
+      sign: '',
+      followers: 0,
+      following: 0,
+      likes: 0,
+      views: 0,
+      lastUpdated: new Date(),
+      isValid: false,
+    };
+  }
 };
 &nbsp;
 // 获取用户数据
 const fetchBilibiliUserData = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async (u</span>id: string, cacheTimeInSeconds: number): Promise&lt;IBilibiliUser | null&gt; =&gt;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" > {</span></span></span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
         const headers = <span class="cstat-no" title="statement not covered" >getBilibiliHeaders();</span>
-        let userInfo: any = <span class="cstat-no" title="statement not covered" >{},</span> userStat: any = <span class="cstat-no" title="statement not covered" >{},</span> upStat: any = <span class="cstat-no" title="statement not covered" >{},</span> videoData: any = <span class="cstat-no" title="statement not covered" >{};</span>
-&nbsp;
-        // 获取用户基本信息 (使用 wbi 签名)
-        // try {
-        //     const web_keys = await getWbiKeys(bilibiliConfig.bilibiliSession);
-        //     const params = {mid: uid},
-        //         img_key = web_keys.img_key,
-        //         sub_key = web_keys.sub_key
-        //
-        //     const query = encWbi(params, img_key, sub_key);
-        //     console.log('AAAAAA' + query)
-        //
-        //     const userInfoResponse = await axios.get(API_PATHS.USER_INFO + '?' + query, {
-        //         headers
-        //     });
-        //     userInfo = userInfoResponse.data;
-        //     console.log(`获取到的哔哩哔哩用户信息: ${JSON.stringify(userInfo)}`);
-        // } catch (error: any) {
-        //     console.error(`获取用户基本信息失败: ${error.message}`);
-        //     throw error;
-        // }
+        let userInfo: any = <span class="cstat-no" title="statement not covered" >{},</span> userStat: any = <span class="cstat-no" title="statement not covered" >{},</span> upStat: any = <span class="cstat-no" title="statement not covered" >{};</span>
 &nbsp;
         // 爬取用户基本信息
 <span class="cstat-no" title="statement not covered" >        try {</span>
@@ -569,7 +512,7 @@ const fetchBilibiliUserData = <span class="cstat-no" title="statement not covere
             });
 &nbsp;
         } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >            console.log(`获取用户基本信息失败: ${error.message}`)</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.error(`获取用户基本信息失败: ${error.message}`)</span>
 <span class="cstat-no" title="statement not covered" >            throw error;</span>
         }
 &nbsp;
@@ -579,9 +522,9 @@ const fetchBilibiliUserData = <span class="cstat-no" title="statement not covere
                 headers
             });
 <span class="cstat-no" title="statement not covered" >            userStat = userStatResponse.data;</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`获取到的哔哩哔哩用户统计信息: ${JSON.stringify(userStat)}`);</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.info(`获取到的哔哩哔哩用户统计信息: ${JSON.stringify(userStat)}`);</span>
         } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >            console.error(`获取用户统计信息失败: ${error.message}`);</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.error(`获取用户统计信息失败: ${error.message}`);</span>
 <span class="cstat-no" title="statement not covered" >            userStat = {follower: 0, following: 0};</span>
         }
 &nbsp;
@@ -591,9 +534,9 @@ const fetchBilibiliUserData = <span class="cstat-no" title="statement not covere
                 headers
             });
 <span class="cstat-no" title="statement not covered" >            upStat = upStatResponse.data;</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`获取到的哔哩哔哩UP主数据: ${JSON.stringify(upStat)}`);</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.info(`获取到的哔哩哔哩UP主数据: ${JSON.stringify(upStat)}`);</span>
         } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >            console.error(`获取UP主数据失败: ${error.message}`);</span>
+<span class="cstat-no" title="statement not covered" >            secureLogger.error(`获取UP主数据失败: ${error.message}`);</span>
 <span class="cstat-no" title="statement not covered" >            upStat = {likes: 0};</span>
         }
 &nbsp;
@@ -611,7 +554,7 @@ const fetchBilibiliUserData = <span class="cstat-no" title="statement not covere
             expireAt: new Date(new Date().getTime() + cacheTimeInSeconds * 1000), // 设置过期时间
         };
     } catch (error: any) {
-<span class="cstat-no" title="statement not covered" >        console.error(`[Bilibili] 更新失败: ${error.message}`);</span>
+<span class="cstat-no" title="statement not covered" >        secureLogger.error(`[Bilibili] 更新失败: ${error.message}`);</span>
 <span class="cstat-no" title="statement not covered" >        return null;</span>
     }
 };
@@ -622,7 +565,7 @@ const fetchBilibiliUserData = <span class="cstat-no" title="statement not covere
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-23T10:31:11.792Z
+                at 2025-12-19T10:08:09.117Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

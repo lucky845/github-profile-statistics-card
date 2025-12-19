@@ -99,7 +99,7 @@ export function createCacheMiddleware(options: CacheMiddlewareOptions = {}) {
       // 继续处理请求
       next();
     } catch (error) {
-      console.error('Cache middleware error:', error);
+      secureLogger.error('Cache middleware error:', { error: error instanceof Error ? error.message : String(error) });
       // 即使缓存出错，也继续处理请求
       next();
     }

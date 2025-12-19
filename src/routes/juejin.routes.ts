@@ -1,5 +1,6 @@
 import {Router} from 'express';
 import {fetchJuejinUserData} from '../controllers/juejin.controller';
+import { secureLogger } from '../utils/logger';
 
 // 自定义掘金缓存中间件，适配user_id参数
 const juejinCacheMiddleware = () => {
@@ -16,7 +17,7 @@ const juejinCacheMiddleware = () => {
       
       next();
     } catch (error) {
-      console.error('Juejin cache middleware error:', error);
+      secureLogger.error('Juejin cache middleware error:', error);
       next();
     }
   };

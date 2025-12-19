@@ -1,7 +1,12 @@
+import axios from 'axios';
 import { createRequest, createRequestWithRetry } from '../utils/http.utils';
 import { LeetCodeStats } from '../types';
+import { secureLogger } from '../utils/logger';
 
-// 定义类型
+// 扩展全局变量类型
+declare global {
+  var leetcodeApiCallCount: number;
+}// 定义类型
 interface SubmissionItem {
   difficulty: string;
   count: number;
@@ -47,6 +52,9 @@ export async function fetchLeetCodeStats(
       const cnVariables = { userSlug: username };
       
       try {
+        // 增加LeetCode API调用计数
+        global.leetcodeApiCallCount = (global.leetcodeApiCallCount || 0) + 1;
+        
         // 使用带重试机制的请求
         const response = await createRequestWithRetry(() => request.post(
           "https://leetcode.cn/graphql",
@@ -61,7 +69,7 @@ export async function fetchLeetCodeStats(
         }
         return { success: false, error: '未找到中国区LeetCode用户数据' };
       } catch (error: any) {
-        console.warn(`获取中国区LeetCode数据失败: ${error.message}`);
+        secureLogger.warn(`获取中国区LeetCode数据失败: ${error.message}`);
         // API调用失败时返回错误
         return { 
           success: false, 
@@ -92,7 +100,9 @@ export async function fetchLeetCodeStats(
       const usVariables = { username };
       
       try {
-        // 使用带重试机制的请求
+        // 增加LeetCode API调用计数
+        global.leetcodeApiCallCount = (global.leetcodeApiCallCount || 0) + 1;
+        
         const response = await createRequestWithRetry(() => request.post(
           "https://leetcode.com/graphql",
           {
@@ -106,7 +116,7 @@ export async function fetchLeetCodeStats(
         }
         return { success: false, error: '未找到美国区LeetCode用户数据' };
       } catch (error: any) {
-        console.warn(`获取美国区LeetCode数据失败: ${error.message}`);
+        secureLogger.warn(`获取美国区LeetCode数据失败: ${error.message}`);
         // API调用失败时返回错误
         return { 
           success: false, 
@@ -115,7 +125,7 @@ export async function fetchLeetCodeStats(
       }
     }
   } catch (error: any) {
-    console.error(`获取LeetCode数据失败:`, error);
+    secureLogger.error(`获取LeetCode数据失败:`, error);
     // 整体请求失败时返回错误
     return {
       success: false,

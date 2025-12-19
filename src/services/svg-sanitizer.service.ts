@@ -3,6 +3,7 @@
  */
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
+import { secureLogger } from '../utils/logger';
 
 // 创建DOMPurify实例
 const window = new JSDOM('').window;
@@ -112,7 +113,7 @@ export class SvgSanitizerService {
       const sanitized = dompurify.sanitize(svgContent, dompurifyOptions);
       return sanitized;
     } catch (error: any) {
-      console.error(`SVG净化失败: ${error.message}`);
+      secureLogger.error(`SVG净化失败: ${error.message}`);
       // 如果净化失败，返回空字符串以避免潜在的安全风险
       return '';
     }
@@ -149,7 +150,7 @@ export class SvgSanitizerService {
 
       return !dangerousPatterns.some(pattern => pattern.test(svgContent));
     } catch (error) {
-      console.error('SVG安全检查过程中发生错误:', error);
+      secureLogger.error('SVG安全检查过程中发生错误:', error);
       return false; // 错误时默认认为不安全
     }
   }

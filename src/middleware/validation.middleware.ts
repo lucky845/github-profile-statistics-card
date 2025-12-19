@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getThemeConfig, generateCard, CardType } from '../services/svg.service';
+import { secureLogger } from '../utils/logger';
 
 /**
  * 验证GitHub用户名格式
@@ -63,7 +64,7 @@ export const validateTheme = (req: Request, res: Response, next: NextFunction): 
     
     // 检查是否有字符被过滤掉
     if (sanitizedTheme !== theme) {
-      console.warn(`主题参数包含不允许的字符: ${theme} -> ${sanitizedTheme}`);
+      secureLogger.warn(`主题参数包含不允许的字符: ${theme} -> ${sanitizedTheme}`);
       // 直接使用净化后的主题名称
       (req.query as any).theme = sanitizedTheme;
     }
@@ -125,7 +126,7 @@ export const validateGenericUsername = (req: Request, res: Response, next: NextF
     // 过滤掉潜在的恶意字符
     const sanitizedUsername = username.replace(/[^a-zA-Z0-9_\-]/g, '');
     if (sanitizedUsername !== username) {
-      console.warn(`用户名包含不允许的字符: ${username} -> ${sanitizedUsername}`);
+      secureLogger.warn(`用户名包含不允许的字符: ${username} -> ${sanitizedUsername}`);
     }
 
     // 将净化后的用户名保存回对应的参数中
@@ -141,7 +142,7 @@ export const validateGenericUsername = (req: Request, res: Response, next: NextF
 
     next();
   } catch (error) {
-    console.error('用户名验证失败:', error);
+    secureLogger.error('用户名验证失败:', error);
     res.status(500).send('服务器内部错误');
   }
 };

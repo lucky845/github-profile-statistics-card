@@ -15,7 +15,7 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 
 - **多平台支持**：GitHub、LeetCode、CSDN、掘金、B站数据统计
 - **可定制主题**：多种精美主题可选，支持亮色/暗色模式
-- **高度优化**：多级缓存策略，确保快速响应
+- **高度优化**：多级缓存策略，基于Redis的高性能缓存系统，确保快速响应
 - **安全可靠**：内置SVG内容过滤，防止XSS攻击
 - **实时监控**：集成Prometheus，全面的性能监控
 - **完整测试**：全面的单元测试和边界情况覆盖
@@ -35,7 +35,7 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 - 实时数据更新
 - 简单易用的API
 - 响应式设计
-- 缓存优化
+- 基于Redis的高性能缓存优化
 
 ## 🚀 使用方法
 
@@ -211,6 +211,7 @@ CSDN 统计卡片包含以下数据：
 - Express
 - TypeScript
 - MongoDB
+- Redis
 - EJS 模板引擎
 
 ## 📝 开源协议
@@ -233,6 +234,25 @@ CSDN 统计卡片包含以下数据：
 4. 在 "Network Access" 中添加 IP 访问权限（可以设置为允许所有 IP：0.0.0.0/0）
 5. 获取数据库连接字符串（格式如：`mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/`)
 
+### Redis Cloud 配置
+
+为了提升应用性能和响应速度，本项目使用Redis作为主要缓存系统。推荐使用Redis Cloud服务，它提供了简单易用的云托管Redis解决方案。
+
+1. 注册 [Redis Cloud](https://redis.com/try-free/) 账户（提供30天免费试用）
+2. 创建新的Redis数据库实例
+3. 获取连接信息：
+   - Redis主机地址（Endpoint）
+   - Redis端口（Port）
+   - Redis密码（Password）
+4. 将这些信息配置到环境变量中
+
+Redis Cloud的优势：
+- 无需自行维护Redis服务器
+- 自动备份和故障恢复
+- 可视化监控面板
+- 多区域部署支持
+- 自动扩缩容能力
+
 ### Vercel 部署
 
 1. 在 Vercel 中导入你 fork 的项目
@@ -240,6 +260,10 @@ CSDN 统计卡片包含以下数据：
    - `MONGODB_URI`: MongoDB Atlas 的连接字符串
    - `BILIBILI_SESSDATA`: 哔哩哔哩登录后获取的cookie里面的`SESSDATA`值
    - `USE_MEMORY_CACHE`: 本地开发时设置为true使用内存缓存（可选，线上环境未配置时默认使用MongoDB）
+   - `REDIS_HOST`: Redis服务器主机地址（使用Redis Cloud时为云端提供的主机地址）
+   - `REDIS_PORT`: Redis服务器端口（使用Redis Cloud时为云端提供的端口）
+   - `REDIS_PASSWORD`: Redis访问密码（使用Redis Cloud时为云端提供的密码）
+   - `REDIS_USERNAME`: Redis用户名（使用Redis Cloud时通常为'default'）
 3. 点击 "Deploy" 开始部署
 
 部署完成后，你可以通过 Vercel 分配的域名访问服务，格式如：

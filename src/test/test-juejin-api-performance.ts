@@ -1,9 +1,11 @@
 import { createRequest, createRequestWithRetry } from '../utils/http.utils';
+import { secureLogger } from '../utils/logger';
 
 // 测试并行请求性能
 async function testParallelRequests() {
     try {
-        console.time('并行请求耗时');
+        const startTime = Date.now();
+        secureLogger.info('开始并行请求测试');
         
         const userId = '2564503943252237';
         const request = createRequest(10000);
@@ -26,21 +28,23 @@ async function testParallelRequests() {
             ), 3, 1000)
         ]);
         
-        console.log('用户信息请求状态:', userResponse.status);
-        console.log('文章列表请求状态:', articlesResponse.status);
-        console.log('用户信息:', userResponse.data.data.user_name);
-        console.log('文章数量:', articlesResponse.data.count || 0);
+        secureLogger.info('用户信息请求状态:', userResponse.status);
+        secureLogger.info('文章列表请求状态:', articlesResponse.status);
+        secureLogger.info('用户信息:', userResponse.data.data.user_name);
+        secureLogger.info('文章数量:', articlesResponse.data.count || 0);
         
-        console.timeEnd('并行请求耗时');
+        const endTime = Date.now();
+        secureLogger.info(`并行请求耗时: ${endTime - startTime}ms`);
     } catch (error) {
-        console.error('并行请求失败:', error);
+        secureLogger.error('并行请求失败:', error);
     }
 }
 
 // 测试串行请求性能
 async function testSequentialRequests() {
     try {
-        console.time('串行请求耗时');
+        const startTime = Date.now();
+        secureLogger.info('开始串行请求测试');
         
         const userId = '2564503943252237';
         const request = createRequest(10000);
@@ -60,26 +64,27 @@ async function testSequentialRequests() {
             }
         ), 3, 1000);
         
-        console.log('用户信息请求状态:', userResponse.status);
-        console.log('文章列表请求状态:', articlesResponse.status);
-        console.log('用户信息:', userResponse.data.data.user_name);
-        console.log('文章数量:', articlesResponse.data.count || 0);
+        secureLogger.info('用户信息请求状态:', userResponse.status);
+        secureLogger.info('文章列表请求状态:', articlesResponse.status);
+        secureLogger.info('用户信息:', userResponse.data.data.user_name);
+        secureLogger.info('文章数量:', articlesResponse.data.count || 0);
         
-        console.timeEnd('串行请求耗时');
+        const endTime = Date.now();
+        secureLogger.info(`串行请求耗时: ${endTime - startTime}ms`);
     } catch (error) {
-        console.error('串行请求失败:', error);
+        secureLogger.error('串行请求失败:', error);
     }
 }
 
 // 运行测试
 async function runTests() {
-    console.log('=== 测试开始 ===');
+    secureLogger.info('=== 测试开始 ===');
     
     await testParallelRequests();
-    console.log('\n' + '='.repeat(50) + '\n');
+    secureLogger.info('\n' + '='.repeat(50) + '\n');
     await testSequentialRequests();
     
-    console.log('\n=== 测试结束 ===');
+    secureLogger.info('\n=== 测试结束 ===');
 }
 
 runTests();
