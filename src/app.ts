@@ -185,19 +185,24 @@ process.on('SIGINT', async () => {
 // 错误处理中间件应该放在所有路由和处理函数之后
 app.use(errorHandler);
 
-// 初始化并启动服务
-startServer().then(serverInstance => {
-    // 处理其他关闭信号
-    process.on('SIGTERM', () => {
+// 导出应用供Vercel使用
+export default app;
+
+// 初始化并启动服务（仅在直接运行时执行）
+if (require.main === module) {
+    startServer().then(serverInstance => {
+        // 处理其他关闭信号
+        process.on('SIGTERM', () => {
+            // 导入需要在运行时动态导入，避免循环依赖
+            const { secureLogger } = require('./utils/logger');
+            secureLogger.info('🛑 接收到SIGTERM信号');
+            serverInstance.close();
+        });
+        
+        // 初始化Prometheus服务
+        prometheusService.initialize();
         // 导入需要在运行时动态导入，避免循环依赖
         const { secureLogger } = require('./utils/logger');
-        secureLogger.info('🛑 接收到SIGTERM信号');
-        serverInstance.close();
+        secureLogger.info('📊 Prometheus监控已初始化');
     });
-    
-    // 初始化Prometheus服务
-    prometheusService.initialize();
-    // 导入需要在运行时动态导入，避免循环依赖
-    const { secureLogger } = require('./utils/logger');
-    secureLogger.info('📊 Prometheus监控已初始化');
-});
+}
