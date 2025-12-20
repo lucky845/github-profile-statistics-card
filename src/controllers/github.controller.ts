@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { generateCard, CardType } from '../services/svg.service';
 import { secureLogger } from '../utils/logger';
 import { SvgSanitizerService } from '../services/svg-sanitizer.service';
-import { getGitHubUserStats } from '../services/github.service';
+import { githubService } from '../services/github.service';
 
 /**
  * 获取GitHub用户统计信息并生成SVG卡片
@@ -27,7 +27,7 @@ export const getGitHubStats = async (req: Request, res: Response): Promise<void>
     const sanitizedUsername = svgSanitizerService.sanitizeUserContent(username.trim());
 
     // 获取GitHub用户统计信息
-    const userData = await getGitHubUserStats(sanitizedUsername);
+    const userData = await githubService.getGitHubUserStats(sanitizedUsername);
 
     // 生成SVG卡片
     const svg = await generateCard(CardType.GITHUB, {

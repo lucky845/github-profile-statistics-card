@@ -3,84 +3,99 @@ import { getGitHubUserData, updateGitHubUserData } from './mongodb.service';
 import { asyncDbUpdate } from '../utils/db-update.utils';
 import { IGitHubUser } from '../types';
 import { secureLogger } from '../utils/logger';
+import { Cacheable } from './cache.service';
 
 // 扩展全局变量类型
 declare global {
   var githubApiCallCount: number;
 }
 
-// 获取GitHub用户数据（包括头像和访问计数）
-export async function getGitHubUserStats(username: string): Promise<{
-  isValid: boolean;
-  avatarUrl: string | null;
-  visitCount: number;
-}> {
-  try {
-    // 先从MongoDB中获取用户数据
-    const { userData } = await getGitHubUserData(username);
-    let avatarUrl = null;
-    let needFetchAvatar = true;
+/**
+ * GitHub服务类
+ * 提供GitHub用户统计数据的获取功能
+ */
+export class GitHubService {
+  /**
+   * 获取GitHub用户数据（包括头像和访问计数）
+   * @param username GitHub用户名
+   * @returns 用户统计数据
+   */
+  @Cacheable(
+    (username: string) => `github:user:stats:${username}`,
+    300 // 5分钟缓存
+  )
+  async getGitHubUserStats(username: string): Promise<{
+    isValid: boolean;
+    avatarUrl: string | null;
+    visitCount: number;
+  }> {
+    try {
+      // 先从MongoDB中获取用户数据
+      const { userData } = await getGitHubUserData(username);
+      let avatarUrl = null;
+      let needFetchAvatar = true;
 
-    // 检查缓存的头像URL是否有效（30天内）
-    if (userData?.avatarUrl && userData.avatarUpdatedAt) {
-      const avatarAge = new Date().getTime() - new Date(userData.avatarUpdatedAt).getTime();
-      if (avatarAge < 30 * 24 * 60 * 60 * 1000) {
-        avatarUrl = userData.avatarUrl;
-        needFetchAvatar = false;
-      }
-    }
-
-    // 如果需要，从GitHub API获取新的头像URL
-    if (needFetchAvatar) {
-      const httpClient = createRequest(8000);
-      try {
-        // 增加GitHub API调用计数
-        global.githubApiCallCount = (global.githubApiCallCount || 0) + 1;
-        
-        const response = await httpClient.get(`https://api.github.com/users/${username}`, {
-          headers: {
-            'Accept': 'application/vnd.github.v3+json',
-            'If-None-Match': '',
-            'User-Agent': 'GitHub-Stats-Card'
-          },
-          validateStatus: status => status < 500
-        });
-
-        if (response.status === 200 && response.data?.avatar_url) {
-          avatarUrl = response.data.avatar_url;
+      // 检查缓存的头像URL是否有效（30天内）
+      if (userData?.avatarUrl && userData.avatarUpdatedAt) {
+        const avatarAge = new Date().getTime() - new Date(userData.avatarUpdatedAt).getTime();
+        if (avatarAge < 30 * 24 * 60 * 60 * 1000) {
+          avatarUrl = userData.avatarUrl;
+          needFetchAvatar = false;
         }
-      } catch (error) {
-        secureLogger.error(`获取GitHub头像失败: ${error}`);
       }
+
+      // 如果需要，从GitHub API获取新的头像URL
+      if (needFetchAvatar) {
+        const httpClient = createRequest(8000);
+        try {
+          // 增加GitHub API调用计数
+          global.githubApiCallCount = (global.githubApiCallCount || 0) + 1;
+          
+          const response = await httpClient.get(`https://api.github.com/users/${username}`, {
+            headers: {
+              'Accept': 'application/vnd.github.v3+json',
+              'If-None-Match': '',
+              'User-Agent': 'GitHub-Stats-Card'
+            },
+            validateStatus: status => status < 500
+          });
+
+          if (response.status === 200 && response.data?.avatar_url) {
+            avatarUrl = response.data.avatar_url;
+          }
+        } catch (error) {
+          secureLogger.error(`获取GitHub头像失败: ${error}`);
+        }
+      }
+
+      // 更新访问计数和头像URL（如果有新的）
+      // 构造要更新的数据对象
+      const updateData: Partial<IGitHubUser> = {
+        ...(userData || {}),
+        visitCount: (userData?.visitCount || 0) + 1,
+        lastVisited: new Date(),
+        lastUpdated: new Date(),
+        ...(needFetchAvatar && avatarUrl ? { avatarUrl, avatarUpdatedAt: new Date() } : {})
+      };
+      
+      asyncDbUpdate(updateGitHubUserData, [username, updateData], 'GitHub');
+
+      // 获取更新后的用户数据以获取最新的访问计数
+      const { userData: updatedData } = await getGitHubUserData(username);
+
+      return {
+        isValid: true,
+        avatarUrl: avatarUrl || null,
+        visitCount: updatedData?.visitCount || 1
+      };
+    } catch (error) {
+      secureLogger.error(`获取GitHub用户统计失败: ${error}`);
+      return {
+        isValid: true,
+        avatarUrl: null,
+        visitCount: 1
+      };
     }
-
-    // 更新访问计数和头像URL（如果有新的）
-    // 构造要更新的数据对象
-    const updateData: Partial<IGitHubUser> = {
-      ...(userData || {}),
-      visitCount: (userData?.visitCount || 0) + 1,
-      lastVisited: new Date(),
-      lastUpdated: new Date(),
-      ...(needFetchAvatar && avatarUrl ? { avatarUrl, avatarUpdatedAt: new Date() } : {})
-    };
-    
-    asyncDbUpdate(updateGitHubUserData, [username, updateData], 'GitHub');
-
-    // 获取更新后的用户数据以获取最新的访问计数
-    const { userData: updatedData } = await getGitHubUserData(username);
-
-    return {
-      isValid: true,
-      avatarUrl: avatarUrl || null,
-      visitCount: updatedData?.visitCount || 1
-    };
-  } catch (error) {
-    secureLogger.error(`获取GitHub用户统计失败: ${error}`);
-    return {
-      isValid: true,
-      avatarUrl: null,
-      visitCount: 1
-    };
   }
 }
 
@@ -111,4 +126,7 @@ export function generateCounterSVG(count: number, avatarUrl: string): string {
     <image x="30" y="60" width="30" height="30" xlink:href="${avatarUrl}" />
     <text x="70" y="80" class="small">GitHub: @</text>
   </svg>`;
-} 
+}
+
+// 导出单例实例
+export const githubService = new GitHubService();
