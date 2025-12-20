@@ -3,7 +3,7 @@
  * 提供统一的缓存接口，支持多种缓存策略
  */
 
-import { createClient, RedisClientType } from 'redis';
+import { createClientPool, RedisClientPoolType } from 'redis';
 import { secureLogger } from '../utils/logger';
 
 // 缓存配置类型
@@ -81,7 +81,7 @@ class NoopCacheService extends BaseCacheService {
  * Redis缓存服务实现
  */
 class RedisCacheService extends BaseCacheService {
-  private client: RedisClientType;
+  private client: RedisClientPoolType;
   private hits: number = 0;
   private misses: number = 0;
   private ttl: number;
@@ -91,14 +91,19 @@ class RedisCacheService extends BaseCacheService {
     super();
     this.ttl = config.ttl;
     
-    // 创建Redis客户端
-    this.client = createClient({
+    // 创建Redis连接池，限制最大连接数为10
+    this.client = createClientPool({
       username: process.env.REDIS_USERNAME || 'default',
       password: process.env.REDIS_PASSWORD,
       socket: {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379')
       }
+    }, {
+      minimum: 1,
+      maximum: 10, // 限制最大连接数为10，避免超出免费服务限制
+      acquireTimeout: 5000,
+      cleanupDelay: 3000
     });
 
     // 连接Redis
@@ -109,7 +114,7 @@ class RedisCacheService extends BaseCacheService {
     try {
       await this.client.connect();
       this.isConnected = true;
-      secureLogger.info('✅ Redis connected');
+      secureLogger.info('✅ Redis connected with connection pool');
     } catch (error) {
       secureLogger.error(`❌ Redis connection error: ${(error as Error).message}`);
       this.isConnected = false;
@@ -128,8 +133,8 @@ class RedisCacheService extends BaseCacheService {
     }
 
     try {
-      const value = await this.client.get(key);
-      if (value === null) {
+      const value = await this.client.execute(client => client.get(key));
+      if (value === null || value === undefined) {
         this.misses++;
         return undefined;
       }
@@ -154,9 +159,9 @@ class RedisCacheService extends BaseCacheService {
 
     try {
       const serializedValue = JSON.stringify(value);
-      await this.client.set(key, serializedValue, { 
+      await this.client.execute(client => client.set(key, serializedValue, { 
         EX: ttl || this.ttl 
-      });
+      }));
       secureLogger.debug(`Cache set: ${key}`);
       return true;
     } catch (error) {
@@ -176,7 +181,7 @@ class RedisCacheService extends BaseCacheService {
     }
 
     try {
-      const result = await this.client.del(key);
+      const result = await this.client.execute(client => client.del(key));
       return result > 0;
     } catch (error) {
       secureLogger.error(`❌ Redis delete error for key ${key}: ${(error as Error).message}`);
@@ -195,7 +200,7 @@ class RedisCacheService extends BaseCacheService {
     }
 
     try {
-      await this.client.flushAll();
+      await this.client.execute(client => client.flushAll());
       return true;
     } catch (error) {
       secureLogger.error(`❌ Redis clear error: ${(error as Error).message}`);
@@ -221,10 +226,10 @@ class RedisCacheService extends BaseCacheService {
         patternStr = pattern.source;
       }
       
-      const keys = await this.client.keys(patternStr);
+      const keys = await this.client.execute(client => client.keys(patternStr));
       if (keys.length === 0) return 0;
       
-      const result = await this.client.del(keys);
+      const result = await this.client.execute(client => client.del(keys));
       return result;
     } catch (error) {
       secureLogger.error(`❌ Redis deleteByPattern error: ${(error as Error).message}`);
@@ -243,10 +248,10 @@ class RedisCacheService extends BaseCacheService {
     }
 
     try {
-      const keys = await this.client.keys(`${group}:*`);
+      const keys = await this.client.execute(client => client.keys(`${group}:*`));
       if (keys.length === 0) return 0;
       
-      const result = await this.client.del(keys);
+      const result = await this.client.execute(client => client.del(keys));
       return result;
     } catch (error) {
       secureLogger.error(`❌ Redis clearGroup error for group ${group}: ${(error as Error).message}`);

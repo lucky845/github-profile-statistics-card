@@ -4,6 +4,10 @@ import './polyfill';
 // 初始化全局变量
 import './global-init';
 
+// 加载环境变量
+import dotenv from 'dotenv';
+dotenv.config();
+
 import path from 'path';
 import express, { Request, Response } from 'express';
 import { 
