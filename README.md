@@ -16,6 +16,8 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 - **多平台支持**：GitHub、LeetCode、CSDN、掘金、B站数据统计
 - **可定制主题**：多种精美主题可选，支持亮色/暗色模式
 - **高度优化**：多级缓存策略，基于Redis的高性能缓存系统，确保快速响应
+  - GitHub服务实现5分钟缓存，显著减少重复请求的响应时间
+  - Redis连接池优化，最大连接数限制为10，避免"ERR max number of clients reached"错误
 - **安全可靠**：内置SVG内容过滤，防止XSS攻击
 - **实时监控**：集成Prometheus，全面的性能监控
 - **完整测试**：全面的单元测试和边界情况覆盖
