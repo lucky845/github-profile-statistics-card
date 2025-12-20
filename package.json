@@ -4,12 +4,13 @@
   "description": "GitHub profile LeetCode stats display",
   "main": "src/app.ts",
   "scripts": {
-    "start": "nodemon src/app.ts",
+    "start": "node dist/app.js",
     "dev": "nodemon --exec 'ts-node -P tsconfig.json' src/app.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "build": "tsc && tsc-alias",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "vercel-build": "npm run build"
   },
   "keywords": [
     "github",
