@@ -14,7 +14,7 @@ declare global {
  * GitHub服务类
  * 提供GitHub用户统计数据的获取功能
  */
-export class GitHubService {
+class GitHubService {
   /**
    * 获取GitHub用户数据（包括头像和访问计数）
    * @param username GitHub用户名
@@ -99,6 +99,9 @@ export class GitHubService {
   }
 }
 
+// 导出单例实例
+export const githubService = new GitHubService();
+
 // 生成SVG计数器
 export function generateCounterSVG(count: number, avatarUrl: string): string {
   const colors = {
@@ -128,5 +131,3 @@ export function generateCounterSVG(count: number, avatarUrl: string): string {
   </svg>`;
 }
 
-// 导出单例实例
-export const githubService = new GitHubService();

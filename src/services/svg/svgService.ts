@@ -8,7 +8,7 @@ import { generateGitHubCounterCard } from './generators/githubCardGenerator';
 import { generateCSDNCard } from './generators/csdnCardGenerator';
 import { generateJuejinCard } from './generators/juejinCardGenerator';
 import { generateBilibiliCard } from './generators/bilibiliCardGenerator';
-import { themes, activeTheme } from './themes';
+import { themes } from '../../config/theme.config';
 import { secureLogger } from '../../utils/logger';
 
 /**
@@ -17,7 +17,8 @@ import { secureLogger } from '../../utils/logger';
  * @returns 主题配置对象
  */
 export const getThemeConfig = (themeName?: string): ThemeOptions => {
-  return themeName && themes[themeName] ? themes[themeName] : activeTheme;
+  // 使用默认主题作为后备
+  return themeName && themes[themeName] ? themes[themeName] : themes.default;
 };
 
 /**
@@ -46,6 +47,9 @@ export const generateCard = (
         return generateJuejinCard(data, theme);
       case CardType.BILIBILI:
         return generateBilibiliCard(data, theme);
+      case CardType.ERROR:
+        // 处理错误卡片类型
+        return generateErrorCard(data as string, theme);
       default:
         return generateErrorCard(`不支持的卡片类型: ${cardType}`, theme);
     }

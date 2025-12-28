@@ -1,7 +1,6 @@
 import {Request, Response} from 'express';
 import {IBilibiliUser} from '../types';
 import {CardType, generateCard} from '../services/svg.service';
-import {activeTheme} from '../config/theme.config';
 import {getBilibiliInfo} from "../services/bilibili.service";
 import { secureLogger } from '../utils/logger';
 

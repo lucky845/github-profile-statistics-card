@@ -55,8 +55,8 @@ export const validateLeetCodeUsername = (req: Request, res: Response, next: Next
 export const validateTheme = (req: Request, res: Response, next: NextFunction): void => {
   const theme = req.query.theme as string;
 
-  // 允许的主题列表
-  const validThemes = ['light', 'dark', 'merko', 'gruvbox', 'tokyonight'];
+  // 允许的主题列表 - 使用与配置文件一致的主题名称
+  const validThemes = ['default', 'light', 'dark', 'blue', 'green', 'purple', 'orange', 'red'];
 
   if (theme) {
     // 过滤掉潜在的恶意字符，只允许字母、数字和连字符
