@@ -152,6 +152,7 @@ process.on('uncaughtException', (error) => {
 process.on('SIGINT', async () => {
     // 导入需要在运行时动态导入，避免循环依赖
     const { secureLogger } = require('./utils/logger');
+    const { cacheService } = require('./services/cache.service');
     secureLogger.info('🛑 接收到终止信号');
 
     try {
@@ -160,11 +161,15 @@ process.on('SIGINT', async () => {
             secureLogger.info('🚫 已停止接受新请求');
         });
 
-        // 2. 关闭数据库连接
+        // 2. 关闭缓存服务
+        await cacheService.close();
+        secureLogger.info('✅ Redis连接已关闭');
+
+        // 3. 关闭数据库连接
         await dbManager.disconnect();
         secureLogger.info('✅ MongoDB连接已关闭');
 
-        // 3. 关闭现有连接
+        // 4. 关闭现有连接
         server.close(() => {
             secureLogger.info('🛑 HTTP服务完全停止');
             process.exit(0);
@@ -192,10 +197,20 @@ export default app;
 if (require.main === module) {
     startServer().then(serverInstance => {
         // 处理其他关闭信号
-        process.on('SIGTERM', () => {
+        process.on('SIGTERM', async () => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
+            const { cacheService } = require('./services/cache.service');
             secureLogger.info('🛑 接收到SIGTERM信号');
+            
+            try {
+                // 关闭缓存服务
+                await cacheService.close();
+                secureLogger.info('✅ Redis连接已关闭');
+            } catch (error) {
+                secureLogger.error('❌ 关闭Redis连接失败:', error);
+            }
+            
             serverInstance.close();
         });
         

@@ -3,8 +3,9 @@
  * 提供统一的存储接口，支持多种存储策略（Redis、MongoDB等）
  */
 
-import { BaseCacheService, CacheServiceFactory, CacheStrategy } from './cache.service';
+import { BaseCacheService, CacheServiceFactory, CacheStrategy, cacheService } from './cache.service';
 import { MongoDBManager } from '../utils/dbManager';
+import { PostgreSQLManager } from '../utils/pgManager';
 import { secureLogger } from '../utils/logger';
 
 // 存储策略枚举
@@ -35,6 +36,30 @@ export interface StorageService {
     mongoConnected: boolean;
     fallbackMode: 'redis' | 'mongo' | 'none';
   }>;
+  
+  // GitHub用户访问数据相关方法
+  getGitHubUserVisit(username: string): Promise<{
+    username: string;
+    visit_count: number;
+    last_visited: Date;
+    avatar_url?: string;
+    avatar_updated_at?: Date;
+  } | null>;
+  
+  updateGitHubUserVisit(
+    username: string, 
+    data: {
+      visit_count?: number;
+      avatar_url?: string;
+      avatar_updated_at?: Date;
+    }
+  ): Promise<{
+    username: string;
+    visit_count: number;
+    last_visited: Date;
+    avatar_url?: string;
+    avatar_updated_at?: Date;
+  } | null>;
 }
 
 /**
@@ -43,6 +68,7 @@ export interface StorageService {
 export class UnifiedStorageService implements StorageService {
   private cacheService: BaseCacheService;
   private mongoManager: MongoDBManager;
+  private pgManager: PostgreSQLManager;
   private strategy: StorageStrategy;
   private ttl: number;
 
@@ -50,14 +76,19 @@ export class UnifiedStorageService implements StorageService {
     this.strategy = config.strategy;
     this.ttl = config.ttl || 300; // 默认5分钟
     
-    // 初始化缓存服务
-    this.cacheService = CacheServiceFactory.createCacheService(
-      CacheStrategy.REDIS,
-      { ttl: this.ttl }
-    );
+    // 使用现有的缓存服务单例
+    this.cacheService = cacheService;
     
-    // 初始化MongoDB管理器
+    // 初始化MongoDB管理器（作为备份）
     this.mongoManager = MongoDBManager.getInstance();
+    
+    // 初始化PostgreSQL管理器（作为主要存储）
+    this.pgManager = PostgreSQLManager.getInstance();
+    
+    // 初始化PostgreSQL数据库表结构
+    this.pgManager.initializeDatabase().catch(error => {
+      secureLogger.warn('⚠️ Failed to initialize PostgreSQL database:', error);
+    });
   }
 
   /**
@@ -75,11 +106,21 @@ export class UnifiedStorageService implements StorageService {
           return await this.getFromMongoDB<T>(key);
           
         case StorageStrategy.HYBRID:
-          // 先从Redis获取，如果没有再从MongoDB获取
+          // 先从Redis获取，如果没有再从PostgreSQL获取，如果PostgreSQL失败则回退到MongoDB
           const redisResult = await this.getFromRedis<T>(key);
           if (redisResult !== null) {
             return redisResult;
           }
+          
+          try {
+            const pgResult = await this.getFromPostgreSQL<T>(key);
+            if (pgResult !== null) {
+              return pgResult;
+            }
+          } catch (pgError) {
+            secureLogger.warn(`⚠️ PostgreSQL get error for key ${key}, falling back to MongoDB:`, pgError);
+          }
+          
           return await this.getFromMongoDB<T>(key);
           
         default:
@@ -132,6 +173,30 @@ export class UnifiedStorageService implements StorageService {
   }
 
   /**
+   * 从PostgreSQL获取数据
+   */
+  private async getFromPostgreSQL<T>(key: string): Promise<T | null> {
+    try {
+      const isConnected = await this.pgManager.ensureConnection();
+      if (!isConnected) {
+        return null;
+      }
+
+      const result = await this.pgManager.executeOperation(async (client) => {
+        // 从PostgreSQL中获取记录
+        const query = 'SELECT value FROM key_value_store WHERE key = $1 AND (expire_at IS NULL OR expire_at > CURRENT_TIMESTAMP)';
+        const res = await client.query(query, [key]);
+        return res.rows.length > 0 ? res.rows[0].value : null;
+      });
+
+      return result;
+    } catch (error) {
+      secureLogger.error(`❌ PostgreSQL get error for key ${key}:`, error);
+      throw error; // 抛出错误，让调用者可以回退到MongoDB
+    }
+  }
+
+  /**
    * 设置数据
    * @param key 键
    * @param value 值
@@ -150,10 +215,19 @@ export class UnifiedStorageService implements StorageService {
           return await this.setInMongoDB<T>(key, value);
           
         case StorageStrategy.HYBRID:
-          // 同时存储到Redis和MongoDB
+          // 同时存储到Redis（缓存）
           const redisSuccess = await this.setInRedis<T>(key, value, effectiveTtl);
-          const mongoSuccess = await this.setInMongoDB<T>(key, value);
-          return redisSuccess && mongoSuccess;
+          
+          // 优先存储到PostgreSQL（主要存储），如果失败则回退到MongoDB（备份存储）
+          let persistentSuccess = false;
+          try {
+            persistentSuccess = await this.setInPostgreSQL<T>(key, value, effectiveTtl);
+          } catch (pgError) {
+            secureLogger.warn(`⚠️ PostgreSQL set error for key ${key}, falling back to MongoDB:`, pgError);
+            persistentSuccess = await this.setInMongoDB<T>(key, value);
+          }
+          
+          return redisSuccess || persistentSuccess;
           
         default:
           // 默认存储到Redis
@@ -211,6 +285,42 @@ export class UnifiedStorageService implements StorageService {
   }
 
   /**
+   * 存储到PostgreSQL
+   */
+  private async setInPostgreSQL<T>(key: string, value: T, ttl: number): Promise<boolean> {
+    try {
+      const isConnected = await this.pgManager.ensureConnection();
+      if (!isConnected) {
+        return false;
+      }
+
+      await this.pgManager.executeOperation(async (client) => {
+        // 计算过期时间
+        const expireAt = ttl ? new Date(Date.now() + ttl * 1000) : null;
+        
+        // Upsert操作：如果存在则更新，否则插入新记录
+        const query = `
+          INSERT INTO key_value_store (key, value, ttl, expire_at, updated_at)
+          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+          ON CONFLICT (key)
+          DO UPDATE SET
+            value = $2,
+            ttl = $3,
+            expire_at = $4,
+            updated_at = CURRENT_TIMESTAMP
+        `;
+        
+        await client.query(query, [key, value, ttl, expireAt]);
+      });
+
+      return true;
+    } catch (error) {
+      secureLogger.error(`❌ PostgreSQL set error for key ${key}:`, error);
+      throw error; // 抛出错误，让调用者可以回退到MongoDB
+    }
+  }
+
+  /**
    * 删除数据
    * @param key 键
    * @returns 是否成功
@@ -233,24 +343,71 @@ export class UnifiedStorageService implements StorageService {
           });
           
         case StorageStrategy.HYBRID:
-          // 同时从Redis和MongoDB删除
+          // 同时从Redis删除
           const redisSuccess = await this.cacheService.delete(key);
-          // MongoDB删除逻辑
-          const mongoSuccess = await this.mongoManager.executeOperation(async (conn) => {
-            // 动态导入模型以避免循环依赖
-            const { KeyValueStore } = await import('../models/mongodb.models');
-            
-            // 删除记录
-            const result = await KeyValueStore.deleteOne({ key });
-            return result.deletedCount > 0;
-          });
-          return redisSuccess || mongoSuccess;
+          
+          // 优先从PostgreSQL删除，失败则回退到MongoDB
+          let persistentSuccess = false;
+          try {
+            persistentSuccess = await this.deleteFromPostgreSQL(key);
+          } catch (pgError) {
+            secureLogger.warn(`⚠️ PostgreSQL delete error for key ${key}, falling back to MongoDB:`, pgError);
+            persistentSuccess = await this.deleteFromMongoDB(key);
+          }
+          
+          return redisSuccess || persistentSuccess;
           
         default:
           return await this.cacheService.delete(key);
       }
     } catch (error) {
       secureLogger.error(`❌ Storage delete error for key ${key}:`, error);
+      return false;
+    }
+  }
+  
+  /**
+   * 从PostgreSQL删除数据
+   */
+  private async deleteFromPostgreSQL(key: string): Promise<boolean> {
+    try {
+      const isConnected = await this.pgManager.ensureConnection();
+      if (!isConnected) {
+        return false;
+      }
+      
+      await this.pgManager.executeOperation(async (client) => {
+        const query = 'DELETE FROM key_value_store WHERE key = $1';
+        await client.query(query, [key]);
+      });
+      
+      return true;
+    } catch (error) {
+      secureLogger.error(`❌ PostgreSQL delete error for key ${key}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 从MongoDB删除数据
+   */
+  private async deleteFromMongoDB(key: string): Promise<boolean> {
+    try {
+      const isConnected = await this.mongoManager.ensureConnection();
+      if (!isConnected) {
+        return false;
+      }
+      
+      return await this.mongoManager.executeOperation(async (conn) => {
+        // 动态导入模型以避免循环依赖
+        const { KeyValueStore } = await import('../models/mongodb.models');
+        
+        // 删除记录
+        const result = await KeyValueStore.deleteOne({ key });
+        return result.deletedCount > 0;
+      });
+    } catch (error) {
+      secureLogger.error(`❌ MongoDB delete error for key ${key}:`, error);
       return false;
     }
   }
@@ -277,24 +434,71 @@ export class UnifiedStorageService implements StorageService {
           });
           
         case StorageStrategy.HYBRID:
-          // 同时清空Redis和MongoDB
+          // 同时清空Redis
           const redisSuccess = await this.cacheService.clear();
-          // MongoDB清空逻辑
-          const mongoSuccess = await this.mongoManager.executeOperation(async (conn) => {
-            // 动态导入模型以避免循环依赖
-            const { KeyValueStore } = await import('../models/mongodb.models');
-            
-            // 清空所有记录
-            const result = await KeyValueStore.deleteMany({});
-            return result.deletedCount >= 0; // 返回true表示操作成功执行
-          });
-          return redisSuccess && mongoSuccess;
+          
+          // 优先清空PostgreSQL，失败则回退到MongoDB
+          let persistentSuccess = false;
+          try {
+            persistentSuccess = await this.clearFromPostgreSQL();
+          } catch (pgError) {
+            secureLogger.warn('⚠️ PostgreSQL clear error, falling back to MongoDB:', pgError);
+            persistentSuccess = await this.clearFromMongoDB();
+          }
+          
+          return redisSuccess && persistentSuccess;
           
         default:
           return await this.cacheService.clear();
       }
     } catch (error) {
       secureLogger.error('❌ Storage clear error:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 清空PostgreSQL中的所有数据
+   */
+  private async clearFromPostgreSQL(): Promise<boolean> {
+    try {
+      const isConnected = await this.pgManager.ensureConnection();
+      if (!isConnected) {
+        return false;
+      }
+      
+      await this.pgManager.executeOperation(async (client) => {
+        const query = 'TRUNCATE TABLE key_value_store';
+        await client.query(query);
+      });
+      
+      return true;
+    } catch (error) {
+      secureLogger.error('❌ PostgreSQL clear error:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 清空MongoDB中的所有数据
+   */
+  private async clearFromMongoDB(): Promise<boolean> {
+    try {
+      const isConnected = await this.mongoManager.ensureConnection();
+      if (!isConnected) {
+        return false;
+      }
+      
+      return await this.mongoManager.executeOperation(async (conn) => {
+        // 动态导入模型以避免循环依赖
+        const { KeyValueStore } = await import('../models/mongodb.models');
+        
+        // 清空所有记录
+        const result = await KeyValueStore.deleteMany({});
+        return result.deletedCount >= 0; // 返回true表示操作成功执行
+      });
+    } catch (error) {
+      secureLogger.error('❌ MongoDB clear error:', error);
       return false;
     }
   }
@@ -408,6 +612,143 @@ export class UnifiedStorageService implements StorageService {
       mongoConnected,
       fallbackMode
     };
+  }
+
+  /**
+   * 获取GitHub用户访问数据
+   * 优先从PostgreSQL获取，如果失败则回退到MongoDB
+   * @param username GitHub用户名
+   * @returns 用户访问数据或null
+   */
+  async getGitHubUserVisit(username: string): Promise<{
+    username: string;
+    visit_count: number;
+    last_visited: Date;
+    avatar_url?: string;
+    avatar_updated_at?: Date;
+  } | null> {
+    try {
+      // 优先从PostgreSQL获取
+      const pgResult = await this.pgManager.getGitHubUserVisit(username);
+      if (pgResult) {
+        return pgResult;
+      }
+
+      // PostgreSQL失败时回退到MongoDB
+      secureLogger.warn(`PostgreSQL getGitHubUserVisit failed for ${username}, falling back to MongoDB`);
+      
+      const isMongoConnected = await this.mongoManager.ensureConnection();
+      if (!isMongoConnected) {
+        return null;
+      }
+
+      // 从MongoDB获取GitHub用户数据
+      const mongoResult = await this.mongoManager.executeOperation(async (conn) => {
+        const { GitHubUser } = await import('../models/mongodb.models');
+        const user = await GitHubUser.findOne({ username }).lean();
+        if (user) {
+          return {
+            username: user.username,
+            visit_count: user.visitCount || 0,
+            last_visited: user.lastVisited || new Date(),
+            avatar_url: user.avatarUrl,
+            avatar_updated_at: user.avatarUpdatedAt
+          };
+        }
+        return null;
+      });
+
+      return mongoResult;
+    } catch (error) {
+      secureLogger.error(`getGitHubUserVisit failed for ${username}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 更新GitHub用户访问数据
+   * 优先更新PostgreSQL，如果失败则回退到MongoDB
+   * @param username GitHub用户名
+   * @param data 要更新的数据
+   * @returns 更新后的用户访问数据或null
+   */
+  async updateGitHubUserVisit(
+    username: string, 
+    data: {
+      visit_count?: number;
+      avatar_url?: string;
+      avatar_updated_at?: Date;
+    }
+  ): Promise<{
+    username: string;
+    visit_count: number;
+    last_visited: Date;
+    avatar_url?: string;
+    avatar_updated_at?: Date;
+  } | null> {
+    try {
+      // 优先更新PostgreSQL
+      const pgResult = await this.pgManager.updateGitHubUserVisit(username, data);
+      if (pgResult) {
+        return pgResult;
+      }
+
+      // PostgreSQL失败时回退到MongoDB
+      secureLogger.warn(`PostgreSQL updateGitHubUserVisit failed for ${username}, falling back to MongoDB`);
+      
+      const isMongoConnected = await this.mongoManager.ensureConnection();
+      if (!isMongoConnected) {
+        return null;
+      }
+
+      // 更新MongoDB中的GitHub用户数据
+      const mongoResult = await this.mongoManager.executeOperation(async (conn) => {
+        const { GitHubUser } = await import('../models/mongodb.models');
+        
+        // 计算要更新的数据
+        const updateData: any = {
+          lastVisited: new Date(),
+          lastUpdated: new Date()
+        };
+        
+        if (data.visit_count !== undefined) {
+          updateData.visitCount = data.visit_count;
+        } else {
+          updateData.$inc = { visitCount: 1 };
+        }
+        
+        if (data.avatar_url !== undefined) {
+          updateData.avatarUrl = data.avatar_url;
+        }
+        
+        if (data.avatar_updated_at !== undefined) {
+          updateData.avatarUpdatedAt = data.avatar_updated_at;
+        }
+
+        // 执行更新
+        const user = await GitHubUser.findOneAndUpdate(
+          { username },
+          updateData,
+          { upsert: true, new: true }
+        );
+
+        if (user) {
+          return {
+            username: user.username,
+            visit_count: user.visitCount || 0,
+            last_visited: user.lastVisited || new Date(),
+            avatar_url: user.avatarUrl,
+            avatar_updated_at: user.avatarUpdatedAt
+          };
+        }
+        return null;
+      });
+
+      return mongoResult;
+    } catch (error) {
+      secureLogger.error(`updateGitHubUserVisit failed for ${username}:`, error);
+      return null;
+    }
   }
 }
 

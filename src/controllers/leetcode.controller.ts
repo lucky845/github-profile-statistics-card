@@ -14,7 +14,7 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
         const useCN = req.query.cn === 'true';
         // 获取缓存时间
         const cacheTimeInSeconds = req.query.cacheSeconds ? parseInt(req.query.cacheSeconds as string) : 120;
-        secureLogger.debug(`处理LeetCode请求: 用户名=${username}, 区域=${useCN ? 'CN' : 'US'}`);
+        secureLogger.debug(`处理LeetCode请求: 用户名=${username}, 区域=${useCN ? 'CN' : 'US'}, 缓存时间=${cacheTimeInSeconds}秒, 主题=${themeName}`);
 
 
         if (!username) {

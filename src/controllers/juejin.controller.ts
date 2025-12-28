@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import getJuejinInfo from '../services/juejin.service';
 import { JuejinUserData } from '../types';
 import { generateCard, CardType } from '../services/svg.service';
-import { activeTheme } from '../config/theme.config';
 import { secureLogger } from '../utils/logger';
 
 // 获取掘金用户数据的控制器
