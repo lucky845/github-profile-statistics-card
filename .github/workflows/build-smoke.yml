@@ -30,31 +30,46 @@ jobs:
           test -f dist/src/app.js || { echo "dist/src/app.js 缺失，构建产物不完整"; exit 1; }
           test -d dist/src/views || { echo "views 未复制到 dist"; exit 1; }
 
-      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB 时必须降级启动而不是崩溃
+      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB/Redis 时必须降级启动而不是崩溃
       - name: Start server and smoke test
         env:
           NODE_ENV: production
           PORT: 8080
         run: |
+          set -uo pipefail
           node dist/src/app.js > server.log 2>&1 &
           echo $! > server.pid
-          for i in $(seq 1 30); do
+          ready=0
+          for i in $(seq 1 45); do
             if curl -fsS -m 2 http://127.0.0.1:8080/health > /dev/null 2>&1; then
               echo "服务在 ${i} 秒内就绪"
+              ready=1
               break
             fi
             sleep 1
           done
+
+          echo "--- 进程状态 ---"
+          ps -p "$(cat server.pid)" -o pid,stat,etime,cmd 2>/dev/null || echo "进程已退出"
+          echo "--- 监听端口 ---"
+          (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null || true) | grep -E ':8080' || echo "8080 未监听"
+          echo "--- 服务日志全文 ---"
+          cat server.log 2>/dev/null || echo "无 server.log"
+
+          if [ "$ready" != "1" ]; then
+            echo "::error::服务在 45 秒内未就绪（端口 8080 无法访问）"
+            exit 1
+          fi
+
           echo "--- /health ---"
           curl -fsS -m 10 http://127.0.0.1:8080/health
           echo
           echo "--- 主页可访问 ---"
           curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "GitHub & LeetCode Stats" && echo "主页 OK"
-          echo "--- 服务日志尾部 ---"
-          tail -20 server.log
 
       - name: Stop server
         if: always()
         run: |
           [ -f server.pid ] && kill "$(cat server.pid)" 2>/dev/null || true
-          tail -50 server.log 2>/dev/null || true
+          echo "--- 终止时日志尾部 ---"
+          tail -40 server.log 2>/dev/null || true
