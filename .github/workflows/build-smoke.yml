@@ -48,8 +48,8 @@ jobs:
           echo "--- /health ---"
           curl -fsS -m 10 http://127.0.0.1:8080/health
           echo
-          echo "--- 主页应包含 Total Visitors ---"
-          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "Total Visitors" && echo "主页 OK"
+          echo "--- 主页可访问 ---"
+          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "GitHub & LeetCode Stats" && echo "主页 OK"
           echo "--- 服务日志尾部 ---"
           tail -20 server.log
 
