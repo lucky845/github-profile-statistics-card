@@ -27,7 +27,10 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
 
         // 确保当请求的区域与存储的数据区域不一致时，始终从API重新获取数据
         const regionMismatch = userData && ((useCN && userData.region !== 'CN') || (!useCN && userData.region === 'CN'));
-        if (!userData || regionMismatch) {
+        // 注意：getLeetCodeUserData 在缓存未命中时**已经**调用过一次 fetchLeetCodeStats。
+        // 这里只在"区域不匹配"时才需要重新抓取，否则失败场景会把同一组 3 次重试
+        // 完整地跑第二遍，请求耗时直接翻倍并拖垮网关节奏。
+        if (regionMismatch) {
             // 从LeetCode API获取数据，传入区域参数
             const result = await fetchLeetCodeStats(username, useCN);
 
@@ -39,6 +42,21 @@ export const getLeetCodeStats = async (req: Request, res: Response): Promise<voi
                 res.set('Content-Type', 'image/svg+xml');
                 res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
                 res.send(generateCard(CardType.LEETCODE, result.data, themeName));
+                return;
+            }
+        }
+
+        // 请求区域拿不到数据时自动回退到另一区域：
+        // 默认走 US 区（/leetcode/xxx 不带 cn 参数），而 leetcode.com 的 graphql
+        // 在部分网络/地域下返回 matchedUser 为 null，导致卡片空白。回退到 CN 区兜底。
+        if (!userData || !userData.totalSolved) {
+            const fallbackResult = await fetchLeetCodeStats(username, !useCN);
+            if (fallbackResult.success && fallbackResult.data) {
+                await updateLeetCodeUserData(username, fallbackResult.data, cacheTimeInSeconds);
+                secureLogger.info(`LeetCode区域回退成功: ${username} ${useCN ? 'CN' : 'US'} → ${useCN ? 'US' : 'CN'}`);
+                res.set('Content-Type', 'image/svg+xml');
+                res.set('Cache-Control', 'max-age=1800'); // 30分钟缓存
+                res.send(generateCard(CardType.LEETCODE, fallbackResult.data, themeName));
                 return;
             }
         }

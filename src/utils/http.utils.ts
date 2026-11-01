@@ -57,10 +57,22 @@ export const createRequest = (timeout = 10000, config: AxiosRequestConfig = {}) 
     });
 };
 
+/**
+ * 判断错误是否属于"重试也没用"的确定性失败。
+ *
+ * 4xx 表示请求本身有问题（用户不存在 404、被风控 403、参数错误 400），
+ * 重试只会把一次快速失败拖成几十秒的等待，在云平台上直接触发网关超时，
+ * 让用户看到"服务挂了"而不是"这个用户名不存在"。
+ */
+const isNonRetryable = (error: any): boolean => {
+    const status = error?.response?.status;
+    return typeof status === 'number' && status >= 400 && status < 500;
+};
+
 // 创建带有重试机制的请求函数
 export const createRequestWithRetry = async (
     requestFn: () => Promise<any>,
-    maxRetries = 3,
+    maxRetries = 2,
     delay = 1000
 ): Promise<any> => {
     let lastError: any;
@@ -70,6 +82,13 @@ export const createRequestWithRetry = async (
             return await requestFn();
         } catch (error: any) {
             lastError = error;
+
+            // 确定性失败立即抛出，不浪费时间重试
+            if (isNonRetryable(error)) {
+                secureLogger.warn(`请求返回 ${error.response.status}，属于确定性失败，不再重试: ${error.message}`);
+                throw error;
+            }
+
             secureLogger.warn(`请求失败，尝试重试 (${attempt + 1}/${maxRetries}): ${error.message}`);
 
             // 如果不是最后一次尝试，则等待一段时间后重试

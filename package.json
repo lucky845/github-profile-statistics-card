@@ -8,10 +8,10 @@
     "dev": "nodemon --exec 'ts-node -P tsconfig.json' src/app.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
-    "build": "tsc && tsc-alias",
+    "build": "tsc && tsc-alias && node scripts/copy-assets.js",
     "lint": "eslint src/**/*.ts",
     "vercel-build": "npm run build",
-    "start:prod": "node dist/app.js"
+    "start:prod": "node dist/src/app.js"
   },
   "keywords": [
     "github",

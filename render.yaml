@@ -1,9 +1,22 @@
 services:
   - type: web
     name: github-profile-views
-    env: node
-    buildCommand: npm install && npm run build
-    startCommand: npm run start:prod
+    runtime: node
+    plan: free
+    region: singapore
+    branch: develop
+    # 必须带 devDependencies，否则没有 tsc，构建直接失败
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/src/app.js
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20"
+      # 说明：PORT 由 Render 自动注入，app.config.ts 已读取 process.env.PORT，无需配置
+      # MongoDB / Redis 等可选服务按需在控制台补充，缺失时服务会降级启动而非崩溃
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
