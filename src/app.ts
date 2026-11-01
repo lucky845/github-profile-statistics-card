@@ -63,7 +63,11 @@ app.use(express.urlencoded({ extended: true }));
 // 应用业务中间件
 app.use(mongoConnectionMiddleware);
 app.use(themeMiddleware);
-app.use(createCacheMiddleware());
+// 健康检查必须绕过缓存：/health 只读内存状态，若走缓存中间件就要等 Redis
+// 连接（CI/Vercel 无 Redis 时每次请求挂 5 秒），启动阶段的探活会被一路拖慢。
+app.use(createCacheMiddleware({
+    skipCache: (req) => req.path === '/health'
+}));
 
 // 性能监控中间件 - 放在所有路由之前以捕获所有请求
 app.use(metricsMiddleware);
@@ -110,18 +114,26 @@ let server: ReturnType<typeof app.listen>;
 
 const startServer = async () => {
     try {
-        // 尝试初始化数据库连接（即使失败也继续启动服务器）
-        await dbManager.connect().catch(error => {
-            // 导入需要在运行时动态导入，避免循环依赖
-            const { secureLogger } = require('./utils/logger');
-            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
-        });
-
-        server = app.listen(port, () => {
+        // 先监听端口，再把数据库连接放到后台执行。
+        // 数据库不可达时（本地无 DB、Vercel 冷启动、CI 冒烟测试），mongoose.connect
+        // 会阻塞 30~60 秒，之前 await 它导致 HTTP 服务迟迟不 ready，
+        // CI 30 秒健康检查失败、Vercel 函数调用直接超时。
+        // 连接逻辑本身是幂等的，中间件会按需触发 ensureConnection()。
+        // 显式指定 0.0.0.0：缺省 host 时 Node 会走一次 dns.lookup（占用 libuv 线程池），
+        // 在 CI 这类「PG/Mongo/Redis 同时连接失败、线程池被打满」的环境里，这次 lookup
+        // 会排队 30 秒以上，表现为端口迟迟不监听、健康检查一路失败。
+        server = app.listen(port, '0.0.0.0', () => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
             secureLogger.info(`🚀 服务已启动于端口 ${port}`);
             secureLogger.info(`📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}`);
+        });
+
+        // 后台连接数据库（即使失败也继续提供服务）
+        void dbManager.connect().catch(error => {
+            // 导入需要在运行时动态导入，避免循环依赖
+            const { secureLogger } = require('./utils/logger');
+            secureLogger.warn('⚠️  数据库连接失败，将在后台继续尝试连接:', error);
         });
 
         return server;

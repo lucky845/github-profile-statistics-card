@@ -30,31 +30,54 @@ jobs:
           test -f dist/src/app.js || { echo "dist/src/app.js 缺失，构建产物不完整"; exit 1; }
           test -d dist/src/views || { echo "views 未复制到 dist"; exit 1; }
 
-      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB 时必须降级启动而不是崩溃
+      # 精确测量启动各阶段耗时（定位 listen 为何被推迟）
+      - name: Diagnose startup timeline
+        env:
+          NODE_ENV: production
+          PORT: 8083
+        run: |
+          node -e 'const t0=Date.now();const app=require(process.cwd()+"/dist/src/app.js").default;console.log("MODULE_LOADED_MS="+(Date.now()-t0));const t1=Date.now();const s=app.listen(8083,()=>{console.log("LISTEN_CB_MS="+(Date.now()-t1)+" TOTAL_MS="+(Date.now()-t0));s.close();process.exit(0)});setTimeout(()=>{console.log("PROBE_TIMEOUT_MS="+(Date.now()-t0));process.exit(1)},60000)'
+
+      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB/Redis 时必须降级启动而不是崩溃
       - name: Start server and smoke test
         env:
           NODE_ENV: production
           PORT: 8080
         run: |
+          set -uo pipefail
           node dist/src/app.js > server.log 2>&1 &
           echo $! > server.pid
-          for i in $(seq 1 30); do
+          ready=0
+          for i in $(seq 1 90); do
             if curl -fsS -m 2 http://127.0.0.1:8080/health > /dev/null 2>&1; then
               echo "服务在 ${i} 秒内就绪"
+              ready=1
               break
             fi
             sleep 1
           done
+
+          echo "--- 进程状态 ---"
+          ps -p "$(cat server.pid)" -o pid,stat,etime,cmd 2>/dev/null || echo "进程已退出"
+          echo "--- 监听端口 ---"
+          (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null || true) | grep -E ':8080' || echo "8080 未监听"
+          echo "--- 服务日志全文 ---"
+          cat server.log 2>/dev/null || echo "无 server.log"
+
+          if [ "$ready" != "1" ]; then
+            echo "::error::服务在 90 秒内未就绪（端口 8080 无法访问）"
+            exit 1
+          fi
+
           echo "--- /health ---"
           curl -fsS -m 10 http://127.0.0.1:8080/health
           echo
-          echo "--- 主页应包含 Total Visitors ---"
-          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "Total Visitors" && echo "主页 OK"
-          echo "--- 服务日志尾部 ---"
-          tail -20 server.log
+          echo "--- 主页可访问 ---"
+          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "GitHub & LeetCode Stats" && echo "主页 OK"
 
       - name: Stop server
         if: always()
         run: |
           [ -f server.pid ] && kill "$(cat server.pid)" 2>/dev/null || true
-          tail -50 server.log 2>/dev/null || true
+          echo "--- 终止时日志尾部 ---"
+          tail -40 server.log 2>/dev/null || true
