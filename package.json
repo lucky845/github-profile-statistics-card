@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "build": "tsc && tsc-alias",
     "lint": "eslint src/**/*.ts",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm run build",
+    "start:prod": "node dist/app.js"
   },
   "keywords": [
     "github",
