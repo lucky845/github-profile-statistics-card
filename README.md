@@ -149,57 +149,58 @@ CSDN 统计卡片包含以下数据：
 
 支持以下主题参数：
 - `cacheSeconds`: 配置缓存的秒数(默认120秒)
-- `theme=light` - 明亮主题（默认）
+- `theme=default` - 默认主题（明亮主题）
+- `theme=light` - 明亮主题
 - `theme=dark` - 暗黑主题
-- `theme=merko` - Merko 主题
-- `theme=gruvbox` - Gruvbox 主题
-- `theme=gruvbox_light` - Gruvbox Light 主题
-- `theme=tokyonight` - Tokyo Night 主题
-- `theme=onedark` - One Dark 主题
+- `theme=blue` - 蓝色主题
+- `theme=green` - 绿色主题
+- `theme=purple` - 紫色主题
+- `theme=orange` - 橙色主题
+- `theme=red` - 红色主题
 
 主题预览：
 
-### Light（默认）
+### Default（默认）
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=light)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=default)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=light&cn=true)
+![GitHub Stats](./img/leetcode_light.png)
 
 ### Dark
 ```markdown
 ![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=dark)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=dark&cn=true)
+![GitHub Stats](./img/leetcode_dark.png)
 
-### Merko
+### Blue
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=merko)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=blue)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=merko&cn=true)
+![GitHub Stats](./img/leetcode_blue.png)
 
-### Gruvbox
+### Green
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=gruvbox)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=green)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=gruvbox&cn=true)
+![GitHub Stats](./img/leetcode_green.png)
 
-### Gruvbox Light
+### Purple
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=gruvbox_light&cn=true)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=purple)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=gruvbox_light&cn=true)
+![GitHub Stats](./img/leetcode_purple.png)
 
-### Tokyo Night
+### Orange
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=tokyonight)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=orange)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=tokyonight&cn=true)
+![GitHub Stats](./img/leetcode_orange.png)
 
-### One Dark
+### Red
 ```markdown
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=onedark)
+![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/username?theme=red)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/leetcode/lucky845?theme=onedark&cn=true)
+![GitHub Stats](./img/leetcode_red.png)
 
 ## 🔜 即将支持的平台
 

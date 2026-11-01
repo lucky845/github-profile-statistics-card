@@ -22,14 +22,14 @@ export class MongoDBManager {
     }
 
     private readonly config: mongoose.ConnectOptions = {
-        maxPoolSize: dbConfig.options.maxPoolSize || 10,
-        minPoolSize: dbConfig.options.minPoolSize || 5,
-        serverSelectionTimeoutMS: dbConfig.options.serverSelectionTimeoutMS || 30000,
-        socketTimeoutMS: dbConfig.options.socketTimeoutMS || 120000,
-        retryReads: dbConfig.options.retryReads || true,
-        retryWrites: dbConfig.options.retryWrites || true,
-        heartbeatFrequencyMS: dbConfig.options.heartbeatFrequencyMS || 10000,
-        connectTimeoutMS: dbConfig.options.connectTimeoutMS || 60000,
+        maxPoolSize: dbConfig.mongo.options.maxPoolSize || 10,
+        minPoolSize: dbConfig.mongo.options.minPoolSize || 5,
+        serverSelectionTimeoutMS: dbConfig.mongo.options.serverSelectionTimeoutMS || 30000,
+        socketTimeoutMS: dbConfig.mongo.options.socketTimeoutMS || 120000,
+        retryReads: dbConfig.mongo.options.retryReads || true,
+        retryWrites: dbConfig.mongo.options.retryWrites || true,
+        heartbeatFrequencyMS: dbConfig.mongo.options.heartbeatFrequencyMS || 10000,
+        connectTimeoutMS: dbConfig.mongo.options.connectTimeoutMS || 60000,
         family: 4, // 优先使用IPv4
     };
 
@@ -54,7 +54,7 @@ export class MongoDBManager {
             }
             
             // 检查连接字符串是否存在
-            if (!dbConfig.mongoURI) {
+            if (!dbConfig.mongo.uri) {
                 secureLogger.warn('⚠️ MongoDB URI not configured, skipping connection');
                 this.isConnected = false;
                 return;
@@ -63,7 +63,7 @@ export class MongoDBManager {
             secureLogger.info('🔄 Attempting to connect to MongoDB...');
             
             // 尝试连接数据库，设置超时时间
-            const connectPromise = mongoose.connect(dbConfig.mongoURI, this.config);
+            const connectPromise = mongoose.connect(dbConfig.mongo.uri, this.config);
             const timeoutPromise = new Promise<void>((_, reject) => 
                 setTimeout(() => reject(new Error('Database connection timeout')), this.config.connectTimeoutMS || 30000)
             );
@@ -219,19 +219,15 @@ export class MongoDBManager {
         return {
             isConnected: this.isConnected,
             readyState: mongoose.connection.readyState,
-            connectionString: dbConfig.mongoURI ? dbConfig.mongoURI.replace(/:[^:]*@/, ':******@') : ''
+            connectionString: dbConfig.mongo.uri ? dbConfig.mongo.uri.replace(/:[^:]*@/, ':******@') : ''
         };
     }
     
-    // 清理过期数据的方法
+    // 清理过期数据的方法 - 仅清理GitHub用户数据
     async cleanExpiredData(): Promise<void> {
         try {
             const models = [
-                mongoose.model('GitHubUser'),
-                mongoose.model('LeetCodeUser'),
-                mongoose.model('CSDNUser'),
-                mongoose.model('JueJinUser'),
-                mongoose.model('BilibiliUser')
+                mongoose.model('GitHubUser') // 仅清理GitHub用户数据，其他平台数据使用Redis缓存，无需清理
             ];
             
             for (const model of models) {

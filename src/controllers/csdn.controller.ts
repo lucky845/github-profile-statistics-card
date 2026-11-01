@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { getCSDNUserStats } from '../services/csdn.service';
 import { generateCard, CardType } from '../services/svg.service';
-import { activeTheme } from '../config/theme.config';
 import { secureLogger } from '../utils/logger';
 
 // 获取CSDN统计信息

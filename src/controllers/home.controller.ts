@@ -91,7 +91,7 @@ export const handleHealthCheck = (req: Request, res: Response): void => {
  * @param res Express响应对象
  */
 export const handleThemeTest = (req: Request, res: Response): void => {
-  const { getThemeConfig } = require('../services/svg.service');
+  const { getThemeConfig } = require('../services/svg/svgService');
   const themeName = req.query.theme as string;
   const themeConfig = getThemeConfig(themeName);
   
@@ -103,8 +103,8 @@ export const handleThemeTest = (req: Request, res: Response): void => {
     <text x="230" y="60" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.title}" font-weight="bold" fill="${themeConfig.colors.text.title}">测试用户</text>
     <text x="230" y="90" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.normal}" fill="${themeConfig.colors.text.secondary}">这是主题测试卡片</text>
     <rect x="70" y="120" width="260" height="1" fill="${themeConfig.colors.border}"/>
-    <text x="130" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据1: 123</text>
-    <text x="250" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.large}" fill="${themeConfig.colors.text.primary}">数据2: 456</text>
+    <text x="130" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.normal}" fill="${themeConfig.colors.text.primary}">数据1: 123</text>
+    <text x="250" y="150" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.normal}" fill="${themeConfig.colors.text.primary}">数据2: 456</text>
     <text x="200" y="180" font-family="${themeConfig.fonts.family}" font-size="${themeConfig.fonts.size.small}" text-anchor="middle" fill="${themeConfig.colors.text.secondary}">主题: ${themeName || '默认'}</text>
   </svg>`);
 };

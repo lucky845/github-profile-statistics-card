@@ -1,6 +1,6 @@
 import {IBilibiliUser} from '../types';
 import {getBilibiliUserData, updateBilibiliUserData} from "./bilibili-storage.service";
-import axios from "axios";
+import { createRequest, createRequestWithRetry } from '../utils/http.utils';
 import {bilibiliConfig} from "../config/bilibili.config";
 import * as cheerio from 'cheerio';
 import { asyncDbUpdate } from '../utils/db-update.utils';
@@ -93,57 +93,65 @@ const fetchBilibiliUserData = async (uid: string, cacheTimeInSeconds: number): P
         const headers = getBilibiliHeaders();
         let userInfo: any = {}, userStat: any = {}, upStat: any = {};
 
-        // 爬取用户基本信息
+        // 创建带有反爬虫措施的请求实例
+        const request = createRequest(5000, { headers });
+
+        // 并行请求所有数据
         try {
-            const userInfoResponse = await axios.get(API_PATHS.USER_INFO_CRAWLER + uid, {
-                headers
-            });
+            const [userInfoResponse, userStatResponse, upStatResponse] = await Promise.all([
+                createRequestWithRetry(() => request.get(API_PATHS.USER_INFO_CRAWLER + uid)).catch((error: any) => {
+                    secureLogger.error(`获取用户基本信息失败: ${error.message}`);
+                    return null;
+                }),
+                createRequestWithRetry(() => request.get(API_PATHS.USER_STAT + '?vmid=' + uid)).catch((error: any) => {
+                    secureLogger.error(`获取用户统计信息失败: ${error.message}`);
+                    return null;
+                }),
+                createRequestWithRetry(() => request.get(API_PATHS.USER_UPSTAT + '?mid=' + uid)).catch((error: any) => {
+                    secureLogger.error(`获取UP主数据失败: ${error.message}`);
+                    return null;
+                })
+            ]);
 
-            let $ = cheerio.load(userInfoResponse.data);
+            // 处理用户基本信息响应
+            if (userInfoResponse) {
+                let $ = cheerio.load(userInfoResponse.data);
 
-            $('.base .name').each((_i, e) => {
-                userInfo.name = $(e).text();
-            });
+                $('.base .name').each((_i, e) => {
+                    userInfo.name = $(e).text();
+                });
 
-            // todo 等级是svg，已经无法直接获取了
-            $('.base .level i').each((_i, e) => {
-                let classStr: any = $(e).attr('class');
-                let level = classStr.substr(classStr.length - 1);
-                userInfo.level = parseInt(level);
-            });
+                // todo 等级是svg，已经无法直接获取了
+                $('.base .level i').each((_i, e) => {
+                    let classStr: any = $(e).attr('class');
+                    let level = classStr.substr(classStr.length - 1);
+                    userInfo.level = parseInt(level);
+                });
 
-            $('.desc .content').each((_i, e) => {
-                userInfo.description = $(e).text();
-            });
+                $('.desc .content').each((_i, e) => {
+                    userInfo.description = $(e).text();
+                });
+            }
 
+            // 处理用户统计信息响应
+            if (userStatResponse) {
+                userStat = userStatResponse.data;
+                secureLogger.info(`获取到的哔哩哔哩用户统计信息: ${JSON.stringify(userStat)}`);
+            } else {
+                userStat = { follower: 0, following: 0 };
+            }
+
+            // 处理UP主数据响应
+            if (upStatResponse) {
+                upStat = upStatResponse.data;
+                secureLogger.info(`获取到的哔哩哔哩UP主数据: ${JSON.stringify(upStat)}`);
+            } else {
+                upStat = { likes: 0 };
+            }
         } catch (error: any) {
-            secureLogger.error(`获取用户基本信息失败: ${error.message}`)
-            throw error;
-        }
-
-        // 获取用户统计信息
-        try {
-            const userStatResponse = await axios.get(API_PATHS.USER_STAT + '?vmid=' + uid, {
-                headers
-            });
-            userStat = userStatResponse.data;
-            secureLogger.info(`获取到的哔哩哔哩用户统计信息: ${JSON.stringify(userStat)}`);
-        } catch (error: any) {
-            secureLogger.error(`获取用户统计信息失败: ${error.message}`);
-            userStat = {follower: 0, following: 0};
-        }
-
-        // 获取UP主数据
-        try {
-            const upStatResponse: { data: any } = await axios.get(API_PATHS.USER_UPSTAT + '?mid=' + uid, {
-                headers
-            });
-            upStat = upStatResponse.data;
-            secureLogger.info(`获取到的哔哩哔哩UP主数据: ${JSON.stringify(upStat)}`);
-        } catch (error: any) {
-            secureLogger.error(`获取UP主数据失败: ${error.message}`);
-            upStat = {likes: 0};
-        }
+    secureLogger.error(`并行请求数据时发生错误: ${error.message}`);
+    throw error;
+}
 
         // 整合数据
         return {

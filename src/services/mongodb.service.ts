@@ -183,7 +183,7 @@ const withRetry = async <T>(
   return result.success && result.data !== undefined ? result.data : null;
 };
 
-// LeetCode 用户数据获取和更新函数
+// LeetCode 用户数据获取和更新函数 - 仅使用Redis缓存
 export const getLeetCodeUserData = async (
   userId: string,
   cacheTime: number = CACHE_TTL
@@ -205,19 +205,7 @@ export const getLeetCodeUserData = async (
       return { userData: cachedData, needsFetch: false };
     }
 
-    // 从数据库获取数据
-    const dbData = await withRetry(async () => {
-      const user = await LeetCodeUser.findOne({ userId }).lean();
-      return user || null;
-    }, `getLeetCodeUserData:${userId}`);
-
-    // 如果数据库中有数据，更新缓存并返回
-    if (dbData) {
-      await cacheService.set(cacheKey, dbData, cacheTime);
-      return { userData: dbData, needsFetch: false };
-    }
-
-    // 如果缓存和数据库都没有数据，需要重新抓取
+    // 如果缓存没有数据，需要重新抓取
     return { userData: null, needsFetch: true };
   } catch (error: any) {
     secureLogger.error('获取LeetCode用户数据失败:', {
@@ -243,23 +231,10 @@ export const updateLeetCodeData = async (
       throw new Error('Invalid userData provided');
     }
 
-    // 更新数据库
-    const result = await withRetry(async () => {
-      const updatedUser = await LeetCodeUser.findOneAndUpdate(
-        { userId },
-        { $set: userData },
-        { upsert: true, new: true }
-      );
-      return !!updatedUser;
-    }, `updateLeetCodeData:${userId}`);
-
-    if (result) {
-      // 更新缓存
-      const cacheKey = `${CACHE_PREFIX.LEETCODE}:${userId}`;
-      await cacheService.set(cacheKey, userData, CACHE_TTL);
-    }
-
-    return result || false;
+    // 仅更新缓存
+    const cacheKey = `${CACHE_PREFIX.LEETCODE}:${userId}`;
+    await cacheService.set(cacheKey, userData, CACHE_TTL);
+    return true;
   } catch (error: any) {
     secureLogger.error('更新LeetCode用户数据失败:', {
       userId,
@@ -292,14 +267,21 @@ export const getGitHubUserData = async (
       return { userData: cachedData, needsFetch: false };
     }
 
-    // 从数据库获取数据
-    const dbData = await withRetry(async () => {
-      const user = await GitHubUser.findOne({ username }).lean();
-      return user || null;
-    }, `getGitHubUserData:${username}`);
-
-    // 如果数据库中有数据，更新缓存并返回
-    if (dbData) {
+    // 使用统一存储服务获取GitHub用户访问数据
+    const visitData = await storageService.getGitHubUserVisit(username);
+    
+    if (visitData) {
+      // 转换为IGitHubUser格式
+      const dbData: IGitHubUser = {
+        username: visitData.username,
+        visitCount: visitData.visit_count,
+        lastVisited: visitData.last_visited,
+        lastUpdated: visitData.last_visited,
+        avatarUrl: visitData.avatar_url,
+        avatarUpdatedAt: visitData.avatar_updated_at
+      };
+      
+      // 更新缓存并返回
       await cacheService.set(cacheKey, dbData, cacheTime);
       return { userData: dbData, needsFetch: false };
     }
@@ -330,23 +312,44 @@ export const updateGitHubUserData = async (
       throw new Error('Invalid userData provided');
     }
 
-    // 更新数据库
-    const result = await withRetry(async () => {
-      const updatedUser = await GitHubUser.findOneAndUpdate(
-        { username },
-        { $set: userData },
-        { upsert: true, new: true }
-      );
-      return !!updatedUser;
-    }, `updateGitHubUserData:${username}`);
-
-    if (result) {
+    // 准备要更新的数据
+    const updateData: {
+      visit_count?: number;
+      avatar_url?: string;
+      avatar_updated_at?: Date;
+    } = {};
+    
+    if (userData.visitCount !== undefined) {
+      updateData.visit_count = userData.visitCount;
+    }
+    
+    if (userData.avatarUrl !== undefined) {
+      updateData.avatar_url = userData.avatarUrl;
+    }
+    
+    if (userData.avatarUpdatedAt !== undefined) {
+      updateData.avatar_updated_at = userData.avatarUpdatedAt;
+    }
+    
+    // 使用统一存储服务更新GitHub用户访问数据
+    const updatedData = await storageService.updateGitHubUserVisit(username, updateData);
+    
+    if (updatedData) {
       // 更新缓存
       const cacheKey = `${CACHE_PREFIX.GITHUB}:${username}`;
-      await cacheService.set(cacheKey, userData, CACHE_TTL);
+      await cacheService.set(cacheKey, {
+        username: updatedData.username,
+        visitCount: updatedData.visit_count,
+        lastVisited: updatedData.last_visited,
+        lastUpdated: updatedData.last_visited,
+        avatarUrl: updatedData.avatar_url,
+        avatarUpdatedAt: updatedData.avatar_updated_at
+      }, CACHE_TTL);
+      
+      return true;
     }
 
-    return result || false;
+    return false;
   } catch (error: any) {
     secureLogger.error('更新GitHub用户数据失败:', {
       username,
@@ -357,7 +360,7 @@ export const updateGitHubUserData = async (
   }
 };
 
-// Juejin 用户数据获取和更新函数
+// Juejin 用户数据获取和更新函数 - 仅使用Redis缓存
 export const getJuejinUserData = async (
   userId: string,
   cacheTime: number = CACHE_TTL
@@ -379,19 +382,7 @@ export const getJuejinUserData = async (
       return { userData: cachedData, needsFetch: false };
     }
 
-    // 从数据库获取数据
-    const dbData = await withRetry<any>(async () => {
-      const user = await JueJinUser.findOne({ userId }).lean();
-      return user || null;
-    }, `getJuejinUserData:${userId}`);
-
-    // 如果数据库中有数据，更新缓存并返回
-    if (dbData) {
-      await cacheService.set(cacheKey, dbData, cacheTime);
-      return { userData: dbData, needsFetch: false };
-    }
-
-    // 如果缓存和数据库都没有数据，需要重新抓取
+    // 如果缓存没有数据，需要重新抓取
     return { userData: null, needsFetch: true };
   } catch (error: any) {
     secureLogger.error('获取掘金用户数据失败:', {
@@ -417,23 +408,10 @@ export const updateJuejinUserData = async (
       throw new Error('Invalid userData provided');
     }
 
-    // 更新数据库
-    const result = await withRetry(async () => {
-      const updatedUser = await JueJinUser.findOneAndUpdate(
-        { userId },
-        { $set: userData },
-        { upsert: true, new: true }
-      );
-      return !!updatedUser;
-    }, `updateJuejinUserData:${userId}`);
-
-    if (result) {
-      // 更新缓存
-      const cacheKey = `${CACHE_PREFIX.JUEJIN}:${userId}`;
-      await cacheService.set(cacheKey, userData, CACHE_TTL);
-    }
-
-    return result || false;
+    // 仅更新缓存
+    const cacheKey = `${CACHE_PREFIX.JUEJIN}:${userId}`;
+    await cacheService.set(cacheKey, userData, CACHE_TTL);
+    return true;
   } catch (error: any) {
     secureLogger.error('更新掘金用户数据失败:', {
       userId,
@@ -447,7 +425,7 @@ export const updateJuejinUserData = async (
 // 为避免重复，移除重复的 updateJuejinUserData 函数定义
 // 上面已经定义了一个完整的 updateJuejinUserData 函数
 
-// Bilibili 用户数据获取和更新函数
+// Bilibili 用户数据获取和更新函数 - 仅使用Redis缓存
 export const getBilibiliUserData = async (
   userId: string,
   cacheTime: number = CACHE_TTL
@@ -469,19 +447,7 @@ export const getBilibiliUserData = async (
       return { userData: cachedData, needsFetch: false };
     }
 
-    // 从数据库获取数据
-    const dbData = await withRetry(async () => {
-      const user = await BilibiliUser.findOne({ userId }).lean();
-      return user || null;
-    }, `getBilibiliUserData:${userId}`);
-
-    // 如果数据库中有数据，更新缓存并返回
-    if (dbData) {
-      await cacheService.set(cacheKey, dbData, cacheTime);
-      return { userData: dbData, needsFetch: false };
-    }
-
-    // 如果缓存和数据库都没有数据，需要重新抓取
+    // 如果缓存没有数据，需要重新抓取
     return { userData: null, needsFetch: true };
   } catch (error: any) {
     secureLogger.error('获取Bilibili用户数据失败:', {
@@ -507,23 +473,10 @@ export const updateBilibiliUserData = async (
       throw new Error('Invalid userData provided');
     }
 
-    // 更新数据库
-    const result = await withRetry(async () => {
-      const updatedUser = await BilibiliUser.findOneAndUpdate(
-        { userId },
-        { $set: userData },
-        { upsert: true, new: true }
-      );
-      return !!updatedUser;
-    }, `updateBilibiliUserData:${userId}`);
-
-    if (result) {
-      // 更新缓存
-      const cacheKey = `${CACHE_PREFIX.BILIBILI}:${userId}`;
-      await cacheService.set(cacheKey, userData, CACHE_TTL);
-    }
-
-    return result || false;
+    // 仅更新缓存
+    const cacheKey = `${CACHE_PREFIX.BILIBILI}:${userId}`;
+    await cacheService.set(cacheKey, userData, CACHE_TTL);
+    return true;
   } catch (error: any) {
     secureLogger.error('更新Bilibili用户数据失败:', {
       userId,
@@ -534,7 +487,7 @@ export const updateBilibiliUserData = async (
   }
 };
 
-// CSDN 用户数据获取和更新函数
+// CSDN 用户数据获取和更新函数 - 仅使用Redis缓存
 export const getCSDNUserData = async (
   userId: string,
   cacheTime: number = CACHE_TTL
@@ -556,19 +509,7 @@ export const getCSDNUserData = async (
       return { userData: cachedData, needsFetch: false };
     }
 
-    // 从数据库获取数据
-    const dbData = await withRetry(async () => {
-      const user = await CSDNUser.findOne({ userId }).lean();
-      return user || null;
-    }, `getCSDNUserData:${userId}`);
-
-    // 如果数据库中有数据，更新缓存并返回
-    if (dbData) {
-      await cacheService.set(cacheKey, dbData, cacheTime);
-      return { userData: dbData, needsFetch: false };
-    }
-
-    // 如果缓存和数据库都没有数据，需要重新抓取
+    // 如果缓存没有数据，需要重新抓取
     return { userData: null, needsFetch: true };
   } catch (error: any) {
     secureLogger.error('获取CSDN用户数据失败:', {
@@ -594,23 +535,10 @@ export const updateCSDNUserData = async (
       throw new Error('Invalid userData provided');
     }
 
-    // 更新数据库
-    const result = await withRetry(async () => {
-      const updatedUser = await CSDNUser.findOneAndUpdate(
-        { userId },
-        { $set: userData },
-        { upsert: true, new: true }
-      );
-      return !!updatedUser;
-    }, `updateCSDNUserData:${userId}`);
-
-    if (result) {
-      // 更新缓存
-      const cacheKey = `${CACHE_PREFIX.CSDN}:${userId}`;
-      await cacheService.set(cacheKey, userData, CACHE_TTL);
-    }
-
-    return result || false;
+    // 仅更新缓存
+    const cacheKey = `${CACHE_PREFIX.CSDN}:${userId}`;
+    await cacheService.set(cacheKey, userData, CACHE_TTL);
+    return true;
   } catch (error: any) {
     secureLogger.error('更新CSDN用户数据失败:', {
       userId,

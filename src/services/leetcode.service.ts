@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { createRequest, createRequestWithRetry } from '../utils/http.utils';
 import { LeetCodeStats } from '../types';
 import { secureLogger } from '../utils/logger';
