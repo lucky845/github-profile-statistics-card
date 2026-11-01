@@ -36,19 +36,7 @@ jobs:
           NODE_ENV: production
           PORT: 8083
         run: |
-          cat > probe.js <<'JS'
-const t0 = Date.now();
-const app = require(process.cwd() + '/dist/src/app.js').default;
-console.log('MODULE_LOADED_MS=' + (Date.now() - t0));
-const t1 = Date.now();
-const s = app.listen(8083, () => {
-  console.log('LISTEN_CB_MS=' + (Date.now() - t1) + ' TOTAL_MS=' + (Date.now() - t0));
-  s.close();
-  process.exit(0);
-});
-setTimeout(() => { console.log('PROBE_TIMEOUT_MS=' + (Date.now() - t0)); process.exit(1); }, 60000);
-JS
-          node probe.js
+          node -e 'const t0=Date.now();const app=require(process.cwd()+"/dist/src/app.js").default;console.log("MODULE_LOADED_MS="+(Date.now()-t0));const t1=Date.now();const s=app.listen(8083,()=>{console.log("LISTEN_CB_MS="+(Date.now()-t1)+" TOTAL_MS="+(Date.now()-t0));s.close();process.exit(0)});setTimeout(()=>{console.log("PROBE_TIMEOUT_MS="+(Date.now()-t0));process.exit(1)},60000)'
 
       # 干净环境启动冒烟：没有 PostgreSQL/MongoDB/Redis 时必须降级启动而不是崩溃
       - name: Start server and smoke test
