@@ -1,0 +1,60 @@
+name: build-and-smoke
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # 必须带 devDependencies，否则 tsc / tsc-alias 缺失，构建产物为空
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f dist/src/app.js || { echo "dist/src/app.js 缺失，构建产物不完整"; exit 1; }
+          test -d dist/src/views || { echo "views 未复制到 dist"; exit 1; }
+
+      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB 时必须降级启动而不是崩溃
+      - name: Start server and smoke test
+        env:
+          NODE_ENV: production
+          PORT: 8080
+        run: |
+          node dist/src/app.js > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS -m 2 http://127.0.0.1:8080/health > /dev/null 2>&1; then
+              echo "服务在 ${i} 秒内就绪"
+              break
+            fi
+            sleep 1
+          done
+          echo "--- /health ---"
+          curl -fsS -m 10 http://127.0.0.1:8080/health
+          echo
+          echo "--- 主页应包含 Total Visitors ---"
+          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "Total Visitors" && echo "主页 OK"
+          echo "--- 服务日志尾部 ---"
+          tail -20 server.log
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ -f server.pid ] && kill "$(cat server.pid)" 2>/dev/null || true
+          tail -50 server.log 2>/dev/null || true
