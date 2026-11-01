@@ -63,7 +63,11 @@ app.use(express.urlencoded({ extended: true }));
 // 应用业务中间件
 app.use(mongoConnectionMiddleware);
 app.use(themeMiddleware);
-app.use(createCacheMiddleware());
+// 健康检查必须绕过缓存：/health 只读内存状态，若走缓存中间件就要等 Redis
+// 连接（CI/Vercel 无 Redis 时每次请求挂 5 秒），启动阶段的探活会被一路拖慢。
+app.use(createCacheMiddleware({
+    skipCache: (req) => req.path === '/health'
+}));
 
 // 性能监控中间件 - 放在所有路由之前以捕获所有请求
 app.use(metricsMiddleware);
