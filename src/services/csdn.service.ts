@@ -168,7 +168,7 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
         const parsedUserData = await createRequestWithRetry(
             async () => {
                 // 创建请求客户端，添加特定的请求配置
-                const httpClient = createRequest(15000, {
+                const httpClient = createRequest(8000, {
                     headers: {
                         'Referer': `https://blog.csdn.net/${userId}`,
                         'Cookie': 'uuid_tt_dd=xxx-xxx-xxx;',  // 使用模拟的Cookie
@@ -176,8 +176,8 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
                     }
                 });
 
-                // 添加随机延迟，模拟人类行为
-                const randomDelay = Math.floor(Math.random() * 2000) + 1000; // 1-3秒延迟
+                // 添加少量随机延迟，模拟人类行为（控制在毫秒级，避免拖垮云平台请求）
+                const randomDelay = Math.floor(Math.random() * 400) + 200; // 200-600ms
                 await new Promise(resolve => setTimeout(resolve, randomDelay));
 
                 // 获取用户主页数据
@@ -196,8 +196,8 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
 
                 return parsedData;
             },
-            5, // 最大重试5次
-            2000 // 初始延迟2秒
+            2, // 最大重试2次：4xx 会直接快速失败，5xx 才有必要重试
+            800 // 初始延迟800ms
         );
 
         // 构建用户数据，包含访问计数和更新时间

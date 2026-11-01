@@ -34,7 +34,13 @@ export class PrometheusService {
   
   // 活跃请求数指标
   public activeRequestsGauge!: Gauge<string>;
-  
+
+  // 标记指标是否已初始化，保证 initialize() 幂等
+  private initialized = false;
+
+  // 内存指标定时器句柄（用于避免重复创建与优雅关闭）
+  private memoryTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor() {
     // 创建注册表并设置默认标签
     this.registry = new Registry();
@@ -42,15 +48,28 @@ export class PrometheusService {
       app: 'github-profile-statistics-card',
       environment: process.env.NODE_ENV || 'development',
     });
-    
+
     // 注册默认指标（Node.js进程指标）
     collectDefaultMetrics({ register: this.registry });
+
+    // 关键修复：在构造函数中立即初始化所有自定义指标。
+    // 此前 initialize() 只在 startServer() 中被调用，而 Vercel 的 vercel-entry.ts
+    // 仅 import app 从不启动 server，导致 activeRequestsGauge 等指标恒为 undefined，
+    // metricsMiddleware 在每个请求上抛 TypeError: Cannot read properties of undefined (reading 'inc')，
+    // 使全部路由（含 /health）返回 500。
+    this.initializeMetrics();
+    this.initialized = true;
   }
   
   /**
-   * 初始化所有自定义指标
+   * 初始化所有自定义指标（幂等）
+   * 重复调用不会重复注册，避免 prom-client 抛出
+   * "A metric with the name ... has already been registered" 错误。
    */
   private initializeMetrics(): void {
+    if (this.initialized) {
+      return;
+    }
     // API请求计数器
     this.apiRequestsTotal = new Counter({
       name: 'api_requests_total',
@@ -127,15 +146,37 @@ export class PrometheusService {
   }
   
   /**
-   * 初始化Prometheus服务
+   * 初始化Prometheus服务（幂等）
+   * 指标本身已由构造函数注册，这里只负责启动周期性任务。
+   * 可安全重复调用，不会重复注册指标或重复创建定时器。
    */
   public initialize(): void {
-    this.initializeMetrics();
-    
-    // 定期更新内存使用量指标
-    setInterval(() => {
-      this.updateMemoryUsage();
-    }, 5000); // 每5秒更新一次
+    if (!this.initialized) {
+      this.initializeMetrics();
+      this.initialized = true;
+    }
+
+    // 定期更新内存使用量指标（避免重复创建定时器）
+    if (this.memoryTimer === null) {
+      this.memoryTimer = setInterval(() => {
+        this.updateMemoryUsage();
+      }, 5000); // 每5秒更新一次
+
+      // 在无服务器环境（如 Vercel）中不要阻碍进程退出
+      if (typeof this.memoryTimer.unref === 'function') {
+        this.memoryTimer.unref();
+      }
+    }
+  }
+
+  /**
+   * 停止周期性任务并释放资源
+   */
+  public shutdown(): void {
+    if (this.memoryTimer !== null) {
+      clearInterval(this.memoryTimer);
+      this.memoryTimer = null;
+    }
   }
 
   /**
@@ -163,52 +204,52 @@ export class PrometheusService {
    * 记录API请求
    */
   public recordApiRequest(method: string, endpoint: string, statusCode: number): void {
-    this.apiRequestsTotal.inc({ method, endpoint, status_code: statusCode.toString() });
+    this.apiRequestsTotal?.inc({ method, endpoint, status_code: statusCode.toString() });
   }
-  
+
   /**
    * 记录API响应时间
    */
   public recordResponseTime(method: string, endpoint: string, statusCode: number, duration: number): void {
-    this.apiResponseTimeHistogram.observe(
+    this.apiResponseTimeHistogram?.observe(
       { method, endpoint, status_code: statusCode.toString() },
       duration / 1000 // 转换为秒
     );
   }
-  
+
   /**
    * 记录API错误
    */
   public recordApiError(method: string, endpoint: string, errorType: string): void {
-    this.apiErrorsTotal.inc({ method, endpoint, error_type: errorType });
+    this.apiErrorsTotal?.inc({ method, endpoint, error_type: errorType });
   }
-  
+
   /**
    * 记录缓存命中
    */
   public recordCacheHit(cacheType: string, endpoint: string): void {
-    this.cacheHitsTotal.inc({ cache_type: cacheType, endpoint });
+    this.cacheHitsTotal?.inc({ cache_type: cacheType, endpoint });
   }
-  
+
   /**
    * 记录缓存未命中
    */
   public recordCacheMiss(cacheType: string, endpoint: string): void {
-    this.cacheMissesTotal.inc({ cache_type: cacheType, endpoint });
+    this.cacheMissesTotal?.inc({ cache_type: cacheType, endpoint });
   }
-  
+
   /**
    * 记录外部API调用
    */
   public recordExternalApiCall(apiName: string, endpoint: string, status: string): void {
-    this.externalApiCallsTotal.inc({ api_name: apiName, endpoint, status });
+    this.externalApiCallsTotal?.inc({ api_name: apiName, endpoint, status });
   }
-  
+
   /**
    * 记录外部API响应时间
    */
   public recordExternalApiResponseTime(apiName: string, endpoint: string, duration: number): void {
-    this.externalApiResponseTimeHistogram.observe(
+    this.externalApiResponseTimeHistogram?.observe(
       { api_name: apiName, endpoint },
       duration / 1000 // 转换为秒
     );
@@ -218,30 +259,34 @@ export class PrometheusService {
    * 更新内存使用量指标
    */
   public updateMemoryUsage(): void {
+    if (!this.memoryUsageGauge) {
+      return;
+    }
+
     const memoryUsage = process.memoryUsage();
-    
+
     this.memoryUsageGauge.set({ type: 'rss' }, memoryUsage.rss);
     this.memoryUsageGauge.set({ type: 'heapTotal' }, memoryUsage.heapTotal);
     this.memoryUsageGauge.set({ type: 'heapUsed' }, memoryUsage.heapUsed);
     this.memoryUsageGauge.set({ type: 'external' }, memoryUsage.external);
-    
+
     if (memoryUsage.arrayBuffers !== undefined) {
       this.memoryUsageGauge.set({ type: 'arrayBuffers' }, memoryUsage.arrayBuffers);
     }
   }
-  
+
   /**
    * 增加活跃请求数
    */
   public incrementActiveRequests(method: string, endpoint: string): void {
-    this.activeRequestsGauge.inc({ method, endpoint });
+    this.activeRequestsGauge?.inc({ method, endpoint });
   }
-  
+
   /**
    * 减少活跃请求数
    */
   public decrementActiveRequests(method: string, endpoint: string): void {
-    this.activeRequestsGauge.dec({ method, endpoint });
+    this.activeRequestsGauge?.dec({ method, endpoint });
   }
   
   /**

@@ -61,7 +61,7 @@ export async function fetchLeetCodeStats(
             query: cnQuery,
             variables: cnVariables,
           }
-        ), 3, 1000);
+        ), 2, 800);
 
         if (response?.data?.data?.userProfileUserQuestionProgress) {
           return processCNLeetCodeResponse(response.data.data.userProfileUserQuestionProgress, username);
@@ -108,7 +108,7 @@ export async function fetchLeetCodeStats(
             query: usQuery,
             variables: usVariables,
           }
-        ), 3, 1000);
+        ), 2, 800);
 
         if (response?.data?.data?.matchedUser) {
           return processUSLeetCodeResponse(response.data.data.matchedUser, username);
