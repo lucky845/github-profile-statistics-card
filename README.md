@@ -46,7 +46,7 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 ```markdown
 ![GitHub Stats](https://github-profile-views-plum.vercel.app/github/username?theme=light)
 ```
-![GitHub Stats](https://github-profile-views-plum.vercel.app/github/lucky845?theme=light)
+![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=light)
 
 ### LeetCode 统计卡片
 
