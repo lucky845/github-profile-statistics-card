@@ -52,12 +52,23 @@ export const generateGitHubCounterCard = (
   // 安全处理用户数据
   const safeUsername = SvgSanitizerService.sanitizeUserContent(username);
 
+  // 属性值转义：URL 中的 & 会截断属性，引号会提前闭合
+  const escapeAttr = (v: string): string =>
+    String(v)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
   // 头像部分的SVG
   let avatarSvg = '';
   if (avatarUrl) {
+    // 同时给 href 与 xlink:href：老渲染器只认后者，新标准只认前者，
+    // 且 avatarUrl 必须转义，否则 URL 里的 & 会截断属性
+    const safeAvatar = escapeAttr(avatarUrl);
     avatarSvg = `
       <!-- 头像 -->
-      <image href="${avatarUrl}" x="25" y="25" width="50" height="50" rx="5" ry="5"/>
+      <image href="${safeAvatar}" xlink:href="${safeAvatar}" x="25" y="25" width="50" height="50" rx="5" ry="5"/>
     `;
   }
 
@@ -70,7 +81,7 @@ export const generateGitHubCounterCard = (
     ['访问', count],
   ];
 
-  return SvgSanitizerService.sanitize(`<svg xmlns="http://www.w3.org/2000/svg" width="495" height="170" viewBox="0 0 495 170">
+  return SvgSanitizerService.sanitize(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="495" height="170" viewBox="0 0 495 170">
     <defs>
       <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="${theme.colors.accent.primary}" />
