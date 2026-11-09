@@ -76,6 +76,10 @@ class TestMemoryCacheService extends BaseCacheService {
       hitsRate: total > 0 ? (this.hits / total) * 100 : 0
     };
   }
+
+  async close(): Promise<void> {
+    this.cache.clear();
+  }
 }
 
 // 创建测试用的缓存服务实例

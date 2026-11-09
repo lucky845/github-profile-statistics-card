@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { secureLogger } from '../utils/logger';
+import { renderGallery } from '../services/platforms/gallery';
 
 /**
  * 处理首页请求
@@ -20,6 +21,8 @@ export const handleHomePage = (req: Request, res: Response): void => {
       indexHtml = fs.readFileSync(indexPath, 'utf8');
       // 替换基础URL
       indexHtml = indexHtml.replace(/\$\{BASE_URL\}/g, baseUrl);
+      // 卡片画廊由平台注册表生成，新增平台无需手改 HTML
+      indexHtml = indexHtml.replace('<!-- GALLERY -->', renderGallery(baseUrl));
     } else {
       // 如果文件不存在，则使用内联HTML作为后备
       indexHtml = generateFallbackHtml(baseUrl);

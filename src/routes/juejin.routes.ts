@@ -1,14 +1,15 @@
 import {Router} from 'express';
 import {fetchJuejinUserData} from '../controllers/juejin.controller';
 import { secureLogger } from '../utils/logger';
+import { firstString } from '../utils/request.util';
 
 // 自定义掘金缓存中间件，适配user_id参数
 const juejinCacheMiddleware = () => {
   return (req: any, res: any, next: any) => {
     try {
       // 缓存实现简化版
-      const userId = req.params.user_id;
-      const theme = req.query.theme || 'default';
+      const userId = firstString(req.params.user_id);
+      const theme = firstString(req.query.theme) || 'default';
       const cacheKey = `juejin_${userId}_${theme}`;
       
       // 设置缓存头

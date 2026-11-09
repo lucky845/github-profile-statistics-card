@@ -6,7 +6,11 @@ import { asyncDbUpdate } from '../utils/db-update.utils';
 import { secureLogger } from '../utils/logger';
 
 
-async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promise<JuejinUserData> {
+// 重试会重置单次 5 秒超时，两个请求叠加重试可远超客户端等待上限，
+// 这里给整次抓取设总预算，避免路由挂死（缓存命中或读库时不受影响）
+const TOTAL_TIMEOUT_MS = 15000;
+
+async function getJuejinInfoInner(userId: string, cacheTimeInSeconds: number): Promise<JuejinUserData> {
     if (!userId) {
         throw new Error('用户ID不能为空');
     }
@@ -97,6 +101,19 @@ async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promis
 
         // 没有缓存，抛出错误
         throw new Error(`获取掘金数据失败且无缓存: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+}
+
+async function getJuejinInfo(userId: string, cacheTimeInSeconds: number): Promise<JuejinUserData> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('掘金数据获取超时')), TOTAL_TIMEOUT_MS);
+        timer.unref?.();
+    });
+    try {
+        return await Promise.race([getJuejinInfoInner(userId, cacheTimeInSeconds), timeout]);
+    } finally {
+        if (timer) clearTimeout(timer);
     }
 }
 

@@ -6,6 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { cacheService, CacheKeyGenerator } from '../services/cache.service';
 import { secureLogger } from '../utils/logger';
+import { firstString } from '../utils/request.util';
 
 /**
  * 缓存中间件配置选项
@@ -65,8 +66,9 @@ export function createCacheMiddleware(options: CacheMiddlewareOptions = {}) {
 
       // 重写send方法，在发送响应时缓存
       res.send = function(body) {
-        // 只缓存成功的响应
-        if (res.statusCode >= 200 && res.statusCode < 300) {
+        // 只缓存成功的响应；下游显式声明 no-store 时不缓存（如上游限流降级）
+        const cc = String(res.getHeader('Cache-Control') || '');
+        if (res.statusCode >= 200 && res.statusCode < 300 && !cc.includes('no-store')) {
           // 获取需要缓存的响应头
           const headersToCache = getCacheableHeaders(res.getHeaders());
           
@@ -280,87 +282,26 @@ export function manualCacheClearHandler(req: Request, res: Response): void {
 }
 
 /**
- * GitHub API缓存中间件
+ * 各平台 HTTP 缓存中间件：仅 ttl / 参数名 / key 生成器不同，统一由数据表生成
  */
-export function githubCacheMiddleware() {
-  return createCacheMiddleware({
-    ttl: 600, // 10分钟缓存
-    keyGenerator: (req: Request) => {
-      const username = req.params.username;
-      const theme = req.query.theme as string || 'default';
-      return CacheKeyGenerator.generateGitHubKey(username, theme);
-    },
-    skipCache: (req: Request) => {
-      // 如果有nocache参数，则跳过缓存
-      return req.query.nocache === 'true';
-    }
-  });
-}
+const CACHE_SPECS = [
+  { name: 'GitHub', ttl: 600, param: 'username', key: CacheKeyGenerator.generateGitHubKey },
+  { name: 'LeetCode', ttl: 900, param: 'username', key: CacheKeyGenerator.generateLeetCodeKey },
+  { name: 'CSDN', ttl: 1800, param: 'userId', key: CacheKeyGenerator.generateCSDNKey },
+  { name: '掘金', ttl: 1800, param: 'userId', key: CacheKeyGenerator.generateJuejinKey },
+  { name: 'B站', ttl: 1800, param: 'uid', key: CacheKeyGenerator.generateBilibiliKey },
+] as const;
 
-/**
- * LeetCode API缓存中间件
- */
-export function leetcodeCacheMiddleware() {
-  return createCacheMiddleware({
-    ttl: 900, // 15分钟缓存
-    keyGenerator: (req: Request) => {
-      const username = req.params.username;
-      const theme = req.query.theme as string || 'default';
-      return CacheKeyGenerator.generateLeetCodeKey(username, theme);
-    },
-    skipCache: (req: Request) => {
-      return req.query.nocache === 'true';
-    }
+const makeCacheMiddleware = (spec: typeof CACHE_SPECS[number]) => () =>
+  createCacheMiddleware({
+    ttl: spec.ttl,
+    keyGenerator: (req: Request) =>
+      spec.key(firstString(req.params[spec.param]) || 'unknown', (req.query.theme as string) || 'default'),
+    skipCache: (req: Request) => req.query.nocache === 'true'
   });
-}
 
-/**
- * CSDN API缓存中间件
- */
-export function csdnCacheMiddleware() {
-  return createCacheMiddleware({
-    ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request): string => {
-      const userId = req.params.userId || 'unknown';
-      const theme = req.query.theme as string || 'default';
-      return CacheKeyGenerator.generateCSDNKey(userId, theme);
-    },
-    skipCache: (req: Request) => {
-      return req.query.nocache === 'true';
-    }
-  });
-}
-
-/**
- * 掘金 API缓存中间件
- */
-export function juejinCacheMiddleware() {
-  return createCacheMiddleware({
-    ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request): string => {
-      const userId = req.params.userId || 'unknown';
-      const theme = req.query.theme as string || 'default';
-      return CacheKeyGenerator.generateJuejinKey(userId, theme);
-    },
-    skipCache: (req: Request) => {
-      return req.query.nocache === 'true';
-    }
-  });
-}
-
-/**
- * B站 API缓存中间件
- */
-export function bilibiliCacheMiddleware() {
-  return createCacheMiddleware({
-    ttl: 1800, // 30分钟缓存
-    keyGenerator: (req: Request): string => {
-      const uid = req.params.uid || 'unknown';
-      const theme = req.query.theme as string || 'default';
-      return CacheKeyGenerator.generateBilibiliKey(uid, theme);
-    },
-    skipCache: (req: Request) => {
-      return req.query.nocache === 'true';
-    }
-  });
-}
+export const githubCacheMiddleware = makeCacheMiddleware(CACHE_SPECS[0]);
+export const leetcodeCacheMiddleware = makeCacheMiddleware(CACHE_SPECS[1]);
+export const csdnCacheMiddleware = makeCacheMiddleware(CACHE_SPECS[2]);
+export const juejinCacheMiddleware = makeCacheMiddleware(CACHE_SPECS[3]);
+export const bilibiliCacheMiddleware = makeCacheMiddleware(CACHE_SPECS[4]);

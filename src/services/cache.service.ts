@@ -95,6 +95,9 @@ class RedisCacheService extends BaseCacheService {
 
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
+  /** 单次缓存操作的硬超时（毫秒）：Redis 不可达时不能拖慢 HTTP 请求 */
+  private readonly operationTimeoutMs: number = 800;
+
   constructor(config: CacheConfig) {
     super();
     this.ttl = config.ttl;
@@ -249,7 +252,30 @@ class RedisCacheService extends BaseCacheService {
     }
   }
 
+  /**
+   * 给缓存操作加硬超时。
+   * Redis 不可达时连接池 acquireTimeout 是 5 秒，直接 await 会把 HTTP 请求
+   * 一起拖死；超时按“缓存未命中”处理，业务逻辑照常走回源。
+   */
+  private async withTimeout<T>(operation: Promise<T>, fallback: T): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<T>(resolve => {
+          timer = setTimeout(() => resolve(fallback), this.operationTimeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async get<T>(key: string): Promise<T | undefined> {
+    return this.withTimeout(this.readThrough<T>(key), undefined);
+  }
+
+  private async readThrough<T>(key: string): Promise<T | undefined> {
     // 确保连接有效
     if (!await this.ensureConnection()) {
       this.misses++;
@@ -277,6 +303,10 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    return this.withTimeout(this.writeThrough(key, value, ttl), false);
+  }
+
+  private async writeThrough<T>(key: string, value: T, ttl?: number): Promise<boolean> {
     // 确保连接有效
     if (!await this.ensureConnection()) {
       return false;

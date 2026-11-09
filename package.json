@@ -1,7 +1,7 @@
 {
   "name": "github-profile-statistics-card",
   "version": "1.0.0",
-  "description": "GitHub profile LeetCode stats display",
+  "description": "多平台统计卡片：GitHub / LeetCode / CSDN / 掘金 / 哔哩哔哩，一行 Markdown 嵌入 README",
   "main": "src/app.ts",
   "scripts": {
     "start": "nodemon --exec 'ts-node -P tsconfig.json' src/app.ts",

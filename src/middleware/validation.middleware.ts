@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { getThemeConfig, generateCard, CardType } from '../services/svg.service';
 import { secureLogger } from '../utils/logger';
+import { firstString } from '../utils/request.util';
 
 /**
  * 验证GitHub用户名格式
  * GitHub用户名规则：字母数字、连字符（不能开头或结尾）、最多39个字符
  */
 export const validateGitHubUsername = (req: Request, res: Response, next: NextFunction): void => {
-  const username = req.params.username;
+  const username = firstString(req.params.username);
 
   if (!username) {
     res.status(400).send('未提供GitHub用户名');
@@ -30,7 +31,7 @@ export const validateGitHubUsername = (req: Request, res: Response, next: NextFu
  * LeetCode用户名规则：字母数字、下划线、连字符，长度限制1-30
  */
 export const validateLeetCodeUsername = (req: Request, res: Response, next: NextFunction): void => {
-  const username = req.params.username;
+  const username = firstString(req.params.username);
 
   if (!username) {
     res.status(400).send('未提供LeetCode用户名');
@@ -106,7 +107,7 @@ export const validateCacheTime = (req: Request, res: Response, next: NextFunctio
 export const validateGenericUsername = (req: Request, res: Response, next: NextFunction): void => {
   try {
     // 直接从params中获取对应的参数，而不是通过路径判断
-    const username = req.params.userId || req.params.uid || req.params.username;
+    const username = firstString(req.params.userId) || firstString(req.params.uid) || firstString(req.params.username);
 
     if (!username || username.trim() === '') {
       // 检查是否是SVG卡片请求
