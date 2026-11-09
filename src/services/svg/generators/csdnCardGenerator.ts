@@ -62,7 +62,7 @@ export const generateCSDNCard = (data: any, theme: ThemeOptions): string => {
     <rect x="25" y="50" width="445" height="1" fill="${theme.colors.border}"/>
     
     <!-- 统计数据第一行 -->
-    <g transform="translate(40, 85)">
+    <g transform="translate(25, 82)">
       <!-- 文章数量 -->
       <text x="0" y="0" class="label">文章:</text>
       <text x="55" y="0" class="value" fill="${theme.colors.stats.total}">${SvgSanitizerService.formatNumber(articleCount)}</text>
@@ -77,7 +77,7 @@ export const generateCSDNCard = (data: any, theme: ThemeOptions): string => {
     </g>
     
     <!-- 统计数据第二行 -->
-    <g transform="translate(40, 120)">
+    <g transform="translate(25, 114)">
       <!-- 访问量 -->
       <text x="0" y="0" class="label">访问量:</text>
       <text x="55" y="0" class="value" fill="${theme.colors.accent.primary}">${SvgSanitizerService.formatNumber(views)}</text>
@@ -92,7 +92,7 @@ export const generateCSDNCard = (data: any, theme: ThemeOptions): string => {
     </g>
     
     <!-- 统计数据第三行 -->
-    <g transform="translate(40, 155)">
+    <g transform="translate(25, 146)">
       <!-- 码龄 -->
       <text x="0" y="0" class="label">码龄:</text>
       <text x="55" y="0" class="value" fill="${theme.colors.stats.easy}">${safeCodeAge}</text>
@@ -107,10 +107,14 @@ export const generateCSDNCard = (data: any, theme: ThemeOptions): string => {
     </g>
     
     <!-- 统计数据第四行 -->
-    <g transform="translate(40, 190)">
+    <g transform="translate(25, 178)">
       <!-- 当月积分 -->
       <text x="0" y="0" class="label">当月分:</text>
       <text x="55" y="0" class="value" fill="${theme.colors.accent.secondary}">${SvgSanitizerService.formatNumber(monthPoints)}</text>
+
+      <!-- 总访问量 -->
+      <text x="150" y="0" class="label">访问:</text>
+      <text x="205" y="0" class="value" fill="${theme.colors.stats.count}">${SvgSanitizerService.formatNumber(views)}</text>
     </g>
     
     <!-- 分隔线 -->

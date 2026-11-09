@@ -41,6 +41,7 @@ export const generateLeetCodeCard = (data: ILeetCodeUser | string, theme: ThemeO
       .small { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.small}; fill: ${theme.colors.text.secondary}; }
       .label { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.secondary}; }
       .value { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; font-weight: bold; }
+      .pct { font-family: ${theme.fonts.family}; font-size: 24px; font-weight: bold; font-variant-numeric: tabular-nums; }
       .footer { font-family: ${theme.fonts.family}; font-size: 10px; fill: ${theme.colors.text.secondary}; }
     </style>
     
@@ -52,17 +53,17 @@ export const generateLeetCodeCard = (data: ILeetCodeUser | string, theme: ThemeO
     
     <!-- 总体进度 -->
     <g transform="translate(25, 70)">
-      <text x="0" y="0" class="label">已解决问题:</text>
+      <text x="0" y="4" class="label">已解决问题:</text>
       <text x="150" y="0" class="value" fill="${theme.colors.stats.total}">${totalSolved} / ${totalProblem}</text>
-      <text x="250" y="0" class="value" fill="${theme.colors.stats.total}">${solvedPercentage}%</text>
+      <text x="445" y="4" text-anchor="end" class="pct" fill="${theme.colors.stats.total}">${solvedPercentage}%</text>
       
       <!-- 进度条 -->
-      <rect x="0" y="15" width="445" height="10" fill="${theme.colors.border}" rx="5" ry="5"/>
-      <rect x="0" y="15" width="${(solvedPercentage / 100) * 445}" height="10" fill="${theme.colors.stats.total}" rx="5" ry="5"/>
+      <rect x="0" y="22" width="445" height="10" fill="${theme.colors.border}" rx="5" ry="5"/>
+      <rect x="0" y="22" width="${(solvedPercentage / 100) * 445}" height="10" fill="${theme.colors.stats.total}" rx="5" ry="5"/>
     </g>
     
     <!-- 分隔线 -->
-    <rect x="25" y="105" width="445" height="1" fill="${theme.colors.border}"/>
+    <rect x="25" y="112" width="445" height="1" fill="${theme.colors.border}"/>
     
     <!-- 各难度统计 -->
     <g transform="translate(25, 140)">
