@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import { getCSDNUserStats } from '../services/csdn.service';
 import { generateCard, CardType } from '../services/svg.service';
 import { secureLogger } from '../utils/logger';
+import { firstString } from '../utils/request.util';
 
 // 获取CSDN统计信息
 export const getCSDNStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.params.userId;
+    const userId = firstString(req.params.userId);
     // 从查询参数获取主题名称，支持主题参数
     const themeName = (req.query.theme as string) || 'default';
     // 获取缓存时间

@@ -28,6 +28,22 @@ export const getThemeConfig = (themeName?: string): ThemeOptions => {
  * @param themeName 主题名称，可选
  * @returns SVG字符串
  */
+/**
+ * 卡片渲染器注册表：新增平台只需在此登记一行，无需改动 generateCard 的分发逻辑
+ */
+export interface CardRenderer {
+  render(data: any, theme: ThemeOptions): string;
+}
+
+const RENDERERS: Record<string, CardRenderer['render']> = {
+  [CardType.LEETCODE]: generateLeetCodeCard,
+  [CardType.GITHUB]: generateGitHubCounterCard,
+  [CardType.CSDN]: generateCSDNCard,
+  [CardType.JUEJIN]: generateJuejinCard,
+  [CardType.BILIBILI]: generateBilibiliCard,
+  [CardType.ERROR]: (data: any, theme: ThemeOptions) => generateErrorCard(data as string, theme),
+};
+
 export const generateCard = (
   cardType: CardType,
   data: any,
@@ -36,23 +52,11 @@ export const generateCard = (
   const theme = getThemeConfig(themeName);
 
   try {
-    switch (cardType) {
-      case CardType.LEETCODE:
-        return generateLeetCodeCard(data, theme);
-      case CardType.GITHUB:
-        return generateGitHubCounterCard(data, theme);
-      case CardType.CSDN:
-        return generateCSDNCard(data, theme);
-      case CardType.JUEJIN:
-        return generateJuejinCard(data, theme);
-      case CardType.BILIBILI:
-        return generateBilibiliCard(data, theme);
-      case CardType.ERROR:
-        // 处理错误卡片类型
-        return generateErrorCard(data as string, theme);
-      default:
-        return generateErrorCard(`不支持的卡片类型: ${cardType}`, theme);
+    const render = RENDERERS[cardType];
+    if (!render) {
+      return generateErrorCard(`不支持的卡片类型: ${cardType}`, theme);
     }
+    return render(data, theme);
   } catch (error) {
     secureLogger.error(`生成${cardType}卡片时出错:`, error);
     return generateErrorCard('卡片生成失败', theme);

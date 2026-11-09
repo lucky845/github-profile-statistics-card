@@ -11,5 +11,7 @@
       "src": "/(.*)",
       "dest": "/src/vercel-entry.ts"
     }
-  ]
+  ],
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build"
 }

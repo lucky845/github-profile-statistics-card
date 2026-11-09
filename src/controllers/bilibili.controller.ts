@@ -20,8 +20,16 @@ export const fetchBilibiliUserData = async (req: Request, res: Response): Promis
         return;
     }
 
-    // 获取掘金统计数据
-    const stats = await getBilibiliInfo(uid, cacheTimeInSeconds);
+    // 获取Bilibili统计数据（无 try/catch 会让异常变成未处理的 Promise 拒绝，请求永不返回）
+    let stats;
+    try {
+        stats = await getBilibiliInfo(uid, cacheTimeInSeconds);
+    } catch (error) {
+        secureLogger.error(`获取Bilibili数据失败: ${error instanceof Error ? error.message : String(error)}`);
+        res.status(503).set('Content-Type', 'image/svg+xml').set('Cache-Control', 'no-store')
+            .send(generateCard(CardType.ERROR, 'Bilibili 数据暂时不可用', themeName));
+        return;
+    }
 
     if (!stats.isValid) {
         res.status(404)

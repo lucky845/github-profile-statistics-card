@@ -3,11 +3,12 @@ import { CardType, generateCard } from '../services/svg.service';
 import { getLeetCodeUserData, updateLeetCodeUserData } from '../services/leetcode-storage.service';
 import { fetchLeetCodeStats } from '../services/leetcode.service';
 import { secureLogger } from '../utils/logger';
+import { firstString } from '../utils/request.util';
 
 // 获取LeetCode统计
 export const getLeetCodeStats = async (req: Request, res: Response): Promise<void> => {
     try {
-        const username = req.params.username;
+        const username = firstString(req.params.username);
         // 从查询参数获取主题名称，支持主题参数
         const themeName = (req.query.theme as string) || 'default';
         // 获取区域参数，默认为非中国区
