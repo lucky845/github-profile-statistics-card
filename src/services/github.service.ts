@@ -27,7 +27,7 @@ class GitHubService {
   )
   async getGitHubUserStats(username: string): Promise<{
     isValid: boolean;
-    error?: 'USER_NOT_FOUND' | 'RATE_LIMITED';
+    error?: 'USER_NOT_FOUND' | 'RATE_LIMITED' | 'UPSTREAM_ERROR';
     avatarUrl: string | null;
     visitCount: number;
     publicRepos: number;
@@ -41,6 +41,7 @@ class GitHubService {
       let publicRepos = 0;
       let followers = 0;
       let totalStars = 0;
+      let rateLimited = false;
 
       // 检查缓存的头像URL是否有效（30天内）
       if (userData?.avatarUrl && userData.avatarUpdatedAt) {
@@ -71,14 +72,14 @@ class GitHubService {
 
           // 404 表示用户不存在：直接返回无效，避免伪造「全 0」的 200 卡片
           if (response.status === 404) {
-            return { isValid: false, error: 'USER_NOT_FOUND', avatarUrl: null, visitCount: 0, publicRepos: 0, followers: 0, totalStars: 0 };
+            throw new Error('User not found');
           }
 
           // 403/429 是配额耗尽，不是「该用户 0 仓库 0 粉丝」：
           // 标记无效，让 controller 返回 no-store 错误卡，避免把限流结果缓存 10 分钟
           if (response.status === 403 || response.status === 429) {
             secureLogger.warn(`GitHub API 限流（${response.status}），不返回伪造数据: ${username}`);
-            return { isValid: false, error: 'RATE_LIMITED', avatarUrl: null, visitCount: 0, publicRepos: 0, followers: 0, totalStars: 0 };
+            rateLimited = true;
           }
 
           if (response.status === 200 && response.data?.avatar_url) {
@@ -130,6 +131,18 @@ class GitHubService {
       // 获取更新后的用户数据以获取最新的访问计数
       const { userData: updatedData } = await getGitHubUserData(username);
 
+      if (rateLimited) {
+        return {
+          isValid: false,
+          error: 'RATE_LIMITED',
+          avatarUrl: null,
+          visitCount: 0,
+          publicRepos: 0,
+          followers: 0,
+          totalStars: 0
+        };
+      }
+
       return {
         isValid: true,
         avatarUrl: avatarUrl || null,
@@ -139,10 +152,22 @@ class GitHubService {
         totalStars
       };
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        return {
+          isValid: false,
+          error: 'USER_NOT_FOUND',
+          avatarUrl: null,
+          visitCount: 0,
+          publicRepos: 0,
+          followers: 0,
+          totalStars: 0
+        };
+      }
       secureLogger.error(`获取GitHub用户统计失败: ${error}`);
       // 上游失败不应伪装成「全 0 的有效数据」：标记 isValid=false 让上层不缓存
       return {
         isValid: false,
+        error: 'UPSTREAM_ERROR',
         avatarUrl: null,
         visitCount: 1,
         publicRepos: 0,
