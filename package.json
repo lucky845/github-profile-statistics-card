@@ -11,7 +11,8 @@
     "build": "tsc && tsc-alias && node scripts/copy-assets.js",
     "lint": "eslint src/**/*.ts",
     "vercel-build": "npm run build",
-    "start:prod": "node dist/src/app.js"
+    "start:prod": "node dist/src/app.js",
+    "verify:cards": "node scripts/verify-cards.js"
   },
   "keywords": [
     "github",
@@ -60,6 +61,7 @@
     "@types/node": "^22.13.9",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
+    "playwright-core": "^1.65.0",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.1",
