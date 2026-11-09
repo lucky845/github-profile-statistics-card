@@ -46,14 +46,14 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 ```markdown
 ![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/username?theme=light)
 ```
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=light)
+![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=light&v=2)
 
 ### LeetCode 统计卡片
 
 ```markdown
 ![LeetCode Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=light)
 ```
-![LeetCode Stats](https://github-profile-statistics-card.vercel.app/leetcode/lucky845?theme=light&cn=true)
+![LeetCode Stats](https://github-profile-statistics-card.vercel.app/leetcode/lucky845?theme=light&cn=true&v=2)
 
 支持参数：
 - `username`: LeetCode 用户名
@@ -77,7 +77,7 @@ GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生�
 ```markdown
 ![CSDN Stats](https://github-profile-statistics-card.vercel.app/csdn/userId?theme=light)
 ```
-![CSDN Stats](https://github-profile-statistics-card.vercel.app/csdn/weixin_46427785?theme=light)
+![CSDN Stats](https://github-profile-statistics-card.vercel.app/csdn/weixin_46427785?theme=light&v=2)
 
 CSDN 统计卡片包含以下数据：
 - 文章数量
@@ -93,7 +93,7 @@ CSDN 统计卡片包含以下数据：
 ```markdown
 ![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/userId?theme=light)
 ```
-![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/2564503943252237?theme=light)
+![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/2564503943252237?theme=light&v=2)
 
 掘金统计卡片包含以下数据：
 - 文章数量
@@ -119,7 +119,7 @@ CSDN 统计卡片包含以下数据：
 ```markdown
 ![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/uid?theme=light)
 ```
-![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/89389361?theme=light)
+![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/89389361?theme=light&v=2)
 
 哔哩哔哩统计卡片包含以下数据：
 - 用户名称
