@@ -20,11 +20,10 @@ const githubSource: PlatformStatsSource<Record<string, unknown>> = {
   async fetch(id) {
     const r = await githubService.getGitHubUserStats(id);
     if (r.isValid) return ok({ ...r, username: id } as Record<string, unknown>);
-    return r.error === 'USER_NOT_FOUND'
-      ? fail('NOT_FOUND', 'User not found')
-      : r.error === 'RATE_LIMITED'
-        ? fail('RATE_LIMITED', 'GitHub API 限流')
-        : fail('UPSTREAM_ERROR', 'GitHub 数据获取失败');
+    // 限流和上游抖动都给 200 + 降级卡：GitHub camo 会缓存 5xx，README 里就是永久裂图
+    if (r.error === 'USER_NOT_FOUND') return fail('NOT_FOUND', 'User not found');
+    if (r.error === 'RATE_LIMITED') return fail('DATA_UNAVAILABLE', 'GitHub API 限流');
+    return fail('DATA_UNAVAILABLE', 'GitHub 数据获取失败');
   },
 };
 
@@ -33,9 +32,11 @@ const csdnSource: PlatformStatsSource<Record<string, unknown>> = {
   platform: CardType.CSDN,
   async fetch(id, cacheSeconds) {
     const s = await getCSDNUserStats(id, cacheSeconds);
+    // 抓取失败 + 有空缓存时 service 返回 isValid:false（数据过期但可用），
+    // 这时给降级卡而不是 404 —— README 里 404 会被 camo 缓存成永久坏图
     return s.isValid
       ? ok({ ...s, username: s.username || id } as Record<string, unknown>)
-      : fail('NOT_FOUND', '未找到CSDN用户');
+      : fail('DATA_UNAVAILABLE', 'CSDN 暂无可用数据');
   },
 };
 
@@ -60,7 +61,12 @@ const leetcodeSource: PlatformStatsSource<Record<string, unknown>> = {
 };
 
 /** 掘金「查不到数据」类错误的关键词（上游把业务错误码当异常抛出来） */
-const UPSTREAM_NO_DATA_HINTS = ['空壳数据', '参数错误', '用户不存在', '不存在'];
+// 命中这些关键词说明「接口活着、只是这个人没数据/查无此人」——README 里必须仍渲染成图，
+// 所以归 DATA_UNAVAILABLE 拿 200；只有超时/网络/解析失败才走 503。
+export const UPSTREAM_NO_DATA_HINTS = [
+  '空壳数据', '参数错误', '用户不存在', '不存在',
+  '安全验证页', '风控', '已失效',
+];
 
 // ---------- 掘金 ----------
 const juejinSource: PlatformStatsSource<Record<string, unknown>> = {
@@ -90,12 +96,18 @@ const bilibiliSource: PlatformStatsSource<Record<string, unknown>> = {
   async fetch(id, cacheSeconds) {
     try {
       const s = await getBilibiliInfo(id, cacheSeconds);
-      return s.isValid
-        ? ok({ ...s, username: s.username || id } as Record<string, unknown>)
-        : fail('NOT_FOUND', '未找到哔哩哔哩用户');
+      // service 在「上游挂了但有旧缓存 / 彻底没数据」时返回 isValid:false，
+      // 这和「用户不存在」是两回事，不能返回 404（GitHub camo 会把 404 缓存成坏图）
+      if (s.isValid) {
+        return ok({ ...s, username: s.username || id } as Record<string, unknown>);
+      }
+      return fail('DATA_UNAVAILABLE', 'Bilibili 暂无可用数据');
     } catch (error) {
       secureLogger.error(`Bilibili 数据源失败: ${error}`);
-      return fail('UPSTREAM_ERROR', error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      return UPSTREAM_NO_DATA_HINTS.some(hint => message.includes(hint))
+        ? fail('DATA_UNAVAILABLE', message)
+        : fail('UPSTREAM_ERROR', message);
     }
   },
 };

@@ -66,7 +66,7 @@ export const getBilibiliInfo = async (
     } catch (error: any) {
     secureLogger.error(`获取哔哩哔哩数据出错: ${error.message}`);
 
-    // 判断是否存在缓存，存在缓存直接返回缓存即可
+    // 判断是否存在缓存，存在缓存直接返回缓存即可（已标记 isValid:false 表示数据过期）
     if (cachedUserData) {
       secureLogger.info(`使用过期的缓存数据: ${uid}`);
       return {...cachedUserData, isValid: false};

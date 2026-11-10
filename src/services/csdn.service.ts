@@ -53,6 +53,13 @@ function parseCSDNUserPage(html: string, userId: string): Partial<CSDNUserStats>
         secureLogger.debug(`========== CSDN解析调试 ==========`);
         secureLogger.debug(`解析CSDN用户页面: ${userId}`);
 
+        // 不存在的用户 CSDN 也回 200，只是页面里没有统计条。
+        // 不判这个的话会解析出一张全 0 的"正常"卡，比降级卡更误导
+        if ($('.user-profile-statistics-num').length === 0) {
+            secureLogger.warn(`CSDN 页面不含用户统计: ${userId}`);
+            throw new Error(`CSDN 页面不含用户统计（用户可能不存在）: ${userId}`);
+        }
+
         // 获取用户名
         const username = $('.user-profile-head-name div').eq(0).text().trim() || userId;
         secureLogger.debug(`用户名: ${username}`);
@@ -160,7 +167,7 @@ function parseCSDNUserPage(html: string, userId: string): Partial<CSDNUserStats>
         };
     } catch (error) {
     secureLogger.error(`解析CSDN用户页面失败: ${error}`);
-    return {userId, isValid: false};
+    return { userId, isValid: false };
   }
 }
 
@@ -281,7 +288,9 @@ export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: numbe
         codeAge: cachedUserData.codeAge || 0,
         level: cachedUserData.level !== undefined ? cachedUserData.level : 'N/A',
         monthPoints: cachedUserData.monthPoints || 0,
-        isValid: true,
+        // 抓取失败时回落到旧缓存：数据是过期的，不能宣称有效——
+        // 上层会把它当「不可用」降级，而不是把过期数字当真实值缓存 10 分钟
+        isValid: false,
         expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
       };
     }
