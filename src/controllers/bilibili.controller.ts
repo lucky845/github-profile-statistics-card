@@ -5,4 +5,5 @@ import { CardType } from '../services/svg/types';
 export const fetchBilibiliUserData = createCardHandler(SOURCES[CardType.BILIBILI], {
   paramName: 'uid',
   cardType: CardType.BILIBILI,
+  responseCacheControl: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
 });
