@@ -6,6 +6,7 @@
  */
 import { CardType } from '../svg/types';
 import { PlatformStatsSource, StatsResult, ok, fail } from './types';
+import { recordOk, recordFail } from './health';
 import { githubService } from '../github.service';
 import { getCSDNUserStats } from '../csdn.service';
 import { fetchLeetCodeStats } from '../leetcode.service';
@@ -18,7 +19,7 @@ const githubSource: PlatformStatsSource<Record<string, unknown>> = {
   platform: CardType.GITHUB,
   async fetch(id) {
     const r = await githubService.getGitHubUserStats(id);
-    if (r.isValid) return ok({ ...r } as Record<string, unknown>);
+    if (r.isValid) return ok({ ...r, username: id } as Record<string, unknown>);
     return r.error === 'USER_NOT_FOUND'
       ? fail('NOT_FOUND', 'User not found')
       : r.error === 'RATE_LIMITED'
@@ -33,7 +34,7 @@ const csdnSource: PlatformStatsSource<Record<string, unknown>> = {
   async fetch(id, cacheSeconds) {
     const s = await getCSDNUserStats(id, cacheSeconds);
     return s.isValid
-      ? ok({ ...s } as Record<string, unknown>)
+      ? ok({ ...s, username: s.username || id } as Record<string, unknown>)
       : fail('NOT_FOUND', '未找到CSDN用户');
   },
 };
@@ -47,16 +48,19 @@ const leetcodeSource: PlatformStatsSource<Record<string, unknown>> = {
     const useCN = opts?.useCN === true;
     const primary = await fetchLeetCodeStats(id, useCN);
     if (primary.success && primary.data) {
-      return ok({ ...primary.data, region: useCN ? 'CN' : 'US' } as Record<string, unknown>);
+      return ok({ ...primary.data, region: useCN ? 'CN' : 'US', username: primary.data.username || id } as Record<string, unknown>);
     }
     const fallback = await fetchLeetCodeStats(id, !useCN);
     if (fallback.success && fallback.data) {
       secureLogger.info(`LeetCode区域回退成功: ${id} ${useCN ? 'CN' : 'US'} → ${useCN ? 'US' : 'CN'}`);
-      return ok({ ...fallback.data, region: useCN ? 'US' : 'CN' } as Record<string, unknown>);
+      return ok({ ...fallback.data, region: useCN ? 'US' : 'CN', username: fallback.data.username || id } as Record<string, unknown>);
     }
     return fail('UPSTREAM_ERROR', primary.error || 'LeetCode 数据获取失败');
   },
 };
+
+/** 掘金「查不到数据」类错误的关键词（上游把业务错误码当异常抛出来） */
+const UPSTREAM_NO_DATA_HINTS = ['空壳数据', '参数错误', '用户不存在', '不存在'];
 
 // ---------- 掘金 ----------
 const juejinSource: PlatformStatsSource<Record<string, unknown>> = {
@@ -68,7 +72,14 @@ const juejinSource: PlatformStatsSource<Record<string, unknown>> = {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       secureLogger.error(`掘金数据源失败: ${message}`);
-      return message.includes('超时') ? fail('RATE_LIMITED', message) : fail('UPSTREAM_ERROR', message);
+      if (message.includes('超时')) return fail('RATE_LIMITED', message);
+      // 掘金把「这个 id 没数据」也塞进 err_no，报「参数错误」；空壳数据（user_id=0）同理。
+      // 这些都是接口本身活着、只是查不到人 —— 归 DATA_UNAVAILABLE 拿 200，
+      // 否则 README 里的掘金卡会渲染成坏图。
+      if (UPSTREAM_NO_DATA_HINTS.some(hint => message.includes(hint))) {
+        return fail('DATA_UNAVAILABLE', message);
+      }
+      return fail('UPSTREAM_ERROR', message);
     }
   },
 };
@@ -87,12 +98,31 @@ const bilibiliSource: PlatformStatsSource<Record<string, unknown>> = {
   },
 };
 
-export const SOURCES: Record<string, PlatformStatsSource<Record<string, unknown>>> = {
+const RAW_SOURCES: Record<string, PlatformStatsSource<Record<string, unknown>>> = {
   [CardType.GITHUB]: githubSource,
   [CardType.CSDN]: csdnSource,
   [CardType.LEETCODE]: leetcodeSource,
   [CardType.JUEJIN]: juejinSource,
   [CardType.BILIBILI]: bilibiliSource,
 };
+
+/**
+ * 对外的平台注册表：透明地给每个平台加一层健康计数。
+ * 适配器本身不需要知道 health 的存在。
+ */
+export const SOURCES: Record<string, PlatformStatsSource<Record<string, unknown>>> = Object.fromEntries(
+  Object.entries(RAW_SOURCES).map(([platform, source]) => [
+    platform,
+    {
+      ...source,
+      async fetch(id, cacheSeconds, opts) {
+        const result = await source.fetch(id, cacheSeconds, opts);
+        if (result.ok) recordOk(platform);
+        else recordFail(platform, result.reason + ': ' + result.message);
+        return result;
+      },
+    },
+  ])
+);
 
 export type { PlatformStatsSource, StatsResult };

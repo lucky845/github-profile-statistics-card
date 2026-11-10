@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getThemeConfig, generateCard, CardType } from '../services/svg.service';
 import { secureLogger } from '../utils/logger';
 import { firstString } from '../utils/request.util';
+import { themes } from '../config/theme.config';
 
 /**
  * 验证GitHub用户名格式
@@ -56,12 +57,14 @@ export const validateLeetCodeUsername = (req: Request, res: Response, next: Next
 export const validateTheme = (req: Request, res: Response, next: NextFunction): void => {
   const theme = req.query.theme as string;
 
-  // 允许的主题列表 - 使用与配置文件一致的主题名称
-  const validThemes = ['default', 'light', 'dark', 'blue', 'green', 'purple', 'orange', 'red'];
+  // 允许的主题列表直接从主题配置派生，避免校验白名单和实际主题表再次漂移
+  // （之前白名单还留着已删除的 blue/green/purple/orange/red，
+  //   却漏掉了真实的 github-dark-dimmed / transparent）
+  const validThemes = Object.keys(themes);
 
   if (theme) {
     // 过滤掉潜在的恶意字符，只允许字母、数字和连字符
-    const sanitizedTheme = theme.replace(/[^a-zA-Z0-9-]/g, '');
+    const sanitizedTheme = theme.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
     
     // 检查是否有字符被过滤掉
     if (sanitizedTheme !== theme) {

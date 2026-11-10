@@ -3,6 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { secureLogger } from '../utils/logger';
 import { renderGallery } from '../services/platforms/gallery';
+import { snapshotHealth } from '../services/platforms/health';
+import { themes } from '../config/theme.config';
+import { DEFAULT_THEME_NAME } from '../services/svg/svgService';
 
 /**
  * 处理首页请求
@@ -22,7 +25,13 @@ export const handleHomePage = (req: Request, res: Response): void => {
       // 替换基础URL
       indexHtml = indexHtml.replace(/\$\{BASE_URL\}/g, baseUrl);
       // 卡片画廊由平台注册表生成，新增平台无需手改 HTML
-      indexHtml = indexHtml.replace('<!-- GALLERY -->', renderGallery(baseUrl));
+      const activeTheme = typeof req.query.theme === 'string' && themes[req.query.theme] ? req.query.theme : DEFAULT_THEME_NAME;
+      indexHtml = indexHtml.replace('<!-- GALLERY -->', renderGallery(baseUrl, activeTheme));
+      // 主题名同样从配置生成：首页列出的主题一定是后端真实支持的
+      indexHtml = indexHtml.replace(/\$\{THEME_OPTIONS\}/g, Object.keys(themes).join(' / '));
+      indexHtml = indexHtml.replace(/\$\{THEME_PILLS\}/g, Object.keys(themes)
+        .map(t => `<a class="theme-pill" href="?theme=${encodeURIComponent(t)}">${t}</a>`)
+        .join(''));
     } else {
       // 如果文件不存在，则使用内联HTML作为后备
       indexHtml = generateFallbackHtml(baseUrl);
@@ -84,6 +93,9 @@ export const handleHealthCheck = (req: Request, res: Response): void => {
       status: dbStatus,
       pool: poolStats
     },
+    // 各平台数据源的真实调用情况：失败计数与最近一次错误，
+    // 上游静默失效（如掘金返回空壳）时这里能直接看出来
+    platforms: snapshotHealth(),
     memory: process.memoryUsage()
   });
 };

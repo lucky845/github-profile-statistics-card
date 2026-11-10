@@ -213,30 +213,65 @@ export const gruvboxLightTheme: ThemeOptions = {
   }
 };
 
-// 橙色主题
-export const tokyonightTheme: ThemeOptions = {
+// GitHub Dark Dimmed（GitHub 官方暗色主题的一套配色）
+export const githubDimmedTheme: ThemeOptions = {
   colors: {
-    background: '#fff3e0',
-    border: '#ffb74d',
+    background: '#22272e',
+    border: '#444c56',
     text: {
-      primary: '#e65100',
-      secondary: '#ef6c00',
-      title: '#e65100'
+      primary: '#adbac7',
+      secondary: '#768390',
+      title: '#cdd9e5'
     },
     accent: {
-      primary: '#ff9800',
-      secondary: '#ffa726'
+      primary: '#539bf5',
+      secondary: '#6cb6ff'
     },
     stats: {
-      easy: '#ffa726',
-      medium: '#ffb74d',
-      hard: '#ffcc80',
-      total: '#ff9800',
-      count: '#f57c00'
+      easy: '#57ab5a',
+      medium: '#c69026',
+      hard: '#e5534b',
+      total: '#539bf5',
+      count: '#adbac7'
     }
   },
   fonts: {
-    family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
+    family: '-apple-system, BlinkMacSystemFont, Segoe UI, Noto Sans SC, sans-serif',
+    size: {
+      small: '12px',
+      normal: '14px',
+      title: '18px'
+    }
+  },
+  card: {
+    borderRadius: '6px'
+  }
+};
+
+// 透明背景：只画文字与描边，嵌进任意配色的博客都合适
+export const transparentTheme: ThemeOptions = {
+  colors: {
+    background: 'transparent',
+    border: '#d0d7de',
+    text: {
+      primary: '#1f2328',
+      secondary: '#59636e',
+      title: '#1f2328'
+    },
+    accent: {
+      primary: '#0969da',
+      secondary: '#1a7f37'
+    },
+    stats: {
+      easy: '#1a7f37',
+      medium: '#9a6700',
+      hard: '#cf222e',
+      total: '#0969da',
+      count: '#1f2328'
+    }
+  },
+  fonts: {
+    family: '-apple-system, BlinkMacSystemFont, Segoe UI, Noto Sans SC, sans-serif',
     size: {
       small: '12px',
       normal: '14px',
@@ -284,15 +319,15 @@ export const onedarkTheme: ThemeOptions = {
 };
 
 // 导出所有主题
+//
+// 之前这里有 8 个名字，但 blue/green/purple/orange/red 只是把 merko/gruvbox/
+// tokyonight/onedark 换了个壳——用户以为有 8 种，实际只有 4 种配色。
+// 现在只暴露真实存在的 4 个，名字与视觉一致。
 export const themes: Record<string, ThemeOptions> = {
-  default: defaultTheme,
   light: defaultTheme,
   dark: darkTheme,
-  blue: merkoTheme,
-  green: gruvboxTheme,
-  purple: gruvboxLightTheme,
-  orange: tokyonightTheme,
-  red: onedarkTheme
+  'github-dark-dimmed': githubDimmedTheme,
+  transparent: transparentTheme
 };
 
 // 导出当前活动主题

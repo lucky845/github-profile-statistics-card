@@ -16,9 +16,11 @@ import { secureLogger } from '../../utils/logger';
  * @param themeName 主题名称，可选
  * @returns 主题配置对象
  */
+export const DEFAULT_THEME_NAME = 'light';
+
 export const getThemeConfig = (themeName?: string): ThemeOptions => {
-  // 使用默认主题作为后备
-  return themeName && themes[themeName] ? themes[themeName] : themes.default;
+  // 未知主题名宽容回落到默认主题：README 里的图片链接不会因为拼错主题而坏掉
+  return themeName && themes[themeName] ? themes[themeName] : themes[DEFAULT_THEME_NAME];
 };
 
 /**

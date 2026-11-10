@@ -1,130 +1,82 @@
 /**
- * CSDN卡片生成器
+ * CSDN 卡片生成器（495×200 统一画布）
  */
 import { ThemeOptions } from '../types';
-import { SvgSanitizerService } from '../utils/svgSanitizer';
+import { generateErrorCard } from './errorCardGenerator';
+import { CARD, COLUMN, LAYOUT, SPACE, TYPE, WEIGHT } from '../../../config/design-tokens';
+import { frame, header, divider, footer, text, pill, badge } from '../components';
+import { formatCount, formatDate } from '../../../utils/format';
 
-/**
- * 生成CSDN统计卡片
- * @param data CSDN用户数据
- * @param theme 主题配置
- * @returns SVG字符串
- */
-export const generateCSDNCard = (data: any, theme: ThemeOptions): string => {
-  if (!data) {
-    return generateErrorCard('无法获取CSDN数据', theme);
-  }
+export interface CSDNCardInput {
+  username?: string;
+  avatarUrl?: string | null;
+  articleCount?: number;
+  followers?: number;
+  rank?: number;
+  views?: number;
+  likes?: number;
+  comments?: number;
+  collects?: number;
+  points?: number;
+  monthPoints?: number;
+  codeAge?: string | number;
+  level?: number | string;
+}
 
-  if(data instanceof String) {
-    return generateErrorCard(data as string, theme);
-  }
+const CSDN_BRAND = '#fc5531';
+
+export const generateCSDNCard = (data: CSDNCardInput, theme: ThemeOptions): string => {
+  if (!data) return generateErrorCard('无法获取CSDN数据', theme);
+  if (data instanceof String) return generateErrorCard(data as unknown as string, theme);
 
   const {
-    articleCount,
-    followers,
-    likes,
-    views,
-    comments,
-    points,
-    username,
-    // 新增字段
-    rank,
+    username = 'Unknown',
+    avatarUrl,
+    articleCount = 0,
+    followers = 0,
+    rank = 0,
+    views = 0,
+    points = 0,
     codeAge,
     level,
-    monthPoints
   } = data;
 
-  // 当前日期
-  const currentDate = new Date().toLocaleDateString();
+  const levelText = level !== undefined && level !== null && String(level) !== 'N/A' ? `Lv.${level}` : '';
+  const right = levelText ? badge(theme, levelText, CSDN_BRAND) : '';
 
-  // 安全处理用户数据
-  const safeUsername = SvgSanitizerService.sanitizeUserContent(username || '');
-  const safeRank = SvgSanitizerService.sanitizeUserContent(rank ? SvgSanitizerService.formatNumber(rank) : 'N/A');
-  const safeCodeAge = SvgSanitizerService.sanitizeUserContent(codeAge || 'N/A');
-  const safeLevel = SvgSanitizerService.sanitizeUserContent(level || 'N/A');
-  
-  return SvgSanitizerService.sanitize(`<svg xmlns="http://www.w3.org/2000/svg" width="495" height="245" viewBox="0 0 495 245">
-    <style>
-      .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
-      .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
-      .small { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.small}; fill: ${theme.colors.text.secondary}; }
-      .label { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.secondary}; }
-      .value { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; font-weight: bold; }
-      .footer { font-family: ${theme.fonts.family}; font-size: 10px; fill: ${theme.colors.text.secondary}; }
-    </style>
-    <rect width="495" height="245" fill="${theme.colors.background}" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
-    
-    <!-- 标题和用户名 -->
-    <text x="25" y="35" class="header">CSDN 统计</text>
-    <text x="465" y="35" text-anchor="end" class="small">用户: ${safeUsername}</text>
-    
-    <!-- 分隔线 -->
-    <rect x="25" y="50" width="445" height="1" fill="${theme.colors.border}"/>
-    
-    <!-- 统计数据第一行 -->
-    <g transform="translate(25, 82)">
-      <!-- 文章数量 -->
-      <text x="0" y="0" class="label">文章:</text>
-      <text x="55" y="0" class="value" fill="${theme.colors.stats.total}">${SvgSanitizerService.formatNumber(articleCount)}</text>
-      
-      <!-- 粉丝数 -->
-      <text x="150" y="0" class="label">粉丝:</text>
-      <text x="205" y="0" class="value" fill="${theme.colors.stats.medium}">${SvgSanitizerService.formatNumber(followers)}</text>
-      
-      <!-- 排名 -->
-      <text x="300" y="0" class="label">排名:</text>
-      <text x="355" y="0" class="value" fill="${theme.colors.stats.hard}">${safeRank}</text>
-    </g>
-    
-    <!-- 统计数据第二行 -->
-    <g transform="translate(25, 114)">
-      <!-- 访问量 -->
-      <text x="0" y="0" class="label">访问量:</text>
-      <text x="55" y="0" class="value" fill="${theme.colors.accent.primary}">${SvgSanitizerService.formatNumber(views)}</text>
-      
-      <!-- 点赞数 -->
-      <text x="150" y="0" class="label">点赞:</text>
-      <text x="205" y="0" class="value" fill="${theme.colors.stats.easy}">${SvgSanitizerService.formatNumber(likes)}</text>
-      
-      <!-- 评论数 -->
-      <text x="300" y="0" class="label">评论:</text>
-      <text x="355" y="0" class="value" fill="${theme.colors.stats.medium}">${SvgSanitizerService.formatNumber(comments)}</text>
-    </g>
-    
-    <!-- 统计数据第三行 -->
-    <g transform="translate(25, 146)">
-      <!-- 码龄 -->
-      <text x="0" y="0" class="label">码龄:</text>
-      <text x="55" y="0" class="value" fill="${theme.colors.stats.easy}">${safeCodeAge}</text>
-      
-      <!-- 博客等级 -->
-      <text x="150" y="0" class="label">等级:</text>
-      <text x="205" y="0" class="value" fill="${theme.colors.stats.total}">${safeLevel}</text>
-      
-      <!-- 积分 -->
-      <text x="300" y="0" class="label">总积分:</text>
-      <text x="355" y="0" class="value" fill="${theme.colors.stats.count}">${SvgSanitizerService.formatNumber(points)}</text>
-    </g>
-    
-    <!-- 统计数据第四行 -->
-    <g transform="translate(25, 178)">
-      <!-- 当月积分 -->
-      <text x="0" y="0" class="label">当月分:</text>
-      <text x="55" y="0" class="value" fill="${theme.colors.accent.secondary}">${SvgSanitizerService.formatNumber(monthPoints)}</text>
+  const stats = [
+    { label: '原创', value: formatCount(articleCount) },
+    { label: '粉丝', value: formatCount(followers) },
+    { label: '排名', value: rank > 0 ? formatCount(rank) : '—' },
+    { label: '总访问量', value: formatCount(views) },
+  ];
 
-      <!-- 总访问量 -->
-      <text x="150" y="0" class="label">访问:</text>
-      <text x="205" y="0" class="value" fill="${theme.colors.stats.count}">${SvgSanitizerService.formatNumber(views)}</text>
-    </g>
-    
-    <!-- 分隔线 -->
-    <rect x="25" y="210" width="445" height="1" fill="${theme.colors.border}"/>
-    
-    <!-- 底部信息 -->
-    <text x="25" y="230" class="footer">Generated by GitHub Profile Statistics Card</text>
-    <text x="465" y="230" text-anchor="end" class="footer">更新于: ${currentDate}</text>
-  </svg>`);
+  // 次行：码龄 / 积分胶囊
+  const chips: { svg: string; width: number }[] = [];
+  let chipX = CARD.padding;
+  const codeAgeText = codeAge !== undefined && String(codeAge).trim() !== '' ? `码龄 ${String(codeAge).replace('码龄', '').trim()}` : '';
+  if (codeAgeText) {
+    const p = pill(chipX, LAYOUT.dividerTop + 84, codeAgeText, theme.colors.text.secondary);
+    chips.push(p);
+    chipX += p.width;
+  }
+  if (points > 0) {
+    const p = pill(chipX, LAYOUT.dividerTop + 84, `原力 ${formatCount(points)}`, CSDN_BRAND);
+    chips.push(p);
+    chipX += p.width;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="CSDN 统计卡片">
+    <title>${username} 的 CSDN 统计</title>
+    ${frame(theme)}
+    ${header(theme, { title: 'CSDN', subtitle: '技术博客影响力', dot: CSDN_BRAND, avatarUrl, initial: username, right })}
+    ${divider(LAYOUT.dividerTop, theme)}
+    ${stats.map((s, i) => {
+      const x = COLUMN.startX + i * COLUMN.width;
+      return `${text(x, LAYOUT.statValueBaseline, s.value, { size: TYPE.value, weight: WEIGHT.semibold, fill: theme.colors.text.primary, mono: true })}
+      ${text(x, LAYOUT.statValueBaseline + TYPE.label + 7, s.label, { size: TYPE.label, fill: theme.colors.text.secondary })}`;
+    }).join('\n    ')}
+    ${chips.map(c => c.svg).join('\n    ')}
+    ${footer(theme, 'CSDN Statistics', `更新于 ${formatDate(Date.now())}`)}
+  </svg>`;
 };
-
-// 导入错误卡片生成器以避免循环依赖
-import { generateErrorCard } from './errorCardGenerator';
