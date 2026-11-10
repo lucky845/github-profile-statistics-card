@@ -12,7 +12,9 @@
     "lint": "eslint src/**/*.ts",
     "vercel-build": "npm run build",
     "start:prod": "node dist/src/app.js",
-    "verify:cards": "node scripts/verify-cards.js"
+    "verify:cards": "node scripts/verify-cards.js",
+    "verify:layout": "node scripts/verify-layout.js",
+    "verify": "npm run verify:cards && npm run verify:layout"
   },
   "keywords": [
     "github",

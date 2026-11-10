@@ -59,6 +59,14 @@ async function getJuejinInfoInner(userId: string, cacheTimeInSeconds: number): P
             throw new Error(userResponse.data.err_msg || '获取用户信息失败');
         }
 
+        // shape guard：掘金官方 API 已静默失效，会返回 err_no:0 但 user_id='0'、
+        // user_name 为空、所有计数为 0 的空壳。这种"看起来成功"的响应必须拒绝，
+        // 否则卡片会显示一张全 0 的假数据。
+        const probe = userResponse.data?.data;
+        if (!probe || !probe.user_id || String(probe.user_id) === '0' || !probe.user_name) {
+            throw new Error('掘金接口已失效：返回空壳数据（user_id=0）');
+        }
+
         // 检查文章列表请求结果
         if (articlesResponse.data.err_no !== 0) {
             throw new Error(articlesResponse.data.err_msg || '获取文章列表失败');

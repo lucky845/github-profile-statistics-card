@@ -20,11 +20,11 @@ interface GalleryEntry {
 }
 
 const ENTRIES: GalleryEntry[] = [
-  { platform: 'github', title: 'GitHub 统计', path: 'github', sample: 'lucky845', extraQuery: '', height: 170 },
-  { platform: 'leetcode', title: 'LeetCode 统计', path: 'leetcode', sample: 'lucky845', extraQuery: '&cn=true', height: 245 },
-  { platform: 'csdn', title: 'CSDN 统计', path: 'csdn', sample: 'testuser', extraQuery: '', height: 245 },
-  { platform: 'juejin', title: '掘金统计', path: 'juejin', sample: 'testuser', extraQuery: '', height: 245 },
-  { platform: 'bilibili', title: '哔哩哔哩统计', path: 'bilibili', sample: '1', extraQuery: '', height: 245 },
+  { platform: 'github', title: 'GitHub 统计', path: 'github', sample: 'lucky845', extraQuery: '', height: 200 },
+  { platform: 'leetcode', title: 'LeetCode 统计', path: 'leetcode', sample: 'lucky845', extraQuery: '&cn=true', height: 200 },
+  { platform: 'csdn', title: 'CSDN 统计', path: 'csdn', sample: 'testuser', extraQuery: '', height: 200 },
+  { platform: 'juejin', title: '掘金统计', path: 'juejin', sample: 'testuser', extraQuery: '', height: 200 },
+  { platform: 'bilibili', title: '哔哩哔哩统计', path: 'bilibili', sample: '1', extraQuery: '', height: 200 },
 ];
 
 const escapeHtml = (s: string): string =>
@@ -33,12 +33,14 @@ const escapeHtml = (s: string): string =>
 /**
  * 生成画廊 HTML 片段。只包含注册表里真实存在的平台。
  */
-export function renderGallery(baseUrl: string): string {
+export function renderGallery(baseUrl: string, theme = 'light'): string {
   const available = ENTRIES.filter(e => SOURCES[e.platform]);
   if (available.length === 0) return '';
 
   const cards = available.map((e, i) => {
-    const url = `${baseUrl}/${e.path}/${e.sample}?theme=light${e.extraQuery}`;
+    // theme 跟着首页当前选中的主题走：点 ?theme=dark 时预览图和可复制的
+    // Markdown 一起变成暗色，否则主题胶囊点了没反应
+    const url = `${baseUrl}/${e.path}/${e.sample}?theme=${encodeURIComponent(theme)}${e.extraQuery}`;
     const markdown = `![](${url})`;
     const id = `code-${i}`;
     return `

@@ -6,7 +6,13 @@
  */
 
 /** 失败原因，统一映射到 HTTP 状态与卡片文案 */
-export type StatsFailure = 'NOT_FOUND' | 'RATE_LIMITED' | 'INVALID_INPUT' | 'UPSTREAM_ERROR';
+export type StatsFailure =
+  | 'NOT_FOUND'
+  | 'RATE_LIMITED'
+  | 'INVALID_INPUT'
+  /** 上游认不出这个 id，但服务本身是好的 —— 例如掘金返回 user_id=0 的空壳 */
+  | 'DATA_UNAVAILABLE'
+  | 'UPSTREAM_ERROR';
 
 export type StatsResult<T> =
   | { ok: true; data: T }
@@ -35,9 +41,16 @@ export const fail = (reason: StatsFailure, message: string): StatsResult<never> 
 });
 
 /** 失败原因 → HTTP 状态码 */
+/**
+ * 失败原因 → HTTP 状态码
+ *
+ * 200 只给「请求合法但上游没数据」：这类卡要能嵌进 GitHub README 长期显示，
+ * 返回 4xx/5xx 会让 img 直接坏图。客户端也靠这个码判断要不要翻译成 README 友好文案。
+ */
 export const STATUS_BY_REASON: Record<StatsFailure, number> = {
   NOT_FOUND: 404,
   INVALID_INPUT: 400,
+  DATA_UNAVAILABLE: 200,
   RATE_LIMITED: 503,
   UPSTREAM_ERROR: 503,
 };
@@ -46,6 +59,7 @@ export const STATUS_BY_REASON: Record<StatsFailure, number> = {
 export const MESSAGE_BY_REASON: Record<StatsFailure, string> = {
   NOT_FOUND: '未找到该用户',
   INVALID_INPUT: '参数无效',
+  DATA_UNAVAILABLE: '该平台暂无此用户的数据',
   RATE_LIMITED: '数据源限流，请稍后再试',
   UPSTREAM_ERROR: '数据暂时不可用',
 };

@@ -1,126 +1,47 @@
 /**
- * GitHub卡片生成器
+ * GitHub 卡片生成器（495×200 统一画布）
  */
 import { ThemeOptions } from '../types';
-import { SvgSanitizerService } from '../utils/svgSanitizer';
 import { generateErrorCard } from './errorCardGenerator';
+import { COLUMN, CARD, LAYOUT, TYPE } from '../../../config/design-tokens';
+import { frame, header, divider, statColumn, footer, StatItem } from '../components';
+import { formatCount, formatDate } from '../../../utils/format';
 
-/**
- * 生成GitHub访问计数卡片
- * @param count 访问计数
- * @param avatarUrl 头像URL（可选）
- * @param username GitHub用户名（可选）
- * @param theme 主题配置
- * @returns SVG字符串
- */
-export const generateGitHubCounterCard = (
-  data: any,
-  theme: ThemeOptions
-): string => {
-  // 检查数据是否存在
-  if (!data) {
-    return generateErrorCard('无法获取GitHub数据', theme);
-  }
-  
-  if(data instanceof String) {
-    return generateErrorCard(data as string, theme);
-  }
+export interface GitHubCardInput {
+  count?: number;
+  avatarUrl?: string | null;
+  username?: string;
+  publicRepos?: number;
+  followers?: number;
+  totalStars?: number;
+}
 
-  const {
-    count,
-    avatarUrl,
-    username,
-    publicRepos = 0,
-    followers = 0,
-    totalStars = 0,
-  } = data;
+/** GitHub 品牌色 */
+const GITHUB_DOT = '#1f2328';
 
-  // 格式化计数
-  const formatCount = (num?: number): string => {
-    if (typeof num !== 'number' || !isFinite(num)) return '0';
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-  };
+export const generateGitHubCounterCard = (data: GitHubCardInput, theme: ThemeOptions): string => {
+  if (!data) return generateErrorCard('无法获取GitHub数据', theme);
+  if (data instanceof String) return generateErrorCard(data as unknown as string, theme);
 
-  // 当前日期
-  const currentDate = new Date().toLocaleDateString();
+  const { count = 0, avatarUrl, username, publicRepos = 0, followers = 0, totalStars = 0 } = data;
+  const displayName = username || 'Unknown';
 
-  // 安全处理用户数据
-  const safeUsername = SvgSanitizerService.sanitizeUserContent(username);
-
-  // 属性值转义：URL 中的 & 会截断属性，引号会提前闭合
-  const escapeAttr = (v: string): string =>
-    String(v)
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
-  // 头像部分的SVG
-  let avatarSvg = '';
-  if (avatarUrl) {
-    // 同时给 href 与 xlink:href：老渲染器只认后者，新标准只认前者，
-    // 且 avatarUrl 必须转义，否则 URL 里的 & 会截断属性
-    const safeAvatar = escapeAttr(avatarUrl);
-    avatarSvg = `
-      <!-- 头像 -->
-      <image href="${safeAvatar}" xlink:href="${safeAvatar}" x="25" y="25" width="50" height="50" rx="5" ry="5"/>
-    `;
-  }
-
-  // 生成渐变ID
-  const gradientId = `grad-${Math.random().toString(36).substring(2, 8)}`;
-  const stats: Array<[string, number]> = [
-    ['仓库', publicRepos],
-    ['星标', totalStars],
-    ['关注者', followers],
-    ['访问', count],
+  const stats: StatItem[] = [
+    { label: '仓库', value: formatCount(publicRepos) },
+    { label: '星标', value: formatCount(totalStars) },
+    { label: '关注者', value: formatCount(followers) },
+    { label: '访问', value: formatCount(count) },
   ];
 
-  return SvgSanitizerService.sanitize(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="495" height="170" viewBox="0 0 495 170">
-    <defs>
-      <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="${theme.colors.accent.primary}" />
-        <stop offset="100%" stop-color="${theme.colors.accent.secondary}" />
-      </linearGradient>
-    </defs>
-    <style>
-      .text { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.normal}; fill: ${theme.colors.text.primary}; }
-      .header { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.title}; font-weight: bold; fill: ${theme.colors.text.title}; }
-      .small { font-family: ${theme.fonts.family}; font-size: ${theme.fonts.size.small}; fill: ${theme.colors.text.secondary}; }
-      .label { font-family: ${theme.fonts.family}; font-size: 11px; fill: ${theme.colors.text.secondary}; }
-      .value { font-family: ${theme.fonts.family}; font-size: 22px; font-weight: bold; }
-      .footer { font-family: ${theme.fonts.family}; font-size: 10px; fill: ${theme.colors.text.secondary}; }
-    </style>
+  const right = `<text x="${CARD.width - CARD.padding}" y="${LAYOUT.headerBaseline}" font-family="inherit" font-size="${TYPE.label}" fill="${theme.colors.text.secondary}" text-anchor="end">@${displayName}</text>`;
 
-    <rect width="495" height="170" fill="${theme.colors.background}" rx="${theme.card.borderRadius}" ry="${theme.card.borderRadius}" stroke="${theme.colors.border}" stroke-width="1"/>
-
-    <!-- 左侧头像 -->
-    ${avatarSvg}
-
-    <!-- 头部：标题 + 用户名 -->
-    <g transform="translate(90, 0)">
-      <text x="0" y="35" class="header">GitHub 统计</text>
-      ${username ? `<text x="375" y="35" text-anchor="end" class="small">@${safeUsername}</text>` : ''}
-    </g>
-
-    <!-- 分隔线 -->
-    <line x1="25" y1="55" x2="470" y2="55" stroke="${theme.colors.border}" stroke-width="1"/>
-
-    <!-- 四列数据 -->
-    ${stats.map(([label, value], i) => {
-      const x = 25 + i * 112;
-      return `
-      <text x="${x}" y="88" class="value" fill="url(#${gradientId})">${formatCount(value)}</text>
-      <text x="${x}" y="108" class="label">${label}</text>`;
-    }).join('')}
-
-    <!-- 底部信息 -->
-    <text x="25" y="150" class="footer">Generated by GitHub Profile Statistics Card</text>
-    <text x="465" y="150" text-anchor="end" class="footer">更新于: ${currentDate}</text>
-  </svg>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="GitHub 统计卡片">
+    <title>${displayName} 的 GitHub 统计</title>
+    ${frame(theme)}
+    ${header(theme, { title: 'GitHub', subtitle: '开源仓库与影响力', dot: GITHUB_DOT, avatarUrl, initial: displayName, right })}
+    ${divider(LAYOUT.dividerTop, theme)}
+    ${stats.map((item, i) => statColumn(COLUMN.startX + i * COLUMN.width, LAYOUT.statValueBaseline, item, theme)).join('\n    ')}
+    ${divider(LAYOUT.dividerBottom, theme)}
+    ${footer(theme, 'GitHub Profile Statistics', `更新于 ${formatDate(Date.now())}`)}
+  </svg>`;
 };

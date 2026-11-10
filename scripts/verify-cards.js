@@ -14,7 +14,7 @@ const { chromium } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 
-const BASE = process.argv[2] || 'http://127.0.0.1:3899';
+const BASE = process.argv[2] || process.env.BASE_URL || 'http://127.0.0.1:3000';
 const OUT_DIR = path.join(__dirname, '..', 'shots');
 
 /** 每张卡要验证的：路径、是否必须有头像 */

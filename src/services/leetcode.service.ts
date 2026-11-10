@@ -223,6 +223,23 @@ function processCNLeetCodeResponse(
         ? ((totalAccepted / totalAttempted) * 100).toFixed(1) + '%' 
         : '0%';
 
+      // 真实总题数 = 已通过 + 未通过 + 未做；否则卡片上的百分比是编造的
+      const untouched = new Map<string, number>();
+      (userData.numUntouchedQuestions || []).forEach((item: any) => {
+        untouched.set(item.difficulty, item.count);
+      });
+      const failed = new Map<string, number>();
+      (userData.numFailedQuestions || []).forEach((item: any) => {
+        failed.set(item.difficulty, item.count);
+      });
+      const totalFor = (d: string) =>
+        (difficulties.get(d) || 0) + (failed.get(d) || 0) + (untouched.get(d) || 0);
+      const totalProblems = {
+        easy: totalFor('EASY'),
+        medium: totalFor('MEDIUM'),
+        hard: totalFor('HARD'),
+      };
+
       // 创建数据对象
       const data: LeetCodeStats = {
         region: 'CN',
@@ -233,6 +250,8 @@ function processCNLeetCodeResponse(
         hardSolved: difficulties.get('HARD') || 0,
         acceptanceRate,
         lastUpdated: new Date(),
+        totalProblems:
+          totalProblems.easy + totalProblems.medium + totalProblems.hard > 0 ? totalProblems : undefined,
       };
       
       return { success: true, data };

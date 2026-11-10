@@ -20,4 +20,6 @@ export interface LeetCodeStats {
   hardSolved: number;
   acceptanceRate: string;
   lastUpdated: Date;
-} 
+  /** 各难度总题数（CN 区由 numUntouchedQuestions 推算），未知时缺省 */
+  totalProblems?: { easy: number; medium: number; hard: number };
+}
