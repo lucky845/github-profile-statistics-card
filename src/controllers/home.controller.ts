@@ -38,6 +38,9 @@ export const handleHomePage = (req: Request, res: Response): void => {
     }
 
     res.set('Content-Type', 'text/html');
+    // 首页是纯静态渲染结果，加 CDN 缓存能挡掉绝大多数冷启动；
+    // 不加的话每次都要进函数，一次冷启动就是 1 秒起步
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
     res.send(indexHtml);
   } catch (error) {
     secureLogger.error('读取首页错误:', { error: error instanceof Error ? error.message : String(error) });
