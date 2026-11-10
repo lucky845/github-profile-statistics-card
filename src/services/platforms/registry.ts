@@ -90,7 +90,9 @@ const bilibiliSource: PlatformStatsSource<Record<string, unknown>> = {
   async fetch(id, cacheSeconds) {
     try {
       const s = await getBilibiliInfo(id, cacheSeconds);
-      return s.isValid ? ok({ ...s } as Record<string, unknown>) : fail('NOT_FOUND', '未找到哔哩哔哩用户');
+      return s.isValid
+        ? ok({ ...s, username: s.username || id } as Record<string, unknown>)
+        : fail('NOT_FOUND', '未找到哔哩哔哩用户');
     } catch (error) {
       secureLogger.error(`Bilibili 数据源失败: ${error}`);
       return fail('UPSTREAM_ERROR', error instanceof Error ? error.message : String(error));
