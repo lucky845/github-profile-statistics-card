@@ -181,32 +181,4 @@ class GitHubService {
 // 导出单例实例
 export const githubService = new GitHubService();
 
-// 生成SVG计数器
-export function generateCounterSVG(count: number, avatarUrl: string): string {
-  const colors = {
-    bg: '#ffffff',
-    border: '#e9ecef',
-    text: '#343a40',
-    count: '#6f42c1'
-  };
-
-  // 安全处理计数显示
-  let countDisplay = count.toString();
-  if (count >= 1000) {
-    countDisplay = (count / 1000).toFixed(1) + 'k';
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="100" viewBox="0 0 220 100">
-    <style>
-      .text { font-family: Arial, sans-serif; font-size: 14px; fill: ${colors.text}; }
-      .count { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: ${colors.count}; }
-      .small { font-family: Arial, sans-serif; font-size: 12px; fill: #6c757d; }
-    </style>
-    <rect width="220" height="100" fill="${colors.bg}" rx="10" ry="10" stroke="${colors.border}" stroke-width="1"/>
-    <text x="30" y="40" class="text">访问数:</text>
-    <text x="190" y="50" text-anchor="end" class="count">${countDisplay}</text>
-    <image x="30" y="60" width="30" height="30" xlink:href="${avatarUrl}" />
-    <text x="70" y="80" class="small">GitHub: @</text>
-  </svg>`;
-}
 

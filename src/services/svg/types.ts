@@ -98,6 +98,5 @@ export interface JuejinUserData {
  */
 export interface GitHubCounterData {
   count: number;
-  avatarUrl?: string | null;
   username?: string;
 }

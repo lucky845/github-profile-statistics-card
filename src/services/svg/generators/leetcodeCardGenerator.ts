@@ -12,7 +12,6 @@ import { formatDate, formatCount } from '../../../utils/format';
 
 export interface LeetCodeCardInput extends Partial<ILeetCodeUser> {
   totalProblems?: { easy: number; medium: number; hard: number };
-  avatarUrl?: string | null;
   ranking?: number;
 }
 
@@ -39,8 +38,7 @@ export const generateLeetCodeCard = (data: LeetCodeCardInput | string, theme: Th
     hardSolved = 0,
     acceptanceRate = '—',
     region,
-    avatarUrl,
-    ranking,
+      ranking,
     totalProblems,
   } = data as LeetCodeCardInput;
 
@@ -92,7 +90,7 @@ export const generateLeetCodeCard = (data: LeetCodeCardInput | string, theme: Th
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="LeetCode 统计卡片">
     <title>${username} 的 LeetCode 统计</title>
     ${frame(theme)}
-    ${header(theme, { title: 'LeetCode', subtitle: '刷题进度与通过率', dot: LEETCODE_DOT, avatarUrl, initial: username, right })}
+    ${header(theme, { title: 'LeetCode', subtitle: '刷题进度与通过率', dot: LEETCODE_DOT, right })}
     ${divider(LAYOUT.dividerTop, theme)}
     ${mainRow.join('\n    ')}
     ${bars.join('\n    ')}

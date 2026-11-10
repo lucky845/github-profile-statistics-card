@@ -14,7 +14,6 @@ export interface BilibiliCardInput {
   username?: string;
   level?: number;
   sign?: string;
-  avatarUrl?: string | null;
   followers?: number;
   following?: number;
   likes?: number;
@@ -27,7 +26,7 @@ export const generateBilibiliCard = (data: BilibiliCardInput, theme: ThemeOption
   if (!data) return generateErrorCard('无法获取哔哩哔哩数据', theme);
   if (data instanceof String) return generateErrorCard(data as unknown as string, theme);
 
-  const { uid = '', username, level = 0, sign = '', avatarUrl, followers = 0, following = 0, likes = 0, views = 0 } = data;
+  const { uid = '', username, level = 0, sign = '', followers = 0, following = 0, likes = 0, views = 0 } = data;
   const displayName = username || uid || 'Unknown';
 
   const stats = [
@@ -43,7 +42,7 @@ export const generateBilibiliCard = (data: BilibiliCardInput, theme: ThemeOption
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="哔哩哔哩统计卡片">
     <title>${displayName} 的哔哩哔哩统计</title>
     ${frame(theme)}
-    ${header(theme, { title: '哔哩哔哩', subtitle: 'UP 主数据', dot: BILIBILI_BRAND, avatarUrl, initial: displayName, right })}
+    ${header(theme, { title: '哔哩哔哩', subtitle: 'UP 主数据', dot: BILIBILI_BRAND, right })}
     ${divider(LAYOUT.dividerTop, theme)}
     ${stats.map((s, i) => {
       const x = COLUMN.startX + i * COLUMN.width;

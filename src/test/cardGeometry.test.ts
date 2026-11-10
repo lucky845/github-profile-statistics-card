@@ -58,6 +58,12 @@ describe('卡片几何', () => {
       expect(checkCardGeometry(svg, CANVAS)).toEqual([]);
     });
 
+    it('不引用任何外部图片（README 里经 camo 中转，多一个外链多一个裂图点）', () => {
+      expect(svg).not.toMatch(/<image\b/);
+      expect(svg).not.toMatch(/xlink:href/);
+      expect(svg).not.toMatch(/<clipPath/);
+    });
+
     it('字号只取设计令牌', () => {
       const sizes = new Set(extractTexts(svg).map(t => t.size));
       const allowed = new Set<number>([TYPE.display, TYPE.heading, TYPE.value, TYPE.label, TYPE.caption]);

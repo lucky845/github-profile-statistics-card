@@ -5,7 +5,7 @@
  * 这里输出的都是纯字符串片段，不做主题决策——主题由调用方传进来。
  */
 import { ThemeOptions } from '../types';
-import { CARD, FONT_FAMILY, RADIUS, SPACE, TYPE, WEIGHT } from '../../../config/design-tokens';
+import { CARD, FONT_FAMILY, LAYOUT, RADIUS, SPACE, TYPE, WEIGHT } from '../../../config/design-tokens';
 
 /** HTML/XML 属性转义 */
 export const escapeAttr = (s: string): string =>
@@ -18,13 +18,6 @@ export const escapeText = escapeAttr;
 export const truncate = (s: string, max: number): string =>
   !s ? '' : s.length > max ? s.slice(0, max) + '…' : s;
 
-/** 只允许 http/https 与 data:image 的头像地址；其余返回 null */
-const IMG_ALLOW = new RegExp('^(https?://|data:image/(png|jpe?g|gif|webp|svg\\+xml);base64,)', 'i');
-export const safeImageUrl = (url?: string | null): string | null => {
-  if (!url) return null;
-  const trimmed = url.trim();
-  return IMG_ALLOW.test(trimmed) ? trimmed : null;
-};
 
 export interface FrameOpts {
   width?: number;
@@ -66,31 +59,6 @@ export const text = (
   return `<text ${attrs.join(' ')}>${escapeText(value)}</text>`;
 };
 
-/**
- * 头像：圆形裁切。没有头像时画首字母圆形占位。
- * 必须同时输出 href 与 xlink:href —— 部分渲染器只认后者。
- */
-export const avatar = (
-  x: number,
-  y: number,
-  size: number,
-  url: string | null | undefined,
-  fallbackText: string,
-  theme: ThemeOptions
-): string => {
-  const r = size / 2;
-  const cx = x + r;
-  const cy = y + r;
-  const safe = safeImageUrl(url);
-  if (!safe) {
-    const initial = (fallbackText || '?').trim().charAt(0).toUpperCase() || '?';
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${theme.colors.accent.primary}" opacity="0.15"/>
-      ${text(cx, cy + TYPE.heading * 0.36, initial, { size: TYPE.heading, weight: WEIGHT.semibold, fill: theme.colors.accent.primary, anchor: 'middle' })}`;
-  }
-  const href = escapeAttr(safe);
-  return `<clipPath id="avatar-clip"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>
-    <image x="${x}" y="${y}" width="${size}" height="${size}" clip-path="url(#avatar-clip)" href="${href}" xlink:href="${href}" preserveAspectRatio="xMidYMid slice"/>`;
-};
 
 export interface HeaderOpts {
   title: string;
@@ -99,17 +67,19 @@ export interface HeaderOpts {
   dot?: string;
   /** 右侧附加内容（徽章 / 用户名） */
   right?: string;
-  avatarUrl?: string | null;
-  initial: string;
 }
 
-/** 头部：头像 + 标题 + 副标题 + 右侧内容 */
+/**
+ * 头部：标题 + 副标题 + 右侧内容。
+ *
+ * 不再画头像：头像要在 SVG 里引用外站图片（B站图床对错 Referer 返回 403、
+ * GitHub 原图 25KB），README 经 camo 中转时既慢又容易裂。去掉后每次渲染
+ * 少一个外部依赖，首屏也快——详见 README「为什么卡片没有头像」。
+ */
 export const header = (theme: ThemeOptions, opts: HeaderOpts): string => {
-  const avatarSize = 48;
-  const textX = CARD.padding + avatarSize + SPACE[3];
-  const centerY = CARD.padding + avatarSize / 2;
-  const titleY = opts.subtitle ? centerY - 3 : centerY + TYPE.heading * 0.36;
-  const parts = [avatar(CARD.padding, CARD.padding, avatarSize, opts.avatarUrl, opts.initial, theme)];
+  const textX = CARD.padding;
+  const titleY = LAYOUT.headerBaseline;
+  const parts: string[] = [];
   if (opts.dot) {
     parts.push(`<circle cx="${textX + 3}" cy="${titleY - TYPE.heading * 0.35}" r="3" fill="${opts.dot}"/>`);
   }

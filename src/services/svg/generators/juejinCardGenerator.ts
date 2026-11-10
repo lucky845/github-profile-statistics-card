@@ -14,7 +14,6 @@ import { formatCount, formatDate } from '../../../utils/format';
 export interface JuejinCardInput {
   username?: string;
   desc?: string;
-  avatarUrl?: string | null;
   followers?: number;
   articleCount?: number;
   likes?: number;
@@ -27,7 +26,7 @@ export const generateJuejinCard = (data: JuejinCardInput, theme: ThemeOptions): 
   if (!data) return generateErrorCard('无法获取掘金数据', theme);
   if (data instanceof String) return generateErrorCard(data as unknown as string, theme);
 
-  const { username = 'Unknown', desc = '', avatarUrl, followers = 0, articleCount = 0, likes = 0, views = 0 } = data;
+  const { username = 'Unknown', desc = '', followers = 0, articleCount = 0, likes = 0, views = 0 } = data;
 
   const stats = [
     { label: '文章', value: formatCount(articleCount) },
@@ -41,7 +40,7 @@ export const generateJuejinCard = (data: JuejinCardInput, theme: ThemeOptions): 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="掘金统计卡片">
     <title>${username} 的掘金统计</title>
     ${frame(theme)}
-    ${header(theme, { title: '掘金', subtitle: '技术内容创作', dot: JUEJIN_BRAND, avatarUrl, initial: username })}
+    ${header(theme, { title: '掘金', subtitle: '技术内容创作', dot: JUEJIN_BRAND, })}
     ${divider(LAYOUT.dividerTop, theme)}
     ${stats.map((s, i) => {
       const x = COLUMN.startX + i * COLUMN.width;

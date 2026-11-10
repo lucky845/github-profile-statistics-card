@@ -9,7 +9,6 @@ import { formatCount, formatDate } from '../../../utils/format';
 
 export interface CSDNCardInput {
   username?: string;
-  avatarUrl?: string | null;
   articleCount?: number;
   followers?: number;
   rank?: number;
@@ -31,8 +30,7 @@ export const generateCSDNCard = (data: CSDNCardInput, theme: ThemeOptions): stri
 
   const {
     username = 'Unknown',
-    avatarUrl,
-    articleCount = 0,
+      articleCount = 0,
     followers = 0,
     rank = 0,
     views = 0,
@@ -69,7 +67,7 @@ export const generateCSDNCard = (data: CSDNCardInput, theme: ThemeOptions): stri
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CARD.width}" height="${CARD.height}" viewBox="0 0 ${CARD.width} ${CARD.height}" role="img" aria-label="CSDN 统计卡片">
     <title>${username} 的 CSDN 统计</title>
     ${frame(theme)}
-    ${header(theme, { title: 'CSDN', subtitle: '技术博客影响力', dot: CSDN_BRAND, avatarUrl, initial: username, right })}
+    ${header(theme, { title: 'CSDN', subtitle: '技术博客影响力', dot: CSDN_BRAND, right })}
     ${divider(LAYOUT.dividerTop, theme)}
     ${stats.map((s, i) => {
       const x = COLUMN.startX + i * COLUMN.width;
