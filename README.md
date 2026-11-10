@@ -186,8 +186,8 @@ CSDN 统计卡片包含以下数据：
 - Node.js
 - Express
 - TypeScript
-- MongoDB
 - Redis
+- PostgreSQL（可选，持久化）
 - EJS 模板引擎
 
 ## 📝 开源协议
@@ -199,16 +199,15 @@ CSDN 统计卡片包含以下数据：
 ### 准备工作
 
 1. Fork 本项目到你的 GitHub 账户
-2. 注册 [MongoDB Atlas](https://cloud.mongodb.com/) 账户
-3. 注册 [Vercel](https://vercel.com/) 账户
+2. 注册 [Vercel](https://vercel.com/) 账户
+3. （可选）注册 [Redis Cloud](https://redis.com/try-free/) 账户作为缓存
 
-### MongoDB Atlas 配置
+### 不需要数据库
 
-1. 登录 MongoDB Atlas
-2. 创建新的数据库集群（可以选择免费的共享集群）
-3. 在 "Database Access" 中创建数据库用户
-4. 在 "Network Access" 中添加 IP 访问权限（可以设置为允许所有 IP：0.0.0.0/0）
-5. 获取数据库连接字符串（格式如：`mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/`)
+本项目曾经的 MongoDB 持久层已在 2026-11 移除（访问计数功能一并下线）。现在每次请求都是「Redis 缓存命中 → 上游实时抓取」：
+
+- 只配 Redis 即可运行；连 Redis 也不配时自动退回进程内缓存，卡片照常返回。
+- `POSTGRES`/`DATABASE_URL` 只在需要跨实例持久化 key-value 时才有意义，非必需。
 
 ### Redis Cloud 配置
 
@@ -248,9 +247,9 @@ Redis Cloud的优势：
 
 1. 在 Vercel 中导入你 fork 的项目
 2. 配置环境变量：
-   - `MONGODB_URI`: MongoDB Atlas 的连接字符串
+   - `GITHUB_TOKEN`: （可选，强烈推荐）GitHub 个人访问令牌。未配置时走匿名额度 60 次/小时/IP，部署在共享出口 IP 上很容易被打满，卡片会退化成「暂无数据」
    - `BILIBILI_SESSDATA`: 哔哩哔哩登录后获取的cookie里面的`SESSDATA`值
-   - `USE_MEMORY_CACHE`: 本地开发时设置为true使用内存缓存（可选，线上环境未配置时默认使用MongoDB）
+   - `USE_MEMORY_CACHE`: 本地开发时设置为true使用内存缓存（可选，未配置 Redis 时自动退回进程内缓存）
    - `REDIS_HOST`: Redis服务器主机地址（使用Redis Cloud时为云端提供的主机地址）
    - `REDIS_PORT`: Redis服务器端口（使用Redis Cloud时为云端提供的端口）
    - `REDIS_PASSWORD`: Redis访问密码（使用Redis Cloud时为云端提供的密码）
@@ -298,7 +297,12 @@ npm install
 
 3. 创建 `.env` 文件并设置环境变量：
 ```
-MONGODB_URI=your_mongodb_uri
+# 可选：提升 GitHub 匿名额度 60 次/小时 → 5000 次/小时
+GITHUB_TOKEN=your_github_token
+# 可选：跨实例缓存
+# REDIS_HOST=your_redis_host
+# REDIS_PORT=12123
+# REDIS_PASSWORD=your_redis_password
 ```
 
 4. 启动开发服务器：

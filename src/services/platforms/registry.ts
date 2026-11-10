@@ -7,7 +7,7 @@
 import { CardType } from '../svg/types';
 import { PlatformStatsSource, StatsResult, ok, fail } from './types';
 import { recordOk, recordFail } from './health';
-import { githubService } from '../github.service';
+import { getGitHubStats } from '../github.service';
 import { getCSDNUserStats } from '../csdn.service';
 import { fetchLeetCodeStats } from '../leetcode.service';
 import getJuejinInfo from '../juejin.service';
@@ -17,13 +17,21 @@ import { secureLogger } from '../../utils/logger';
 // ---------- GitHub ----------
 const githubSource: PlatformStatsSource<Record<string, unknown>> = {
   platform: CardType.GITHUB,
-  async fetch(id) {
-    const r = await githubService.getGitHubUserStats(id);
-    if (r.isValid) return ok({ ...r, username: id } as Record<string, unknown>);
-    // 限流和上游抖动都给 200 + 降级卡：GitHub camo 会缓存 5xx，README 里就是永久裂图
-    if (r.error === 'USER_NOT_FOUND') return fail('NOT_FOUND', 'User not found');
-    if (r.error === 'RATE_LIMITED') return fail('DATA_UNAVAILABLE', 'GitHub API 限流');
-    return fail('DATA_UNAVAILABLE', 'GitHub 数据获取失败');
+  async fetch(id, cacheSeconds) {
+    try {
+      const stats = await getGitHubStats(id, cacheSeconds);
+      return ok({ ...stats } as Record<string, unknown>);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // 限流和上游抖动都给 200 + 降级卡：GitHub camo 会缓存 5xx，README 里就是永久裂图
+      if (message.startsWith('USER_NOT_FOUND')) return fail('NOT_FOUND', 'User not found');
+      if (message.startsWith('RATE_LIMITED')) {
+        secureLogger.warn(`GitHub API 限流: ${id} (${message})`);
+        return fail('RATE_LIMITED', 'GitHub API 限流');
+      }
+      secureLogger.error(`GitHub 数据获取失败: ${id} - ${message}`);
+      return fail('DATA_UNAVAILABLE', 'GitHub 数据获取失败');
+    }
   },
 };
 
@@ -31,16 +39,18 @@ const githubSource: PlatformStatsSource<Record<string, unknown>> = {
 const csdnSource: PlatformStatsSource<Record<string, unknown>> = {
   platform: CardType.CSDN,
   async fetch(id, cacheSeconds) {
-    const s = await getCSDNUserStats(id, cacheSeconds);
-    // 抓取失败 + 有空缓存时 service 返回 isValid:false（数据过期但可用），
-    // 这时给降级卡而不是 404 —— README 里 404 会被 camo 缓存成永久坏图
-    return s.isValid
-      ? ok({ ...s, username: s.username || id } as Record<string, unknown>)
-      : fail('DATA_UNAVAILABLE', 'CSDN 暂无可用数据');
+    try {
+      const stats = await getCSDNUserStats(id, cacheSeconds);
+      return ok({ ...stats, username: stats.username || id } as Record<string, unknown>);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // 抓取失败给降级卡而不是 404 —— README 里 404 会被 camo 缓存成永久坏图
+      if (message.startsWith('USER_NOT_FOUND')) return fail('NOT_FOUND', 'CSDN 用户不存在');
+      secureLogger.error(`CSDN 数据获取失败: ${id} - ${message}`);
+      return fail('DATA_UNAVAILABLE', 'CSDN 暂无可用数据');
+    }
   },
-};
-
-// ---------- LeetCode ----------
+};// ---------- LeetCode ----------
 // 默认走 US 区，leetcode.com 的 graphql 在部分网络下返回 matchedUser 为 null，
 // 拿不到数据时回退到 CN 区兜底（原 controller 里的 regionMismatch + 回退逻辑）
 const leetcodeSource: PlatformStatsSource<Record<string, unknown>> = {
@@ -111,6 +121,7 @@ const bilibiliSource: PlatformStatsSource<Record<string, unknown>> = {
     }
   },
 };
+
 
 const RAW_SOURCES: Record<string, PlatformStatsSource<Record<string, unknown>>> = {
   [CardType.GITHUB]: githubSource,

@@ -16,7 +16,7 @@ const CANVAS = { width: CARD.width, height: CARD.height };
 
 const cards: [string, string][] = [
   ['github', generateGitHubCounterCard(
-    { count: 157, username: 'lucky845', publicRepos: 18, followers: 6, totalStars: 13 },
+    { username: 'lucky845', publicRepos: 18, followers: 6, totalStars: 13 },
     defaultTheme
   )],
   ['leetcode', generateLeetCodeCard(

@@ -3,7 +3,7 @@ import { collectDefaultMetrics, register, Gauge } from 'prom-client';
 import os from 'os';
 import process from 'process';
 import { secureLogger } from '../utils/logger';
-import mongoose from 'mongoose';
+import { PostgreSQLManager } from '../utils/pgManager';
 import { cacheService } from '../services/cache.service';
 import { storageService } from '../services/storage.service';
 
@@ -68,7 +68,7 @@ router.get('/health', async (req, res) => {
   const usedMem = totalMem - freeMem;
 
   // 检查数据库连接状态
-  const dbStatus = mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
+  const dbStatus = PostgreSQLManager.getInstance().getConnectionStatus().isConnected ? 'healthy' : 'unhealthy';
 
   // 获取存储状态
   const storageStatus = await storageService.getStorageStatus();
@@ -87,8 +87,8 @@ router.get('/health', async (req, res) => {
       redis: {
         connected: storageStatus.redisConnected
       },
-      mongodb: {
-        connected: storageStatus.mongoConnected
+      postgres: {
+        connected: storageStatus.pgConnected
       },
       fallbackMode: storageStatus.fallbackMode
     },

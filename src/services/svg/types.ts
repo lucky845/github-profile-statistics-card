@@ -94,9 +94,8 @@ export interface JuejinUserData {
 }
 
 /**
- * GitHub计数器卡片数据
+ * GitHub 卡片数据
  */
 export interface GitHubCounterData {
-  count: number;
   username?: string;
 }

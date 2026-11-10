@@ -8,7 +8,6 @@ import { frame, header, divider, statColumn, footer, StatItem } from '../compone
 import { formatCount, formatDate } from '../../../utils/format';
 
 export interface GitHubCardInput {
-  count?: number;
   username?: string;
   publicRepos?: number;
   followers?: number;
@@ -22,14 +21,14 @@ export const generateGitHubCounterCard = (data: GitHubCardInput, theme: ThemeOpt
   if (!data) return generateErrorCard('无法获取GitHub数据', theme);
   if (data instanceof String) return generateErrorCard(data as unknown as string, theme);
 
-  const { count = 0, username, publicRepos = 0, followers = 0, totalStars = 0 } = data;
+  const { username, publicRepos = 0, followers = 0, totalStars = 0 } = data;
   const displayName = username || 'Unknown';
 
   const stats: StatItem[] = [
     { label: '仓库', value: formatCount(publicRepos) },
     { label: '星标', value: formatCount(totalStars) },
     { label: '关注者', value: formatCount(followers) },
-    { label: '访问', value: formatCount(count) },
+    { label: '均值星标', value: formatCount(publicRepos > 0 ? Math.round(totalStars / publicRepos) : 0) },
   ];
 
   const right = `<text x="${CARD.width - CARD.padding}" y="${LAYOUT.headerBaseline}" font-family="inherit" font-size="${TYPE.label}" fill="${theme.colors.text.secondary}" text-anchor="end">@${displayName}</text>`;

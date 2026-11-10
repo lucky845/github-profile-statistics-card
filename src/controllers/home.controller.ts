@@ -85,9 +85,10 @@ function generateFallbackHtml(baseUrl: string): string {
  * @param res Express响应对象
  */
 export const handleHealthCheck = (req: Request, res: Response): void => {
-  const mongoose = require('mongoose');
-  const dbStatus = mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
-  const poolStats = (mongoose.connection as any).poolMetrics || {};
+  const { PostgreSQLManager } = require('../utils/pgManager');
+  const status = PostgreSQLManager.getInstance().getConnectionStatus();
+  const dbStatus = status.isConnected ? 'healthy' : 'unhealthy';
+  const poolStats = status;
 
   res.json({
     status: dbStatus,

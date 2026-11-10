@@ -13,7 +13,6 @@ import express, { Request, Response } from 'express';
 import { 
   errorHandler, 
   logger, 
-  mongoConnectionMiddleware, 
   notFoundHandler,
   themeMiddleware,
   metricsMiddleware,
@@ -37,13 +36,13 @@ import {
   leetcodeRouter 
 } from './routes';
 import metricsRouter from './routes/metrics.routes';
-import mongoose from 'mongoose';
-import { MongoDBManager } from './utils/dbManager';
+import { PostgreSQLManager } from './utils/pgManager';
 import prometheusService from './services/prometheus.service';
 import { handleHomePage, handleHealthCheck, handleLivenessProbe, handleThemeTest } from './controllers/home.controller';
 
 // 初始化数据库连接管理器
-const dbManager = MongoDBManager.getInstance();
+// PostgreSQL 是唯一持久层（MongoDB 已于 2026-11 下线）
+const dbManager = PostgreSQLManager.getInstance();
 
 // 初始化Express应用
 const app = express();
@@ -60,8 +59,7 @@ app.use(logger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 应用业务中间件
-app.use(mongoConnectionMiddleware);
+// 应用业务中间件（MongoDB 已下线，不再有连接预热中间件）
 app.use(themeMiddleware);
 // 健康检查必须绕过缓存：/health 只读内存状态，若走缓存中间件就要等 Redis
 // 连接（CI/Vercel 无 Redis 时每次请求挂 5 秒），启动阶段的探活会被一路拖慢。
@@ -117,7 +115,7 @@ let server: ReturnType<typeof app.listen>;
 const startServer = async () => {
     try {
         // 先监听端口，再把数据库连接放到后台执行。
-        // 数据库不可达时（本地无 DB、Vercel 冷启动、CI 冒烟测试），mongoose.connect
+        // 数据库不可达时（本地无 DB、Vercel 冷启动、CI 冒烟测试），pgManager.connect
         // 会阻塞 30~60 秒，之前 await 它导致 HTTP 服务迟迟不 ready，
         // CI 30 秒健康检查失败、Vercel 函数调用直接超时。
         // 连接逻辑本身是幂等的，中间件会按需触发 ensureConnection()。
@@ -128,7 +126,7 @@ const startServer = async () => {
             // 导入需要在运行时动态导入，避免循环依赖
             const { secureLogger } = require('./utils/logger');
             secureLogger.info(`🚀 服务已启动于端口 ${port}`);
-            secureLogger.info(`📊 数据库状态: ${mongoose.connection.readyState === 1 ? '已连接' : '未连接'}`);
+            secureLogger.info(`📊 数据库状态: ${dbManager.getConnectionStatus().isConnected ? '已连接' : '未连接'}`);
         });
 
         // 后台连接数据库（即使失败也继续提供服务）
@@ -181,7 +179,7 @@ process.on('SIGINT', async () => {
 
         // 3. 关闭数据库连接
         await dbManager.disconnect();
-        secureLogger.info('✅ MongoDB连接已关闭');
+        secureLogger.info('✅ PostgreSQL连接已关闭');
 
         // 4. 关闭现有连接
         server.close(() => {

@@ -1,10 +1,21 @@
+/**
+ * CSDN 用户统计
+ *
+ * 数据只走 Redis（cacheService）+ 上游页面，不再落 MongoDB。
+ * 页面解析逻辑与之前完全一致：优先读 window.__INITIAL_STATE__，
+ * 退回 DOM 标签配对，避免 CSDN 统计条顺序变化时把粉丝数当排名。
+ */
 import * as cheerio from 'cheerio';
-import {createRequest, createRequestWithRetry} from '../utils/http.utils';
-import {getCSDNUserData, updateCSDNUserData} from './mongodb.service';
-import {CSDNUserStats, ICSDNUser} from "../types";
-import { asyncDbUpdate } from '../utils/db-update.utils';
+import { createRequest, createRequestWithRetry } from '../utils/http.utils';
+import { cacheService } from './cache.service';
+import { CSDNUserStats } from '../types';
 import { secureLogger } from '../utils/logger';
 
+const CACHE_PREFIX = 'csdn_data';
+const CACHE_TTL = 30 * 60;
+
+export const csdnCacheKey = (userId: string): string =>
+  `${CACHE_PREFIX}:${userId.toLowerCase()}`;
 
 /**
  * 从页面里取出 window.__INITIAL_STATE__ 的 JSON。
@@ -170,142 +181,72 @@ function parseCSDNUserPage(html: string, userId: string): Partial<CSDNUserStats>
     return { userId, isValid: false };
   }
 }
+/**
+ * 抓取并解析 CSDN 主页。
+ * 不存在的用户 CSDN 也回 200，只是页面里没有统计条；这种情况抛
+ * USER_NOT_FOUND，交给上层映射成 404。
+ */
+const fetchFromPage = async (userId: string): Promise<CSDNUserStats> => {
+    const parsedUserData = await createRequestWithRetry(
+        async () => {
+            const httpClient = createRequest(8000, {
+                headers: {
+                    'Referer': `https://blog.csdn.net/${userId}`,
+                    'Cookie': 'uuid_tt_dd=xxx-xxx-xxx;',
+                    // 91 版 UA 会被 CSDN 直接丢到安全验证页，升到近两年的主版本
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+                }
+            });
+
+            const response = await httpClient.get(`https://blog.csdn.net/${userId}`);
+
+            if (typeof response.data === 'string' &&
+                response.data.includes('Security Verification') &&
+                !response.data.includes('user-profile-statistics-num')) {
+                throw new Error(`CSDN返回安全验证页（风控拦截）: ${userId}`);
+            }
+
+            const parsedData = parseCSDNUserPage(response.data, userId);
+
+            if (!parsedData.isValid) {
+                throw new Error(`USER_NOT_FOUND:${userId}`);
+            }
+
+            return parsedData as CSDNUserStats;
+        },
+        2, // 最大重试2次：4xx 会直接快速失败，5xx 才有必要重试
+        800 // 初始延迟800ms
+    );
+
+    return {
+        ...parsedUserData,
+        expireAt: new Date(Date.now() + CACHE_TTL * 1000),
+    } as CSDNUserStats;
+};
 
 /**
- * 获取CSDN用户统计数据
- * @param userId CSDN用户ID
- * @param cacheTimeInSeconds 缓存时间（秒）
- * @returns 用户统计数据
+ * 对外入口：缓存优先。只缓存成功结果，失败留给上层出降级卡。
  */
-export async function getCSDNUserStats(userId: string, cacheTimeInSeconds: number): Promise<CSDNUserStats> {
-    // 声明userData变量，以便在catch块中可以访问
-    let cachedUserData: ICSDNUser | null = null;
+export async function getCSDNUserStats(userId: string, cacheSeconds: number = CACHE_TTL): Promise<CSDNUserStats> {
+    const key = csdnCacheKey(userId);
 
     try {
-        // 先从MongoDB中获取缓存的数据
-        const {userData, needsFetch} = await getCSDNUserData(userId, cacheTimeInSeconds);
-        // 保存缓存数据，以便在catch块中可以访问
-        cachedUserData = userData;
-
-        // 如果有有效的缓存数据且不需要刷新，直接返回
-        if (userData && !needsFetch) {
+        const cached = await cacheService.get<CSDNUserStats>(key);
+        if (cached && typeof cached.views === 'number') {
             secureLogger.info(`使用缓存的CSDN用户数据: ${userId}`);
-            return {
-                userId,
-                username: userData.username || userId,
-                articleCount: userData.articleCount || 0,
-                followers: userData.followers || 0,
-                likes: userData.likes || 0,
-                views: userData.views || 0,
-                comments: userData.comments || 0,
-                points: userData.points || 0,
-                rank: userData.rank || 0,
-                codeAge: userData.codeAge || 0,
-                level: userData.level !== undefined ? userData.level : 'N/A',
-                monthPoints: userData.monthPoints || 0,
-                isValid: true,
-                expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000),  // 设置过期时间
-            };
+            return cached;
         }
-
-        // 需要从CSDN网站获取最新数据
-        secureLogger.info(`从CSDN获取用户数据: ${userId}`);
-
-        // 使用带有重试机制的请求函数
-        const parsedUserData = await createRequestWithRetry(
-            async () => {
-                // 创建请求客户端，添加特定的请求配置
-                const httpClient = createRequest(8000, {
-                    headers: {
-                        'Referer': `https://blog.csdn.net/${userId}`,
-                        'Cookie': 'uuid_tt_dd=xxx-xxx-xxx;',  // 使用模拟的Cookie
-                        // 91 版 UA 会被 CSDN 直接丢到安全验证页，升到近两年的主版本
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-                    }
-                });
-
-                // 添加少量随机延迟，模拟人类行为（控制在毫秒级，避免拖垮云平台请求）
-                const randomDelay = Math.floor(Math.random() * 400) + 200; // 200-600ms
-                await new Promise(resolve => setTimeout(resolve, randomDelay));
-
-                // 获取用户主页数据
-                const response = await httpClient.get(`https://blog.csdn.net/${userId}`);
-
-                if (response.status !== 200) {
-                    throw new Error(`获取CSDN用户页面失败: ${userId}, 状态码: ${response.status}`);
-                }
-
-                // 风控页也是 200，正文里没有用户统计节点，直接判定为失败，
-                // 否则会被解析成「全 0 但 isValid=true」，卡片显示一堆假的 0
-                if (typeof response.data === 'string' &&
-                    response.data.includes('Security Verification') &&
-                    !response.data.includes('user-profile-statistics-num')) {
-                    throw new Error(`CSDN返回安全验证页（风控拦截）: ${userId}`);
-                }
-
-                // 解析HTML页面
-                const parsedData = parseCSDNUserPage(response.data, userId);
-
-                if (!parsedData.isValid) {
-                    throw new Error(`解析CSDN用户页面失败: ${userId}`);
-                }
-
-                return parsedData;
-            },
-            2, // 最大重试2次：4xx 会直接快速失败，5xx 才有必要重试
-            800 // 初始延迟800ms
-        );
-
-        // 构建用户数据，包含访问计数和更新时间
-        const csdnUserData = {
-            ...parsedUserData,
-            visitCount: cachedUserData?.visitCount ? cachedUserData.visitCount + 1 : 1,
-            lastUpdated: new Date(),
-            expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
-        };
-
-        // 异步更新数据库，不阻塞返回
-        asyncDbUpdate(updateCSDNUserData, [userId, csdnUserData], 'CSDN');
-
-        return {
-            ...csdnUserData,
-            isValid: true
-        } as CSDNUserStats;
-    } catch (error: any) {
-    secureLogger.error(`获取CSDN用户数据失败: ${error.message}`);
-    // 如果有缓存数据，返回缓存数据
-    if (cachedUserData) {
-      return {
-        userId,
-        username: cachedUserData.username || userId,
-        articleCount: cachedUserData.articleCount || 0,
-        followers: cachedUserData.followers || 0,
-        likes: cachedUserData.likes || 0,
-        views: cachedUserData.views || 0,
-        comments: cachedUserData.comments || 0,
-        points: cachedUserData.points || 0,
-        rank: cachedUserData.rank || 0,
-        codeAge: cachedUserData.codeAge || 0,
-        level: cachedUserData.level !== undefined ? cachedUserData.level : 'N/A',
-        monthPoints: cachedUserData.monthPoints || 0,
-        // 抓取失败时回落到旧缓存：数据是过期的，不能宣称有效——
-        // 上层会把它当「不可用」降级，而不是把过期数字当真实值缓存 10 分钟
-        isValid: false,
-        expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间
-      };
+    } catch (error) {
+        secureLogger.warn(`读取CSDN缓存失败: ${userId}`);
     }
-    // 如果没有缓存数据，返回默认值
-    return {
-      userId,
-      username: userId,
-      articleCount: 0,
-      followers: 0,
-      likes: 0,
-      views: 0,
-      comments: 0,
-      points: 0,
-      isValid: false,
-      expireAt: new Date(Date.now() + cacheTimeInSeconds * 1000) // 设置过期时间s
-    };
-  }
+
+    const stats = await fetchFromPage(userId);
+
+    try {
+        await cacheService.set(key, stats, cacheSeconds);
+    } catch (error) {
+        secureLogger.warn(`写入CSDN缓存失败: ${userId}`);
+    }
+
+    return stats;
 }
