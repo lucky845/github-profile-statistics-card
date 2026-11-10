@@ -339,42 +339,39 @@ server {
 ### 1. GitHub统计
 
 ```
-GET /github/:username?theme=default
+GET /github/:username?theme=light
 ```
 
 ### 2. LeetCode统计
 
 ```
-GET /leetcode/:username?theme=default&cn=false
+GET /leetcode/:username?theme=light&cn=false
 ```
 
 ### 3. CSDN统计
 
 ```
-GET /csdn/:userId?theme=default
+GET /csdn/:userId?theme=light
 ```
 
 ### 4. 掘金统计
 
 ```
-GET /juejin/:userId?theme=default
+GET /juejin/:userId?theme=light
 ```
 
 ### 5. B站统计
 
 ```
-GET /bilibili/:uid?theme=default
+GET /bilibili/:uid?theme=light
 ```
 
 ### 6. 可用主题
 
-- `default` - 默认亮色主题
-- `dark` - 暗色主题
-- `merko` - Merko主题
-- `gruvbox` - Gruvbox暗色主题
-- `gruvbox_light` - Gruvbox亮色主题
-- `tokyonight` - Tokyo Night主题
-- `onedark` - One Dark主题
+- `light` - 明亮主题（默认，未知主题也回落到此项）
+- `dark` - 暗黑主题
+- `github-dark-dimmed` - GitHub 暗色变体 `#22272e`
+- `transparent` - 透明背景
 
 ## 性能优化最佳实践
 
