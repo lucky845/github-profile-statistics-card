@@ -6,6 +6,27 @@
 import { createClientPool, RedisClientPoolType } from 'redis';
 import { secureLogger } from '../utils/logger';
 
+/**
+ * 解析 REDIS_URL（redis:// 或 rediss://）
+ * 云平台（Render / Railway / Upstash）只给一串 URL，拆成 redis 客户端要的字段；
+ * 解析失败返回 null，让调用方回落到 REDIS_HOST 那套旧变量。
+ */
+function parseRedisUrl(raw?: string): { host: string; port: number; username?: string; password?: string } | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    return {
+      host: u.hostname,
+      port: u.port ? parseInt(u.port, 10) : 6379,
+      username: u.username ? decodeURIComponent(u.username) : undefined,
+      password: u.password ? decodeURIComponent(u.password) : undefined,
+    };
+  } catch {
+    secureLogger.warn('REDIS_URL 无法解析，回落到 REDIS_HOST/PORT');
+    return null;
+  }
+}
+
 // 缓存配置类型
 export interface CacheConfig {
   ttl: number; // 过期时间（秒）
@@ -117,13 +138,17 @@ class RedisCacheService extends BaseCacheService {
     super();
     this.ttl = config.ttl;
     
+    // 云平台习惯只给一个 REDIS_URL（Render 的 Key Value 就是这种），
+    // 老代码只认 REDIS_HOST/PORT/PASSWORD，直接部署会连到 localhost 白等超时
+    const fromUrl = parseRedisUrl(process.env.REDIS_URL);
+
     // 创建Redis连接池，限制最大连接数为10
     this.client = createClientPool({
-      username: process.env.REDIS_USERNAME || 'default',
-      password: process.env.REDIS_PASSWORD,
+      username: fromUrl?.username || process.env.REDIS_USERNAME || 'default',
+      password: fromUrl?.password || process.env.REDIS_PASSWORD,
       socket: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
+        host: fromUrl?.host || process.env.REDIS_HOST || 'localhost',
+        port: fromUrl?.port || parseInt(process.env.REDIS_PORT || '6379'),
         reconnectStrategy: (retries: number) => {
           // 重连策略：最多重试10次，每次间隔增加
           if (retries > 10) {

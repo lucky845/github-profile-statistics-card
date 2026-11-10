@@ -1,22 +1,26 @@
 services:
   - type: web
-    name: github-profile-views
+    name: github-profile-statistics-card
     runtime: node
     plan: free
-    region: singapore
-    branch: develop
+    region: singapore   # 离中国大陆最近的一个区，冷路径少跨半个地球
+    branch: main
     # 必须带 devDependencies，否则没有 tsc，构建直接失败
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/src/app.js
-    healthCheckPath: /health
+    # 活跃探针用 /livez：/health 报告的是数据库连通性，缺 DB 时会一直 unhealthy
+    healthCheckPath: /livez
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: "20"
-      # 说明：PORT 由 Render 自动注入，app.config.ts 已读取 process.env.PORT，无需配置
-      # MongoDB / Redis 等可选服务按需在控制台补充，缺失时服务会降级启动而非崩溃
+      # PORT 由 Render 自动注入，app.config.ts 已读取 process.env.PORT
       - key: MONGODB_URI
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: REDIS_URL
+        sync: false
+      - key: GITHUB_TOKEN
         sync: false
