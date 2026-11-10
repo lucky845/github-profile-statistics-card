@@ -24,7 +24,7 @@ const ENTRIES: GalleryEntry[] = [
   { platform: 'leetcode', title: 'LeetCode 统计', path: 'leetcode', sample: 'lucky845', extraQuery: '&cn=true', height: 200 },
   { platform: 'csdn', title: 'CSDN 统计', path: 'csdn', sample: 'testuser', extraQuery: '', height: 200 },
   { platform: 'juejin', title: '掘金统计', path: 'juejin', sample: 'testuser', extraQuery: '', height: 200 },
-  { platform: 'bilibili', title: '哔哩哔哩统计', path: 'bilibili', sample: '1', extraQuery: '', height: 200 },
+  { platform: 'bilibili', title: '哔哩哔哩统计', path: 'bilibili', sample: '89389361', extraQuery: '', height: 200 },
 ];
 
 const escapeHtml = (s: string): string =>

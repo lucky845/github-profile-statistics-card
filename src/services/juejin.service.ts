@@ -67,7 +67,10 @@ async function getJuejinInfoInner(userId: string, cacheTimeInSeconds: number): P
             throw new Error('掘金接口已失效：返回空壳数据（user_id=0）');
         }
 
-        // 检查文章列表请求结果
+        // 检查文章列表请求结果。
+        // 注意：文章列表接口对「没发过文章的账号」会返回 err_no:0 / data:null / count:0，
+        // 这是正常的空集合，不是失败。之前把它当失败抛出，整次抓取被丢弃退回
+        // 旧缓存，卡片就一直显示过期的 0。
         if (articlesResponse.data.err_no !== 0) {
             throw new Error(articlesResponse.data.err_msg || '获取文章列表失败');
         }
@@ -82,7 +85,7 @@ async function getJuejinInfoInner(userId: string, cacheTimeInSeconds: number): P
             followers: newUserData.follower_count,
             likes: newUserData.got_digg_count,
             views: newUserData.got_view_count,
-            articleCount: articlesResponse.data.count || 0,
+            articleCount: (typeof articlesResponse.data.count === 'number' ? articlesResponse.data.count : 0),
             lastUpdated: new Date(),
             expireAt: new Date(new Date().getTime() + cacheTimeInSeconds * 1000), // 设置过期时间
             isValid: true // 确保isValid属性存在且为布尔值

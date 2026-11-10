@@ -4,6 +4,7 @@ export interface IBilibiliUser {
     username: string;
     level: number;
     sign: string;
+    avatarUrl?: string | null;
 
     // 统计数据
     followers: number;    // 粉丝数

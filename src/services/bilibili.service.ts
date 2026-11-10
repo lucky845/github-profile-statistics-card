@@ -12,6 +12,8 @@ const API_PATHS = {
     USER_INFO: 'https://api.bilibili.com/x/space/wbi/acc/info', // 该接口一直会出现-352风控异常，暂时先搁置
     USER_INFO_CRAWLER: 'https://m.bilibili.com/space/', // 个人主页
     // UP主粉丝数、关注数
+    // web-interface/card 不走 wbi 签名、不触发 -352 风控，能拿到名字/头像/等级
+    USER_CARD: 'https://api.bilibili.com/x/web-interface/card?mid=',
     USER_STAT: 'https://api.bilibili.com/x/relation/stat',
     // UP主总播放数、总专栏浏览数
     USER_UPSTAT: 'https://api.bilibili.com/x/space/upstat',
@@ -98,7 +100,7 @@ const fetchBilibiliUserData = async (uid: string, cacheTimeInSeconds: number): P
 
         // 并行请求所有数据
         try {
-            const [userInfoResponse, userStatResponse, upStatResponse] = await Promise.all([
+            const [userInfoResponse, userStatResponse, upStatResponse, userCardResponse] = await Promise.all([
                 createRequestWithRetry(() => request.get(API_PATHS.USER_INFO_CRAWLER + uid)).catch((error: any) => {
                     secureLogger.error(`获取用户基本信息失败: ${error.message}`);
                     return null;
@@ -109,6 +111,11 @@ const fetchBilibiliUserData = async (uid: string, cacheTimeInSeconds: number): P
                 }),
                 createRequestWithRetry(() => request.get(API_PATHS.USER_UPSTAT + '?mid=' + uid)).catch((error: any) => {
                     secureLogger.error(`获取UP主数据失败: ${error.message}`);
+                    return null;
+                }),
+                // 头像 / 昵称 / 等级：爬虫页拿不到头像，这里补一份官方 card 数据
+                createRequestWithRetry(() => request.get(API_PATHS.USER_CARD + uid)).catch((error: any) => {
+                    secureLogger.error(`获取用户名片失败: ${error.message}`);
                     return null;
                 })
             ]);
@@ -148,6 +155,14 @@ const fetchBilibiliUserData = async (uid: string, cacheTimeInSeconds: number): P
             } else {
                 upStat = { likes: 0 };
             }
+
+            // 卡片数据：昵称、头像、等级从这里取，能拿到就以它为准
+            const card = userCardResponse?.data?.data?.card;
+            if (card) {
+                const name = card.name || userInfo?.name;
+                const level = card.level_info?.current_level ?? userInfo?.level;
+                userInfo = { ...(userInfo || {}), name, level, face: card.face };
+            }
         } catch (error: any) {
     secureLogger.error(`并行请求数据时发生错误: ${error.message}`);
     throw error;
@@ -158,6 +173,7 @@ const fetchBilibiliUserData = async (uid: string, cacheTimeInSeconds: number): P
             uid,
             username: userInfo?.name || uid,
             level: userInfo?.level || 0,
+            avatarUrl: userInfo?.face || null,
             sign: userInfo?.description || '',
             followers: userStat?.data?.follower || 0,
             following: userStat?.data?.following || 0,
