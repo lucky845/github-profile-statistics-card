@@ -137,7 +137,10 @@ function getCacheableHeaders(headers: Record<string, any>): Record<string, any> 
     'content-type',
     'content-length',
     'x-powered-by',
-    'access-control-allow-origin'
+    'access-control-allow-origin',
+    // 不缓存 Cache-Control 的话，命中缓存的那次响应会把卡片本该有的
+    // s-maxage 丢掉，camo/CDN 就拿不到缓存指令，等于白设
+    'cache-control'
   ];
   
   const cacheableHeaders: Record<string, any> = {};
