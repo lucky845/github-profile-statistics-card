@@ -101,6 +101,17 @@ export const handleHealthCheck = (req: Request, res: Response): void => {
 };
 
 /**
+ * 存活探针：只回答"进程还在跑"，不看数据库
+ *
+ * 与 /health 分工——/health 报告连通性（DB 挂了就是 unhealthy，CI 干净环境里永远红），
+ * /livez 给启动等待和平台存活检查用。两者混用会让"服务没起来"和"数据库没连上"
+ * 变成同一个信号，CI 里分不清到底哪一块坏了。
+ */
+export const handleLivenessProbe = (_req: Request, res: Response): void => {
+  res.json({ status: 'alive', uptime: Math.floor(process.uptime()) });
+};
+
+/**
  * 处理主题测试请求
  * @param req Express请求对象
  * @param res Express响应对象

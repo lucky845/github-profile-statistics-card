@@ -29,6 +29,10 @@ jobs:
         run: |
           test -f dist/src/app.js || { echo "dist/src/app.js 缺失，构建产物不完整"; exit 1; }
           test -d dist/src/views || { echo "views 未复制到 dist"; exit 1; }
+          # 首页由 home.controller.ts 在读取 views/index.html 失败时回落到内置 HTML，
+          # 所以"views 在"不代表"线上是新的"。这里直接核对 seed 首页的唯一标题串。
+          test -f dist/src/views/index.html || { echo "dist/src/views/index.html 缺失"; exit 1; }
+          grep -q "个人主页统计卡片" dist/src/views/index.html || { echo "views/index.html 不是当前版本首页"; exit 1; }
 
       # 精确测量启动各阶段耗时（定位 listen 为何被推迟）
       - name: Diagnose startup timeline
@@ -49,7 +53,9 @@ jobs:
           echo $! > server.pid
           ready=0
           for i in $(seq 1 90); do
-            if curl -fsS -m 2 http://127.0.0.1:8080/health > /dev/null 2>&1; then
+            # 用 /livez 等启动：/health 在无数据库的干净环境里仍返回 200 但 status=unhealthy，
+            # 语义是"连通性"不是"进程活着"，混用会让启动判断和服务健康判断纠缠在一起
+            if curl -fsS -m 2 http://127.0.0.1:8080/livez > /dev/null 2>&1; then
               echo "服务在 ${i} 秒内就绪"
               ready=1
               break
@@ -69,11 +75,11 @@ jobs:
             exit 1
           fi
 
-          echo "--- /health ---"
+          echo "--- /health（干净环境里 database 为 unhealthy 属预期，只验证接口可用）---"
           curl -fsS -m 10 http://127.0.0.1:8080/health
           echo
           echo "--- 主页可访问 ---"
-          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "GitHub & LeetCode Stats" && echo "主页 OK"
+          curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "个人主页统计卡片" && echo "主页 OK"
 
       - name: Stop server
         if: always()

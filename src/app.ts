@@ -40,7 +40,7 @@ import metricsRouter from './routes/metrics.routes';
 import mongoose from 'mongoose';
 import { MongoDBManager } from './utils/dbManager';
 import prometheusService from './services/prometheus.service';
-import { handleHomePage, handleHealthCheck, handleThemeTest } from './controllers/home.controller';
+import { handleHomePage, handleHealthCheck, handleLivenessProbe, handleThemeTest } from './controllers/home.controller';
 
 // 初始化数据库连接管理器
 const dbManager = MongoDBManager.getInstance();
@@ -85,6 +85,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 基本路由
 app.get('/', handleHomePage);
 app.get('/health', handleHealthCheck);
+// 存活探针与 /health 分开：CI 干净环境没有数据库，用 /health 等启动会永远等不到
+app.get('/livez', handleLivenessProbe);
 app.get('/api/theme/test', handleThemeTest);
 
 // 缓存管理API（建议在生产环境中添加访问控制）
