@@ -29,8 +29,9 @@ export function createCacheMiddleware(options: CacheMiddlewareOptions = {}) {
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      // 如果需要跳过缓存，直接继续
-      if (skipCache(req)) {
+      // 清理接口必须直接透传。之前 DELETE /api/cache/clear 自己也被缓存了，
+      // 第二次清缓存直接吃到缓存里的"已清理"响应，实际什么都没清
+      if (skipCache(req) || (req.method !== 'GET' && req.method !== 'HEAD')) {
         return next();
       }
 

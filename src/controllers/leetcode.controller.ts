@@ -5,6 +5,6 @@ import { CardType } from '../services/svg/types';
 export const getLeetCodeStats = createCardHandler(SOURCES[CardType.LEETCODE], {
   paramName: 'username',
   cardType: CardType.LEETCODE,
-  responseCacheControl: 'max-age=1800',
+  responseCacheControl: 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400',
   fetchOptions: req => ({ useCN: req.query.cn === 'true' }),
 });

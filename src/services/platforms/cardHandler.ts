@@ -12,12 +12,19 @@ import { secureLogger } from '../../utils/logger';
 import { firstString } from '../../utils/request.util';
 import { SvgSanitizerService } from '../svg-sanitizer.service';
 
+/**
+ * 成功卡片的默认缓存策略。
+ * s-maxage 给 CDN/camo，max-age 给浏览器；stale-while-revalidate 让
+ * 回源慢的时候旧图继续顶上，而不是让 GitHub 那边等到超时。
+ */
+export const DEFAULT_CARD_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+
 export interface CardHandlerOptions {
   /** 路由参数名，如 username / userId / uid */
   paramName: string;
   /** 卡片类型 */
   cardType: CardType;
-  /** 成功响应的 Cache-Control */
+  /** 成功响应的 Cache-Control（默认值见 DEFAULT_CARD_CACHE_CONTROL） */
   responseCacheControl?: string;
   /** 渲染前对载荷再加工（如合并 username、区域修正） */
   transform?: (data: Record<string, unknown>, req: Request) => Record<string, unknown>;
@@ -75,9 +82,10 @@ export function createCardHandler(
         svg = new SvgSanitizerService().sanitize(svg);
       }
       res.set('Content-Type', 'image/svg+xml');
-      if (options.responseCacheControl) {
-        res.set('Cache-Control', options.responseCacheControl);
-      }
+      // 成功卡片默认也带 s-maxage：CDN/camo 直接命中就不回源，
+      // 首屏不用等美国机房的 Redis/Mongo。所有卡走同一策略，避免出现
+      // "有的带 Cache-Control 有的不带"导致 Vercel 自己改写 max-age=0。
+      res.set('Cache-Control', options.responseCacheControl || DEFAULT_CARD_CACHE_CONTROL);
       res.send(svg);
     } catch (error) {
       secureLogger.error(`渲染${options.cardType}卡片失败: ${error}`);

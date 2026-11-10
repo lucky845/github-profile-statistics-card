@@ -5,5 +5,5 @@ import { CardType } from '../services/svg/types';
 export const getCSDNStats = createCardHandler(SOURCES[CardType.CSDN], {
   paramName: 'userId',
   cardType: CardType.CSDN,
-  responseCacheControl: 'public, max-age=600',
+  responseCacheControl: 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
 });

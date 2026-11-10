@@ -91,6 +91,21 @@ class RedisCacheService extends BaseCacheService {
   private hits: number = 0;
   private misses: number = 0;
   private ttl: number;
+
+  /**
+   * 进程内 L1 缓存。Redis 在美国机房，本机实测一次 PING 就 480ms，
+   * Vercel 函数更是每次冷启动都要重连；每个请求都同步等远端缓存等于自残。
+   * L1 命中直接返回，不等网络。多实例之间可能短暂不一致，
+   * TTL 卡得很短，且 /api/cache/clear 会同时清掉本地层。
+   */
+  private readonly localCache = new Map<string, { value: unknown; expireAt: number }>();
+  private static readonly LOCAL_TTL_CAP_MS = 60_000;
+  private static readonly LOCAL_MAX_ENTRIES = 500;
+  private localHits: number = 0;
+
+  /** 熔断截止时间戳：Redis 刚从故障里恢复时不用继续惩罚请求 */
+  private redisDownUntil: number = 0;
+  private static readonly REDIS_COOLDOWN_MS = 60_000;
   private isConnected: boolean = false;
 
   private heartbeatInterval: NodeJS.Timeout | null = null;
@@ -172,6 +187,12 @@ class RedisCacheService extends BaseCacheService {
    * 如果连接断开，尝试重新连接
    */
   private async ensureConnection(): Promise<boolean> {
+    // 熔断：刚刚失败过就直接当缓存不可用，别让每个请求都去等 800ms 超时。
+    // 每分钟只放一个请求去探测，成功了立刻恢复。
+    if (Date.now() < this.redisDownUntil) {
+      return false;
+    }
+
     // 如果已经连接，尝试执行一个简单的命令来验证连接
     if (this.isConnected) {
       try {
@@ -180,6 +201,7 @@ class RedisCacheService extends BaseCacheService {
       } catch (error) {
         secureLogger.warn('Redis connection lost, attempting to reconnect...', { error: (error as Error).message });
         this.isConnected = false;
+        this.redisDownUntil = Date.now() + RedisCacheService.REDIS_COOLDOWN_MS;
       }
     }
 
@@ -192,6 +214,7 @@ class RedisCacheService extends BaseCacheService {
         await this.connect();
         if (this.isConnected) {
           secureLogger.info(`✅ Redis reconnected successfully after ${retries + 1} attempts`);
+          this.redisDownUntil = 0;
           return true;
         }
       } catch (error) {
@@ -206,6 +229,7 @@ class RedisCacheService extends BaseCacheService {
     }
     
     secureLogger.error(`❌ Redis reconnect failed after ${maxRetries} attempts`);
+    this.redisDownUntil = Date.now() + RedisCacheService.REDIS_COOLDOWN_MS;
     return false;
   }
 
@@ -272,7 +296,34 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async get<T>(key: string): Promise<T | undefined> {
-    return this.withTimeout(this.readThrough<T>(key), undefined);
+    const local = this.localGet<T>(key);
+    if (local !== undefined) return local;
+
+    const value = await this.withTimeout(this.readThrough<T>(key), undefined);
+    if (value !== undefined) this.localSet(key, value, this.ttl);
+    return value;
+  }
+
+  private localGet<T>(key: string): T | undefined {
+    const entry = this.localCache.get(key);
+    if (!entry) return undefined;
+    if (entry.expireAt <= Date.now()) {
+      this.localCache.delete(key);
+      return undefined;
+    }
+    this.localHits++;
+    this.hits++;
+    return entry.value as T;
+  }
+
+  private localSet(key: string, value: unknown, ttlSeconds: number): void {
+    // 太多条目时按插入顺序淘汰最早的一条（Map 保证插入序）
+    if (this.localCache.size >= RedisCacheService.LOCAL_MAX_ENTRIES && !this.localCache.has(key)) {
+      const oldest = this.localCache.keys().next().value;
+      if (oldest !== undefined) this.localCache.delete(oldest);
+    }
+    const ttlMs = Math.min(Math.max(ttlSeconds, 0) * 1000, RedisCacheService.LOCAL_TTL_CAP_MS);
+    this.localCache.set(key, { value, expireAt: Date.now() + ttlMs });
   }
 
   private async readThrough<T>(key: string): Promise<T | undefined> {
@@ -303,6 +354,7 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async set<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    this.localSet(key, value, ttl ?? this.ttl);
     return this.withTimeout(this.writeThrough(key, value, ttl), false);
   }
 
@@ -331,6 +383,8 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async delete(key: string): Promise<boolean> {
+    this.localCache.delete(key);
+
     // 确保连接有效
     if (!await this.ensureConnection()) {
       return false;
@@ -351,6 +405,9 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async clear(): Promise<boolean> {
+    // L1 必须先清，否则 Redis 清完了本地还会继续吐旧响应
+    this.localCache.clear();
+
     // 确保连接有效
     if (!await this.ensureConnection()) {
       return false;
@@ -371,6 +428,12 @@ class RedisCacheService extends BaseCacheService {
   }
 
   async deleteByPattern(pattern: string | RegExp): Promise<number> {
+    const l1Pattern = typeof pattern === 'string' ? pattern : pattern.source;
+    const l1Prefix = l1Pattern.replace(/\*$/, '');
+    for (const key of [...this.localCache.keys()]) {
+      if (key.startsWith(l1Prefix)) this.localCache.delete(key);
+    }
+
     // 确保连接有效
     if (!await this.ensureConnection()) {
       return 0;
@@ -384,6 +447,8 @@ class RedisCacheService extends BaseCacheService {
         patternStr = pattern.source;
       }
       
+      
+
       const keys = await this.client.execute(client => client.keys(patternStr));
       if (keys.length === 0) return 0;
       
@@ -407,6 +472,10 @@ class RedisCacheService extends BaseCacheService {
     }
 
     try {
+      for (const key of [...this.localCache.keys()]) {
+        if (key.startsWith(`${group}:`)) this.localCache.delete(key);
+      }
+
       const keys = await this.client.execute(client => client.keys(`${group}:*`));
       if (keys.length === 0) return 0;
       
@@ -428,7 +497,7 @@ class RedisCacheService extends BaseCacheService {
     return {
       hits: this.hits,
       misses: this.misses,
-      keys: 0, // Redis不支持直接获取键数量，需要单独实现
+      keys: this.localCache.size,
       groups: 0, // Redis不支持直接获取分组数量
       hitsRate: total > 0 ? (this.hits / total) * 100 : 0
     };
