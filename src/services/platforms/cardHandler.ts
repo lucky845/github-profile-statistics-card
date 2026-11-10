@@ -60,7 +60,10 @@ export function createCardHandler(
 
     if (!result.ok) {
       const status = STATUS_BY_REASON[result.reason];
-      res.status(status).set('Content-Type', 'image/svg+xml').set('Cache-Control', 'no-store')
+      // 非 200 一律不缓存；200 的降级卡给短 TTL，让上游恢复后能尽快自愈
+      res.set('Content-Type', 'image/svg+xml')
+        .set('Cache-Control', status === 200 ? 'public, max-age=60' : 'no-store')
+        .status(status)
         .send(generateCard(CardType.ERROR, MESSAGE_BY_REASON[result.reason], theme));
       return;
     }
@@ -78,8 +81,9 @@ export function createCardHandler(
       res.send(svg);
     } catch (error) {
       secureLogger.error(`渲染${options.cardType}卡片失败: ${error}`);
-      res.status(500).set('Content-Type', 'image/svg+xml').set('Cache-Control', 'no-store')
-        .send(generateCard(CardType.ERROR, '卡片渲染失败', theme));
+      // 渲染失败也返回 200 + 错误卡：GitHub camo 会把 5xx 缓存成坏图，README 里会永久裂图
+      res.status(200).set('Content-Type', 'image/svg+xml').set('Cache-Control', 'no-store')
+        .send(generateCard(CardType.ERROR, '数据暂时不可用', theme));
     }
   };
 }

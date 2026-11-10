@@ -105,9 +105,10 @@ async function getJuejinInfoInner(userId: string, cacheTimeInSeconds: number): P
             throw new Error(`获取掘金数据失败: ${error.message}`);
         }
 
-        // 判断是否存在缓存，存在缓存直接返回缓存即可
+        // 抓取失败时回落到过期缓存：数据是旧的，必须标记无效，
+        // 否则上层会当作最新数据再缓存一层 HTTP 结果
         if (cachedUserData) {
-            return {...cachedUserData, isValid: true};
+            return {...cachedUserData, isValid: false};
         }
 
         // 没有缓存，抛出错误

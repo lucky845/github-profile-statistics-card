@@ -52,12 +52,14 @@ describe('PlatformStatsSource 契约', () => {
     expect(captured.headers['Content-Type']).toBe('image/svg+xml');
   });
 
+  // 只有真正的语义错误给 4xx；上游故障一律 200 + 降级卡，否则 camo 会缓存成坏图
   it.each([
     ['NOT_FOUND', 404],
     ['INVALID_INPUT', 400],
-    ['RATE_LIMITED', 503],
-    ['UPSTREAM_ERROR', 503],
-  ] as const)('%s 映射为 %i 且不缓存', async (reason, expected) => {
+    ['DATA_UNAVAILABLE', 200],
+    ['RATE_LIMITED', 200],
+    ['UPSTREAM_ERROR', 200],
+  ] as const)('%s 映射为 %i', async (reason, expected) => {
     const { res, captured } = makeRes();
     const handler = createCardHandler(fakeSource(fail(reason, 'boom')), {
       paramName: 'id',
@@ -65,7 +67,8 @@ describe('PlatformStatsSource 契约', () => {
     });
     await handler(req(), res);
     expect(captured.status).toBe(expected);
-    expect(captured.headers['Cache-Control']).toBe('no-store');
+    // 4xx 不缓存；200 降级卡短缓存，避免坏结果被 camo 长期钉住
+    expect(captured.headers['Cache-Control']).toBe(expected === 200 ? 'public, max-age=60' : 'no-store');
   });
 
   it('缺少参数时返回 400', async () => {
@@ -78,7 +81,7 @@ describe('PlatformStatsSource 契约', () => {
     expect(captured.status).toBe(400);
   });
 
-  it('数据源抛异常时兜底为 503 而不是 500 崩溃', async () => {
+  it('数据源抛异常时兜底为 200 + 降级卡而不是崩溃', async () => {
     const { res, captured } = makeRes();
     const throwing: PlatformStatsSource<Record<string, unknown>> = {
       platform: 'fake',
@@ -88,6 +91,7 @@ describe('PlatformStatsSource 契约', () => {
     };
     const handler = createCardHandler(throwing, { paramName: 'id', cardType: 'github' as never });
     await handler(req(), res);
-    expect(captured.status).toBe(503);
+    expect(captured.status).toBe(200);
+    expect(captured.headers['Content-Type']).toBe('image/svg+xml');
   });
 });

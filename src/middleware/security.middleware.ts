@@ -5,6 +5,18 @@ import rateLimit from 'express-rate-limit';
 import xss from 'xss-clean';
 import hpp from 'hpp';
 import { createRequestLoggerMiddleware } from '../utils/logger';
+import { generateErrorCard } from '../services/svg/generators/errorCardGenerator';
+import { getThemeConfig } from '../services/svg/svgService';
+
+/**
+ * 限流命中同样返回 200 + 错误卡。
+ * GitHub camo 会把 429/5xx 缓存成坏图，README 里就是永久裂图 —— 宁可给一张降级卡。
+ */
+const TOO_MANY_REQUESTS_CARD = '请求过于频繁，请稍后再试';
+const RATE_LIMIT_HEADERS = (res: any) => {
+  res.set('Content-Type', 'image/svg+xml');
+  res.set('Cache-Control', 'no-store');
+};
 
 /**
  * 安全HTTP头配置
@@ -44,7 +56,10 @@ export const globalRateLimiter = rateLimit({
   max: 1000, // 每IP每15分钟1000个请求
   standardHeaders: true,
   legacyHeaders: false,
-  message: '请求过于频繁，请稍后再试',
+  handler: (_req, res) => {
+    RATE_LIMIT_HEADERS(res);
+    res.status(200).send(generateErrorCard(TOO_MANY_REQUESTS_CARD, getThemeConfig()));
+  },
   keyGenerator: (req: Request): string => {
     // 使用X-Forwarded-For头或IP地址作为限流键，确保总是返回字符串
     return (req.headers['x-forwarded-for'] as string) || (req.ip as string) || 'unknown-client';
@@ -59,7 +74,10 @@ export const apiRateLimiter = rateLimit({
   max: 300, // 每IP每15分钟300个API请求
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'API请求过于频繁，请稍后再试',
+  handler: (_req, res) => {
+    RATE_LIMIT_HEADERS(res);
+    res.status(200).send(generateErrorCard('API请求过于频繁，请稍后再试', getThemeConfig()));
+  },
   keyGenerator: (req: Request): string => {
     return (req.headers['x-forwarded-for'] as string) || (req.ip as string) || 'unknown-client';
   },

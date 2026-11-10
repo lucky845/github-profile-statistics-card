@@ -40,19 +40,21 @@ export const fail = (reason: StatsFailure, message: string): StatsResult<never> 
   message,
 });
 
-/** 失败原因 → HTTP 状态码 */
 /**
  * 失败原因 → HTTP 状态码
  *
- * 200 只给「请求合法但上游没数据」：这类卡要能嵌进 GitHub README 长期显示，
- * 返回 4xx/5xx 会让 img 直接坏图。客户端也靠这个码判断要不要翻译成 README 友好文案。
+ * 只有 NOT_FOUND / INVALID_INPUT 保持 4xx（真正的语义错误），
+ * 其余一律 200 + 降级卡：卡片要能长期嵌在 GitHub README 里，
+ * 而 camo 代理会把 4xx/5xx 缓存成永久坏图（实测 502/504 挂了十几分钟不恢复）。
  */
 export const STATUS_BY_REASON: Record<StatsFailure, number> = {
   NOT_FOUND: 404,
   INVALID_INPUT: 400,
   DATA_UNAVAILABLE: 200,
-  RATE_LIMITED: 503,
-  UPSTREAM_ERROR: 503,
+  // 限流/上游故障同样给 200：GitHub camo 会把 5xx 缓存成永久坏图，
+  // 卡片内容已经是降级文案，没必要再用状态码把自己标记成"坏图"
+  RATE_LIMITED: 200,
+  UPSTREAM_ERROR: 200,
 };
 
 /** 失败原因 → 卡片展示文案 */
