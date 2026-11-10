@@ -129,8 +129,24 @@ export const validateGenericUsername = (req: Request, res: Response, next: NextF
 
     // 过滤掉潜在的恶意字符
     const sanitizedUsername = username.replace(/[^a-zA-Z0-9_\-]/g, '');
-    if (sanitizedUsername !== username) {
+    if (sanitizedUsername !== username && sanitizedUsername.length > 0) {
       secureLogger.warn(`用户名包含不允许的字符: ${username} -> ${sanitizedUsername}`);
+    }
+
+    // 净化后为空说明整个参数全是非法字符。放行会让下游用空 ID 去拼上游 URL，
+    // 上游报错后再映射成降级卡，白白打一次外网；直接拒绝更省也更清楚
+    if (sanitizedUsername.length === 0) {
+      const isCard = req.path.includes('/csdn/') || req.path.includes('/bilibili/') ||
+        req.path.includes('/github/') || req.path.includes('/juejin/') ||
+        req.path.includes('/leetcode/');
+      if (isCard) {
+        const themeName = req.query.theme as string;
+        res.status(400).set('Content-Type', 'image/svg+xml')
+          .send(generateCard(CardType.ERROR, '用户 ID 非法', themeName));
+        return;
+      }
+      res.status(400).send('用户 ID 非法');
+      return;
     }
 
     // 将净化后的用户名保存回对应的参数中
