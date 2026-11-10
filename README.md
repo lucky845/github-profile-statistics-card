@@ -147,60 +147,21 @@ CSDN 统计卡片包含以下数据：
 
 ## 🎨 主题配置
 
-支持以下主题参数：
-- `cacheSeconds`: 配置缓存的秒数(默认120秒)
-- `theme=default` - 默认主题（明亮主题）
-- `theme=light` - 明亮主题
-- `theme=dark` - 暗黑主题
-- `theme=blue` - 蓝色主题
-- `theme=green` - 绿色主题
-- `theme=purple` - 紫色主题
-- `theme=orange` - 橙色主题
-- `theme=red` - 红色主题
+内置 4 个主题，全部可实时预览：
 
-主题预览：
+| 参数 | 说明 |
+| --- | --- |
+| `theme=light` | 明亮主题（默认） |
+| `theme=dark` | 暗黑主题 |
+| `theme=github-dark-dimmed` | GitHub 暗色变体 `#22272e` |
+| `theme=transparent` | 透明背景，贴合页面自身底色 |
 
-### Default（默认）
+不传或传未知主题时回落到 `light`，不会报错。
+预览与实时切换：[首页主题胶囊](https://github-profile-statistics-card.vercel.app/?theme=dark)。
+
 ```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=default)
+![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=github-dark-dimmed)
 ```
-![GitHub Stats](./img/leetcode_light.png)
-
-### Dark
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=dark)
-```
-![GitHub Stats](./img/leetcode_dark.png)
-
-### Blue
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=blue)
-```
-![GitHub Stats](./img/leetcode_blue.png)
-
-### Green
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=green)
-```
-![GitHub Stats](./img/leetcode_green.png)
-
-### Purple
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=purple)
-```
-![GitHub Stats](./img/leetcode_purple.png)
-
-### Orange
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=orange)
-```
-![GitHub Stats](./img/leetcode_orange.png)
-
-### Red
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=red)
-```
-![GitHub Stats](./img/leetcode_red.png)
 
 ## 🔜 即将支持的平台
 
