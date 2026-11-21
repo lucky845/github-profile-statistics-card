@@ -151,7 +151,7 @@ vercel deploy
 | `Other` | ❌ 检测不到 Rust，构建器不会被挂上，服务不启动 |
 | `Container` | ❌ 会去构建根 `Dockerfile`，与 `src/main.rs` 入口无关 |
 
-`vercel.json` 里已写死 `projectSettings.framework: "rust"`，正常情况下不需要手动选。
+`vercel.json` 里已写死顶层字段 `"framework": "rust"`（**不是** `projectSettings.framework` —— 那是无效 schema，会直接让构建失败），正常情况下不需要手动选。
 
 ⚠️ **Vercel 与 Docker 有一处真实差异**：进程内缓存与限流计数**随实例存活**，冷启动即清空、多实例各算各的。所以限流的 300/15min 实际会被实例数放大，`/api/cache/stats` 也只代表当前实例。
 
@@ -159,7 +159,7 @@ vercel deploy
 
 ### 托管平台
 
-- **Vercel**：`vercel.json` 已配 `projectSettings.framework: rust`
+- **Vercel**：`vercel.json` 已配顶层 `"framework": "rust"`
 - **Render**：`render.yaml` 已配 `runtime: docker` + `healthCheckPath: /livez`
 - **Railway**：`railway.json` 已配 `build.builder: DOCKERFILE`
 
