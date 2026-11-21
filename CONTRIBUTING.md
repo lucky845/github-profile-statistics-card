@@ -15,7 +15,7 @@
 **这是一个纯 Rust 项目。** 没有任何 `npm install`、没有 Node 运行时、没有 `node_modules`。
 
 ```bash
-# 只需要 Rust 工具链（1.97+）。仓库根就是主 crate。
+# 只需要 Rust 工具链（1.88+）。仓库根就是主 crate。
 cargo build --workspace
 cargo test  --workspace
 
