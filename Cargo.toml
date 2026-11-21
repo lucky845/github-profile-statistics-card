@@ -1,21 +1,51 @@
-# Vercel 的 Rust 框架要求仓库根有 [package] + src/main.rs，本 crate 就是那个入口。
-# 服务端二进制（Docker / 本地）仍是 rust/app 里的那个，两者共用同一个 app lib。
+# 仓库根就是主 crate：HTTP 前端（src/lib.rs）+ 服务端二进制（src/main.rs）。
+#
+# 这里只有一个二进制，因为 Vercel 的 Rust 框架与 Docker 走的是**同一个程序**——两者都只是
+# 监听 $PORT 的 axum 服务，由平台侧做端口转发。分成两个入口曾经是必要的（Vercel 需要
+# vercel_runtime 桥），那个依赖删掉之后就没有理由再保留两份。
+#
+# 三个被移植的单元在 crates/ 下，作为独立的 rlib 被本 crate 直接链接。
 [package]
-name = "gpsc-vercel"
+name = "github-profile-statistics-card"
 version = "0.1.0"
 edition = "2024"
 publish = false
+description = "SVG statistics cards for GitHub, LeetCode, CSDN, Juejin and Bilibili"
+
+[lib]
+name = "app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "app"
+path = "src/main.rs"
 
 [dependencies]
-app = { path = "rust/app" }
 axum = "0.8"
+# 平台数据抓取：GitHub/LeetCode 走 REST/GraphQL，CSDN 抓 HTML。
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+# 移植单元。包名与 lib 名一致，所以 `use svg::port::...` 读起来就是我想要的样子。
+#
+# utils 不在这里：它的逻辑（formatCount / formatPercent / firstString / encWbi …）在
+# frontdoor/ 里按需重写过，主 crate 从未用过 crate 里的那份。保留该 crate 是因为它带着
+# 自己的 6 个测试，记录着这些纯函数的 JS 语义，但主程序不链接它。
+svg = { path = "crates/svg" }
+platforms = { path = "crates/platforms" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+dom_query = { version = "0.28", default-features = false }
+# /metrics 的进程族：CPU 秒数、启动时间、常驻内存只能从 OS 拿，std 不提供。
+libc = "0.2"
+# 共享缓存层。没有 REDIS_* 时完全不建连，容器部署保持原样。
+redis = { version = "1.8", features = ["tokio-comp", "connection-manager", "aio"] }
+
+# cors 的测试要用 oneshot 驱动真实 Router；Next 无法手工构造。
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
 
 [workspace]
-members = ["rust/app", "rust/svg", "rust/utils", "rust/platforms-rs"]
-# workspace 里有两个 bin（app 是服务端二进制、gpsc-vercel 是 Vercel 入口）。把默认成员钉在根包上，
-# 让 `cargo build` 与 Vercel 的 `cargo build -p ...` 都只有一个明确答案。
-default-members = ["."]
+members = ["crates/svg", "crates/utils", "crates/platforms"]
 
 [profile.release]
 codegen-units = 1

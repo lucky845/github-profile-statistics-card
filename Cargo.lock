@@ -3,23 +3,6 @@
 version = 4
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "axum",
- "dom_query",
- "libc",
- "platforms-rs",
- "redis",
- "reqwest",
- "serde",
- "serde_json",
- "svg",
- "tokio",
- "tower",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -435,12 +418,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "gpsc-vercel"
+name = "github-profile-statistics-card"
 version = "0.1.0"
 dependencies = [
- "app",
  "axum",
+ "dom_query",
+ "libc",
+ "platforms",
+ "redis",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "svg",
  "tokio",
+ "tower",
 ]
 
 [[package]]
@@ -909,7 +900,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c938015719552d665fd0553b90d96cd7ff58e83e4c061ca99e6bb78865a72752"
 
 [[package]]
-name = "platforms-rs"
+name = "platforms"
 version = "0.1.0"
 dependencies = [
  "serde",

@@ -1,20 +1,17 @@
 # ---------- 构建阶段 ----------
-# 整个仓库已经是纯 Rust。workspace 落在仓库根，因为 Vercel 的 Rust 框架要求根上有
-# Cargo.toml + src/main.rs；那个 src/main.rs 是 Vercel 入口，容器不用它，但 cargo 解析
-# 根清单时必须能看见它，所以下面一并复制。
+# 仓库根就是主 crate：src/ 是 HTTP 前端，views/ 是编译期模板，crates/ 是三个移植单元。
 FROM rust:1.100-slim-bookworm AS builder
 
 WORKDIR /build
 
+# 只需要 Rust 源码。没有 Node、没有 package.json、没有 node_modules。
 COPY Cargo.toml Cargo.lock ./
-# Vercel 入口的源文件：只为让根清单可解析，不参与 -p app 的构建。
-COPY src/main.rs ./src/main.rs
-# rust/ 是成员 crate 与首页模板（include_str! 的编译期输入）。
-COPY rust/ ./rust/
+COPY src/ ./src/
+COPY views/ ./views/
+COPY crates/ ./crates/
 
 # --locked：Cargo.lock 是构建契约，依赖漂移必须中断镜像构建而不是悄悄换版本。
-# -p app：只编服务端二进制，不编 Vercel 入口（它不是容器的运行目标）。
-RUN cargo build --release --locked -p app
+RUN cargo build --release --locked --bin app
 
 # ---------- 运行阶段 ----------
 # 与 builder 同为 bookworm，glibc 版本一致；二进制在 ldd 层面只依赖 libc。

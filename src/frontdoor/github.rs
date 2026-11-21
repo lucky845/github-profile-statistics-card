@@ -278,7 +278,7 @@ fn expand_self_closing(input: &str) -> String {
 }
 
 fn render(data: Value, theme: &str) -> String {
-    src_services_svg_::port::generate_card(
+    svg::port::generate_card(
         Value::String("github".into()),
         data,
         Some(theme.to_string()),
@@ -294,7 +294,7 @@ fn failure(error: FetchError, theme: &str, key: String) -> Response {
         FetchError::Upstream => (StatusCode::OK, SHORT_CACHE, DATA_UNAVAILABLE_MESSAGE),
     };
     // The failure branch of the original never runs the sanitizer.
-    let svg = src_services_svg_::port::generate_card(
+    let svg = svg::port::generate_card(
         Value::String("error".into()),
         Value::String(message.into()),
         Some(theme.to_string()),

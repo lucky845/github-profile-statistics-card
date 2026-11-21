@@ -130,7 +130,7 @@ pub async fn dispatch(req: Request) -> Response {
             // is why it is the one platform a container theme cannot knock over.
             let theme_is_container = theme.as_ref().is_some_and(|theme| !theme.text_valued);
             if theme_is_container && platform != "juejin" {
-                let body = src_services_svg_::port::generate_card(
+                let body = svg::port::generate_card(
                     Value::String("error".into()),
                     Value::String("theme.replace is not a function".into()),
                     Some("default".into()),
@@ -202,7 +202,7 @@ fn not_found(path: &str, query: &[(String, String)], cacheable: bool) -> Respons
         .any(|prefix| path.contains(prefix));
     if is_svg {
         // res.locals.themeName is never set, so the theme is always the literal "default".
-        let body = src_services_svg_::port::generate_card(
+        let body = svg::port::generate_card(
             Value::String("error".into()),
             Value::String("请求的资源不存在".into()),
             Some("default".into()),
@@ -260,7 +260,7 @@ pub fn card_reply(
         CardOutcome::Rendered(payload) => (
             StatusCode::OK,
             Some(success_cache_control),
-            src_services_svg_::port::generate_card(
+            svg::port::generate_card(
                 Value::String(card_type.to_string()),
                 payload,
                 Some(theme.to_string()),
@@ -291,7 +291,7 @@ pub fn card_reply(
 }
 
 fn error_card(message: &str, theme: &str) -> String {
-    src_services_svg_::port::generate_card(
+    svg::port::generate_card(
         Value::String("error".to_string()),
         Value::String(message.to_string()),
         Some(theme.to_string()),
@@ -355,7 +355,7 @@ async fn theme_test(req: Request) -> Response {
         .iter()
         .find(|(k, _)| k == "theme")
         .map(|(_, v)| v.clone());
-    let config = src_services_svg_::port::get_theme_config(theme.clone()).unwrap_or(Value::Null);
+    let config = svg::port::get_theme_config(theme.clone()).unwrap_or(Value::Null);
     let pick = |path: &[&str]| -> String {
         let mut node = &config;
         for step in path {
@@ -436,7 +436,7 @@ async fn home(req: Request) -> Response {
     // page with no Node build beside it, and src/views/index.html is the copy copy-assets.js
     // duplicates into dist anyway.
     let mut html = INDEX_HTML.to_string();
-    let gallery = platforms_rs::port::render_gallery(base_url.clone(), Some(active.to_string()))
+    let gallery = platforms::port::render_gallery(base_url.clone(), Some(active.to_string()))
         .unwrap_or_default();
     html = html.replace("<!-- GALLERY -->", &gallery);
     html = html.replace("${THEME_OPTIONS}", &THEMES.join(" / "));

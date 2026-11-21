@@ -19,7 +19,6 @@ Thumbs.db
 
 # 构建产物
 target/
-**/target/
 
 # 录制回放报告（由 app replay 生成，不是源码）
 rust/app-cases/replay-report.md
