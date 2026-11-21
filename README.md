@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/github/license/lucky845/github-profile-statistics-card?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/github/issues/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Issues">
   <img src="https://img.shields.io/github/stars/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Stars">
-  <img src="https://img.shields.io/badge/Rust-1.97+-dea584?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-1.88+-dea584?style=for-the-badge&logo=rust" alt="Rust">
 </div>
 
 ## 🚀 项目简介
