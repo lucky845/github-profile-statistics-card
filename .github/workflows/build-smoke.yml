@@ -85,22 +85,25 @@ jobs:
           echo "--- 404 形态 ---"
           curl -s -o /dev/null -w 'status=%{http_code}\n' http://127.0.0.1:8080/definitely-not-a-route
 
-      # Vercel 入口与服务端二进制共用 app::router()，但走的是另一条运行时（bridge + dev server）。
-      # vercel_runtime 在没有 bridge 环境时会自己起一个 dev server，所以这里能直接验它。
-      - name: Vercel entry point smoke
+      # 只有一份二进制了：Docker 与 Vercel 都是"监听 $PORT 的 axum 服务"，由平台侧转发。
+      # 这一步验证它在 Vercel 期望的端口（$PORT 注入）下能起来，并回答正确的形态。
+      # 端口换成 3000 而不是 8080，就是为了证明它真的读 $PORT 而不是写死。
+      - name: PORT-driven startup (Vercel shape)
+        env:
+          PORT: 3000
         run: |
           set -uo pipefail
-          ./target/release/index > vercel.log 2>&1 &
-          echo $! > vercel.pid
+          ./target/release/app > port.log 2>&1 &
+          echo $! > port.pid
           for i in $(seq 1 30); do
             curl -fsS -m 2 http://127.0.0.1:3000/livez > /dev/null 2>&1 && break
             sleep 1
           done
-          curl -fsS -m 5 http://127.0.0.1:3000/health > /dev/null && echo "vercel /health OK"
-          curl -fsS -m 5 http://127.0.0.1:3000/ | grep -q "个人主页统计卡片" && echo "vercel 主页 OK"
+          curl -fsS -m 5 http://127.0.0.1:3000/health > /dev/null && echo "\$PORT /health OK"
+          curl -fsS -m 5 http://127.0.0.1:3000/ | grep -q "个人主页统计卡片" && echo "\$PORT 主页 OK"
           code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 http://127.0.0.1:3000/definitely-not-a-route)
-          test "$code" = "404" || { echo "::error::Vercel 入口 404 形态不对: $code"; exit 1; }
-          kill "$(cat vercel.pid)" 2>/dev/null || true
+          test "$code" = "404" || { echo "::error::404 形态不对: $code"; exit 1; }
+          kill "$(cat port.pid)" 2>/dev/null || true
 
       - name: Stop server
         if: always()

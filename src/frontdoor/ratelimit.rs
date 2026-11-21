@@ -123,7 +123,7 @@ fn write_quota(head: &mut HeaderMap, remaining: u64, reset: u64) {
 
 /// The limiter's handler: a 200 with the error card, no-store, and Retry-After.
 fn over_limit(reset: u64) -> Response {
-    let body = src_services_svg_::port::generate_card(
+    let body = svg::port::generate_card(
         Value::String("error".to_string()),
         Value::String(MESSAGE.to_string()),
         None,

@@ -1,13 +1,13 @@
 [package]
-name = "utils"
+name = "platforms"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 publish = false
-description = "Rust port of `src/utils/`"
+description = "Rust port of `src/services/platforms/`"
 
 [lib]
-name = "src_utils_"
+name = "platforms"
 # 纯 rlib：cdylib 是给 napi 桥用的，桥已删除，二进制现在静态链接这个 crate。
 crate-type = ["rlib"]
 

@@ -15,7 +15,7 @@
 **这是一个纯 Rust 项目。** 没有任何 `npm install`、没有 Node 运行时、没有 `node_modules`。
 
 ```bash
-# 只需要 Rust 工具链（1.97+）。workspace 在仓库根，不在 rust/app。
+# 只需要 Rust 工具链（1.97+）。仓库根就是主 crate。
 cargo build --workspace
 cargo test  --workspace
 
@@ -39,7 +39,7 @@ cargo clippy  --all-targets --workspace -- -D warnings
 
 ```bash
 # 用 rust-anything 重放，比对状态码、响应头与 body
-# workspace 在仓库根，产物在 target/debug/app（不是 rust/app/target/...）
+# workspace 在仓库根，产物在 target/debug/app（不是 crates/ 下的 target）
 rust-anything app replay --repo . --build target/debug/app
 ```
 
@@ -67,15 +67,15 @@ rust-anything app replay --repo . --build target/debug/app
 
 ## 添加新主题
 
-主题定义在 `rust/svg/src/port.rs` 的 `get_theme_config` 附近。加完主题后：
+主题定义在 `crates/svg/src/port.rs` 的 `get_theme_config` 附近。加完主题后：
 
-1. 在 `rust/app/src/frontdoor/handlers.rs` 的 `THEMES` 常量里登记名字（否则会被当成未知主题回落到默认色）
+1. 在 `src/frontdoor/handlers.rs` 的 `THEMES` 常量里登记名字（否则会被当成未知主题回落到默认色）
 2. 跑 `cargo test --workspace`
 3. 手工开一次 `/api/theme/test?theme=你的主题` 确认渲染
 
 ## 添加新平台
 
-1. `rust/app/src/frontdoor/` 下新建模块，照抄 `github.rs` 的结构（validate → 上游取数 → `generate_card` → 响应头）
+1. `src/frontdoor/` 下新建模块，照抄 `github.rs` 的结构（validate → 上游取数 → `generate_card` → 响应头）
 2. 在 `handlers.rs::dispatch` 里接线——**不接线就是 404**，这是刻意的：让遗漏暴露在测试里，而不是被静默吞掉
 3. `keys.rs` 的 `PLATFORMS` 加上平台名与参数名
 4. 若是新的缓存键形态，同步 `keys.rs` 的键生成；若是新的平台层缓存语义，同步缓存文档

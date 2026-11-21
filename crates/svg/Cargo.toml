@@ -1,13 +1,13 @@
 [package]
-name = "platforms-rs"
+name = "svg"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 publish = false
-description = "Rust port of `src/services/platforms/`"
+description = "Rust port of `src/services/svg/`"
 
 [lib]
-name = "platforms_rs"
+name = "svg"
 # 纯 rlib：cdylib 是给 napi 桥用的，桥已删除，二进制现在静态链接这个 crate。
 crate-type = ["rlib"]
 

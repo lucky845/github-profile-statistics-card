@@ -1,13 +1,8 @@
-# 构建上下文只应有 Rust 源码 + 首页模板。
-# 少了这些排除项，docker 会把 1.5G 的 target/、node_modules/ 和录制产物一起送进 daemon。
+# 构建上下文只需要 Rust 源码与模板。
 target/
 **/target/
-node_modules/
-dist/
-coverage/
-logs/
-shots/
 .git/
-.probe-*.cjs
-.probe-*.sh
 rust/app-cases/
+*.md
+.idea/
+.DS_Store
