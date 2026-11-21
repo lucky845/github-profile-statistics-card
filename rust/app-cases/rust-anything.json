@@ -1,0 +1,17 @@
+{
+  "schema": "rust-anything/app-cases@1",
+  "name": "app",
+  "run": [
+    "node",
+    "dist/src/app.js"
+  ],
+  "normalize": [
+    "timestamps",
+    "uuids"
+  ],
+  "normalizers": {
+    "ratelimit-reset": "^[0-9]+$"
+  },
+  "timeout_secs": 25,
+  "http": {}
+}

@@ -3,151 +3,65 @@
 <div align="center">
   <img src="https://img.shields.io/github/license/lucky845/github-profile-statistics-card?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/github/issues/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Issues">
-  <img src="https://img.shields.io/github/forks/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Forks">
   <img src="https://img.shields.io/github/stars/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Stars">
+  <img src="https://img.shields.io/badge/Rust-1.97+-dea584?style=for-the-badge&logo=rust" alt="Rust">
 </div>
 
 ## 🚀 项目简介
 
-GitHub Profile Statistics Card 是一个功能强大的开源工具，用于生成个人统计数据的SVG卡片。支持多种平台的数据展示，可直接嵌入到GitHub个人资料页或任何支持图片的位置。
+把 GitHub、LeetCode、CSDN、掘金、哔哩哔哩的统计数据渲染成一张 **SVG 卡片**，一行 Markdown 嵌进你的 README。
 
-### 🔥 核心功能
+整个后端是**一个 Rust 二进制**：没有 Node 运行时、没有 `package.json`、没有数据库。缓存默认在进程内，可选接入 Redis 做跨实例共享。启动即服务，一次请求拿到一张自包含的 SVG。
 
-- **多平台支持**：GitHub、LeetCode、CSDN、掘金、B站数据统计
-- **可定制主题**：多种精美主题可选，支持亮色/暗色模式
-- **高度优化**：多级缓存策略，基于Redis的高性能缓存系统，确保快速响应
-  - GitHub服务实现5分钟缓存，显著减少重复请求的响应时间
-  - Redis连接池优化，最大连接数限制为10，避免"ERR max number of clients reached"错误
-- **安全可靠**：内置SVG内容过滤，防止XSS攻击
-- **实时监控**：集成Prometheus，全面的性能监控
-- **完整测试**：全面的单元测试和边界情况覆盖
+## ✨ 特性
 
-## 🌟 特性
-
-- 支持多个平台数据统计
-  - GitHub 统计数据
-  - LeetCode 刷题数据
-  - CSDN 博客数据
-  - 掘金
-  - 哔哩哔哩
-  - 更多平台持续添加中...
-- 自定义主题支持
-  - 明亮主题
-  - 暗黑主题
-- 实时数据更新
-- 简单易用的API
-- 响应式设计
-- 基于Redis的高性能缓存优化
+- **五个平台**：GitHub / LeetCode / CSDN / 掘金 / 哔哩哔哩
+- **四个主题**：light / dark / github-dark-dimmed / transparent
+- **单二进制**：约 158 MB 的镜像里只有一个静态链接的可执行文件，非 root 运行
+- **自包含 SVG**：卡内不嵌任何外部图片（理由见下），一次请求即完整内容
+- **行为有契约**：153 条录制的 HTTP case 做重放比对，不是手写断言
+- **双部署**：Docker 单二进制，或 Vercel 官方 Rust runtime
 
 ## 🚀 使用方法
 
-### GitHub 统计卡片
+把下面这行的 `用户名` 换成你的，粘进 README：
 
 ```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/username?theme=light)
-```
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=light&v=2)
-
-### LeetCode 统计卡片
-
-```markdown
-![LeetCode Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=light)
-```
-![LeetCode Stats](https://github-profile-statistics-card.vercel.app/leetcode/lucky845?theme=light&cn=true&v=2)
-
-支持参数：
-- `username`: LeetCode 用户名
-- `theme`: 主题选择（可选，默认为 light）
-- `cn`: 是否获取中国区数据（可选，默认为 false）
-  - `cn=true`: 获取 leetcode-cn.com 的数据
-  - 不携带该参数: 获取 leetcode.com 的数据
-- `cacheSeconds`: 配置缓存的秒数(默认120秒)
-
-示例：
-```markdown
-# 获取 LeetCode 中国区数据
-![LeetCode CN Stats](https://github-profile-statistics-card.vercel.app/leetcode/username?theme=dark&cn=true)
-
-# 获取 LeetCode 美国区数据
-![LeetCode Stats](https://github-profile-statistics-card.vercel.app/api/leetcode/username?theme=dark)
+![GitHub](https://你的域名/github/用户名?theme=dark)
 ```
 
-### CSDN 统计卡片
+各平台路径：
 
-```markdown
-![CSDN Stats](https://github-profile-statistics-card.vercel.app/csdn/userId?theme=light)
-```
-![CSDN Stats](https://github-profile-statistics-card.vercel.app/csdn/weixin_46427785?theme=light&v=2)
+| 平台 | 路径 | 参数 |
+| --- | --- | --- |
+| GitHub | `/github/{username}` | `theme` |
+| LeetCode | `/leetcode/{username}` | `theme`、`cn=true` 走中国站 |
+| CSDN | `/csdn/{userId}` | `theme` |
+| 掘金 | `/juejin/{user_id}` | `theme` |
+| 哔哩哔哩 | `/bilibili/{uid}` | `theme` |
 
-CSDN 统计卡片包含以下数据：
-- 文章数量
-- 粉丝数
-- 点赞数
-- 浏览量
-- 评论数
-- 积分
-- ...
+公共参数：
 
-### 掘金统计卡片
+| 参数 | 说明 |
+| --- | --- |
+| `theme` | `light`（默认）/ `dark` / `github-dark-dimmed` / `transparent`。传未知主题回落 `light`，不报错 |
+| `nocache=true` | 跳过服务端缓存，强制回源（排查上游数据问题时用） |
 
-```markdown
-![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/userId?theme=light)
-```
-![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/2564503943252237?theme=light&v=2)
+### 各平台卡片包含什么
 
-掘金统计卡片包含以下数据：
-- 文章数量
-- 关注者数量
-- 点赞数
-- 浏览量
-- 个人简介
-- ...
+- **GitHub**：仓库数、总 Star（含所有仓库累加）、关注者、Following
+- **LeetCode**：通过题数（按难度分档）、总提交、通过率、竞赛排名
+- **CSDN**：原创、粉丝、获赞、访问量、积分、等级
+- **掘金**：文章数、获赞、浏览量、收藏、掘力值、等级
+- **哔哩哔哩**：粉丝、关注、获赞、播放量、等级、签名
 
-支持参数：
-- `userId`: 掘金用户ID
-- `theme`: 主题选择（可选，默认为 light）
-- `cacheSeconds`: 配置缓存的秒数(默认120秒)
+### 已知限制
 
-示例：
-```markdown
-# 使用暗黑主题
-![掘金统计](https://github-profile-statistics-card.vercel.app/juejin/userId?theme=dark)
-```
+- **哔哩哔哩等级**在上游是 SVG 图片，卡片里只显示数字等级
+- **部分用户数据**因平台隐私设置会缺失，此时显示 `0` 而不是报错
+- **哔哩哔哩不带 `SESSDATA`** 时上游返回 `-352` 风控码，卡片显示**全 0 的真实数据**（不是错误卡）
 
-### 哔哩哔哩统计卡片
-
-```markdown
-![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/uid?theme=light)
-```
-![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/89389361?theme=light&v=2)
-
-哔哩哔哩统计卡片包含以下数据：
-- 用户名称
-- 粉丝数
-- 关注数
-- 获赞数
-- 播放量
-- 个人签名
-- ...
-
-支持参数：
-- `uid`: 哔哩哔哩用户ID
-- `theme`: 主题选择（可选，默认为 light）
-- `cacheSeconds`: 配置缓存的秒数(默认120秒)
-
-示例：
-```markdown
-# 使用暗黑主题
-![哔哩哔哩统计](https://github-profile-statistics-card.vercel.app/bilibili/uid?theme=dark)
-```
-
-⚠️ 已知问题：
-- 由于哔哩哔哩的等级是svg图片，用户等级信息可能无法正常获取
-- 部分用户数据可能因为隐私设置而无法显示
-
-## 🎨 主题配置
-
-内置 4 个主题，全部可实时预览：
+## 🎨 主题
 
 | 参数 | 说明 |
 | --- | --- |
@@ -156,192 +70,116 @@ CSDN 统计卡片包含以下数据：
 | `theme=github-dark-dimmed` | GitHub 暗色变体 `#22272e` |
 | `theme=transparent` | 透明背景，贴合页面自身底色 |
 
-不传或传未知主题时回落到 `light`，不会报错。
-预览与实时切换：[首页主题胶囊](https://github-profile-statistics-card.vercel.app/?theme=dark)。
-
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/github/lucky845?theme=github-dark-dimmed)
-```
+所有主题可在[首页](/)实时预览与切换。
 
 ## 🖼️ 为什么卡片里没有头像
 
-早期版本的卡片会在左上角画用户头像。现在已经去掉了，原因不是省事，而是**头像会让卡片在 README 里更容易裂、更慢**：
+早期版本会在左上角画用户头像，现在去掉了。这不是省事，而是**头像会让卡片在 README 里更容易裂、更慢**：
 
 | 问题 | 说明 |
 | --- | --- |
 | 防盗链 | 哔哩哔哩图床对错误的 `Referer` 直接返回 **403**。SVG 里的 `<image>` 指向外站图床时，浏览器发出的 `Referer` 不可能是 `bilibili.com`，头像必然碎 |
-| 体积 | GitHub 头像原图约 **25KB**，而 48px 显示尺寸只需要 2.7KB（`?s=96&v=4`），是个 9 倍浪费 |
-| 额外一跳 | README 里的图片都会经过 GitHub 的 camo 代理。卡内再嵌外链图片，等于让 camo 之外再多一个会超时、会失败的请求 |
+| 体积 | GitHub 头像原图约 **25 KB**，而 48px 显示尺寸只需 2.7 KB（`?s=96&v=4`），9 倍浪费 |
+| 额外一跳 | README 里的图片都会经过 GitHub 的 camo 代理，卡内再嵌外链图片，等于在 camo 之外再多一个会超时、会失败的请求 |
 
-去掉之后，每张卡从「一个 SVG + 一个外部图片」变成**单一自包含 SVG**：一次请求拿到全部内容，没有额外失败点。代价是卡片左上角的头像位置没有了，标题直接从左边距开始。
+去掉之后，每张卡从「一个 SVG + 一个外部图片」变成**单一自包含 SVG**：一次请求拿到全部内容，没有额外失败点。
 
-## 🔜 即将支持的平台
+## 🔌 API
 
-- 知乎
-- 微博
-- ...更多平台开发中
+| 端点 | 方法 | 说明 |
+| --- | --- | --- |
+| `/` | GET | 首页（主题预览与卡片画廊） |
+| `/livez` | GET | 存活探针：进程还在吗。**健康检查用这个** |
+| `/health` | GET | 连通性：上游平台都通吗。缺 token 或上游限流时返回 unhealthy |
+| `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
+| `/metrics` | GET | Prometheus 文本格式指标 |
+| `/metrics/json` | GET | 同上，JSON 格式 |
+| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数） |
+| `/api/cache/stats` | GET | 缓存计数器 |
+| `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=` |
+
+**探针语义要分清**：`/livez` 恒 200，`/health` 反映上游状态。用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
 
 ## 🛠️ 技术栈
 
-- Node.js
-- Express
-- TypeScript
-- Redis
-- PostgreSQL（可选，持久化）
-- EJS 模板引擎
+- **Rust** — Axum + Tokio + reqwest
+- **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB
+- **渲染** — 手写 SVG 生成，无模板引擎
+- **首页** — HTML 在编译期用 `include_str!` 编进二进制
+- **部署** — 多阶段 Docker 单二进制，或 Vercel Rust runtime
 
-## 📝 开源协议
+## 🚀 部署
 
-[Apache 2.0 许可证](LICENSE)
+两种方式，**共用同一份路由栈**（`rust/app/src/lib.rs`），行为不会漂移。
 
-## 🚀 部署指南
+### 环境变量
 
-### 准备工作
+核心三个，全部可选：
 
-1. Fork 本项目到你的 GitHub 账户
-2. 注册 [Vercel](https://vercel.com/) 账户
-3. （可选）注册 [Redis Cloud](https://redis.com/try-free/) 账户作为缓存
+| 变量 | 默认 | 作用 |
+| --- | --- | --- |
+| `PORT` | `8080` | 监听端口，云平台会自动注入 |
+| `GITHUB_TOKEN` | 空 | GitHub 个人访问令牌。**强烈推荐**：匿名额度只有 60 次/小时/出口 IP，共享出口上几分钟就打满，之后 GitHub 卡片退化成「暂无数据」。配置后 5000 次/小时 |
+| `BILIBILI_SESSDATA` | 空 | 哔哩哔哩登录 Cookie 里的 `SESSDATA`。不带时上游返回 `-352` 风控码 |
+| `REDIS_URL` 或 `REDIS_HOST`/`REDIS_PORT`/`REDIS_USERNAME`/`REDIS_PASSWORD` | 空 | **可选**。配置后启用 Redis 共享缓存层：TTL 按响应的 `s-maxage`（10–60 分钟），跨实例/跨冷启动共享。多实例部署强烈建议配上。两种写法任选，与原版 Node 兼容 |
 
-### 不需要数据库
+### Docker（推荐）
 
-本项目曾经的 MongoDB 持久层已在 2026-11 移除（访问计数功能一并下线）。现在每次请求都是「Redis 缓存命中 → 上游实时抓取」：
-
-- 只配 Redis 即可运行；连 Redis 也不配时自动退回进程内缓存，卡片照常返回。
-- `POSTGRES`/`DATABASE_URL` 只在需要跨实例持久化 key-value 时才有意义，非必需。
-
-### Redis Cloud 配置
-
-为了提升应用性能和响应速度，本项目使用Redis作为主要缓存系统。推荐使用Redis Cloud服务，它提供了简单易用的云托管Redis解决方案。
-
-1. 注册 [Redis Cloud](https://redis.com/try-free/) 账户（提供30天免费试用）
-2. 创建新的Redis数据库实例
-3. 获取连接信息：
-   - Redis主机地址（Endpoint）
-   - Redis端口（Port）
-   - Redis密码（Password）
-4. 将这些信息配置到环境变量中
-
-Redis Cloud的优势：
-- 无需自行维护Redis服务器
-- 自动备份和故障恢复
-- 可视化监控面板
-- 多区域部署支持
-- 自动扩缩容能力
-
-### Redis 连接池配置
-
-为了有效管理Redis连接并避免连接数过多导致的问题，本项目实现了Redis连接池机制：
-
-- **最大连接数限制**：连接池最大连接数设置为10，适合免费Redis服务的连接数限制
-- **连接复用**：通过连接池复用连接，减少连接建立和关闭的开销
-- **自动重连**：连接断开时自动重新连接
-- **超时控制**：设置获取连接的超时时间为5秒，避免长时间等待
-
-连接池配置参数：
-- `minimum`: 最小连接数（默认1）
-- `maximum`: 最大连接数（默认10）
-- `acquireTimeout`: 获取连接超时时间（默认5000ms）
-- `cleanupDelay`: 清理延迟时间（默认3000ms）
-
-### Vercel 部署
-
-1. 在 Vercel 中导入你 fork 的项目
-2. 配置环境变量：
-   - `GITHUB_TOKEN`: （可选，强烈推荐）GitHub 个人访问令牌。未配置时走匿名额度 60 次/小时/IP，部署在共享出口 IP 上很容易被打满，卡片会退化成「暂无数据」
-   - `BILIBILI_SESSDATA`: 哔哩哔哩登录后获取的cookie里面的`SESSDATA`值
-   - `USE_MEMORY_CACHE`: 本地开发时设置为true使用内存缓存（可选，未配置 Redis 时自动退回进程内缓存）
-   - `REDIS_HOST`: Redis服务器主机地址（使用Redis Cloud时为云端提供的主机地址）
-   - `REDIS_PORT`: Redis服务器端口（使用Redis Cloud时为云端提供的端口）
-   - `REDIS_PASSWORD`: Redis访问密码（使用Redis Cloud时为云端提供的密码）
-   - `REDIS_USERNAME`: Redis用户名（使用Redis Cloud时通常为'default'）
-3. 点击 "Deploy" 开始部署
-
-部署完成后，你可以通过 Vercel 分配的域名访问服务，格式如：
-```markdown
-![GitHub Stats](https://github-profile-statistics-card.vercel.app/api/github?username=your-username&theme=light)
+```bash
+docker build -t github-stats-card .
+docker run -d -p 3000:3000 \
+  -e GITHUB_TOKEN=ghp_xxx \
+  --name github-stats-card \
+  github-stats-card
 ```
+
+镜像约 158 MB，`command -v node` 返回空，非 root（uid 10001）运行。
+
+### Vercel
+
+走 **官方 Rust runtime**（Beta），入口是 `api/index.rs`：
+
+```bash
+vercel deploy
+```
+
+在 Vercel 控制台导入仓库时，Framework Preset 选 **Other**（不要选 Next.js，那会去找 `package.json`）。
+
+⚠️ **Vercel 与 Docker 有一处真实差异**：进程内缓存与限流计数**随实例存活**，冷启动即清空、多实例各算各的。所以限流的 300/15min 实际会被实例数放大，`/api/cache/stats` 也只代表当前实例。
+
+**配上 Redis 可以消除前半部分**：卡片缓存会跨实例共享（实测 5 次冷启动只回源 1 次）。限流计数仍按实例计——那是另一层。
+
+### 托管平台
+
+- **Vercel**：`vercel.json` 已配全路径 rewrite 到 `/api/index`
+- **Render**：`render.yaml` 已配 `runtime: docker` + `healthCheckPath: /livez`
+- **Railway**：`railway.json` 已配 `build.builder: DOCKERFILE`
+
+完整说明（compose、Nginx、观测端点、缓存语义、故障排查）见 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。
 
 ## 🤝 参与贡献
 
-我们非常欢迎各种形式的贡献！以下是一些参与项目的方式：
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。核心规矩先放这里：
 
-### 贡献步骤
-
-1. Fork 本项目
-2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交你的改动 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 发起 Pull Request
-
-### 贡献类型
-
-- 🐛 提交 bug 修复
-- ✨ 添加新功能
-- 📝 改进文档
-- 🎨 优化界面
-- 🔧 改进配置
-- 🌐 添加新的平台支持
-
-### 开发指南
-
-1. 克隆项目到本地：
 ```bash
-git clone https://github.com/your-username/github-profile-statistics-card.git
-cd github-profile-statistics-card
+# workspace 在仓库根
+cargo build   --workspace
+cargo test    --workspace
+cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此失败
 ```
 
-2. 安装依赖：
-```bash
-npm install
-```
+- **正确性由 replay 定义**，不是手写断言：153 条录制 case，当前基线 **148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status` 差异，非移植缺陷。改动前后都要跑。
+- **别拿「replay 还是绿的」当证据**：`/health` 的 body、`/api/cache/stats` 的数值、卡片的 `x-cache-key`/`x-cache-status` 在录制时都被归一化成了通配，等于没有断言。动这些地方必须手工对拍。
 
-3. 创建 `.env` 文件并设置环境变量：
-```
-# 可选：提升 GitHub 匿名额度 60 次/小时 → 5000 次/小时
-GITHUB_TOKEN=your_github_token
-# 可选：跨实例缓存
-# REDIS_HOST=your_redis_host
-# REDIS_PORT=12123
-# REDIS_PASSWORD=your_redis_password
-```
+## 🔜 即将支持
 
-4. 启动开发服务器：
-```bash
-npm run dev
-```
+- 知乎
+- 微博
 
-5. 构建项目：
-```bash
-npm run build
-```
+## 📝 开源协议
 
-6. 运行生产版本：
-```bash
-npm start
-```
-
-> 说明：本项目使用TypeScript开发，已优化编译配置，构建输出文件将存放在`dist`目录中，确保源代码与编译产物分离，提高项目结构清晰度。项目使用`tsc-alias`处理路径别名，确保编译后的代码能够正确解析模块引用。
-
-### 提交规范
-
-提交信息请遵循以下格式：
-- `feat`: 新功能
-- `fix`: 修复问题
-- `docs`: 文档修改
-- `style`: 代码格式修改
-- `refactor`: 代码重构
-- `test`: 测试用例修改
-- `chore`: 其他修改
-
-例如：`feat: 添加 bilibili 数据统计支持`
-
-## 📬 联系方式
-
-如有问题或建议，欢迎通过以下方式联系：
-
-- 提交 Issue
-- 发送邮件至：[1447545564@qq.com]
+[Apache 2.0](LICENSE)
 
 ---
 
-如果这个项目对你有帮助，请给个 Star ⭐️ 
+如果这个项目对你有帮助，请给个 Star ⭐️

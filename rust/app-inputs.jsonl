@@ -1,0 +1,12 @@
+{"name":"home","method":"GET","path":"/"}
+{"name":"health","method":"GET","path":"/health"}
+{"name":"livez","method":"GET","path":"/livez"}
+{"name":"cache-stats","method":"GET","path":"/api/cache/stats"}
+{"name":"theme-test","method":"GET","path":"/api/theme/test"}
+{"name":"not-found","method":"GET","path":"/definitely/not/a/route"}
+{"name":"github-user","method":"GET","path":"/github/octocat?theme=dark"}
+{"name":"github-bad-user","method":"GET","path":"/github/baduser!!"}
+{"name":"leetcode-user","method":"GET","path":"/leetcode/leetcode"}
+{"name":"csdn-user","method":"GET","path":"/csdn/testuser"}
+{"name":"juejin-user","method":"GET","path":"/juejin/testuser"}
+{"name":"bilibili-user","method":"GET","path":"/bilibili/testuser"}

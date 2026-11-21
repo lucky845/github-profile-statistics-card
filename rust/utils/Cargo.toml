@@ -1,0 +1,16 @@
+[package]
+name = "utils"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Rust port of `src/utils/`"
+
+[lib]
+name = "src_utils_"
+# 纯 rlib：cdylib 是给 napi 桥用的，桥已删除，二进制现在静态链接这个 crate。
+crate-type = ["rlib"]
+
+[dependencies]
+serde = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }

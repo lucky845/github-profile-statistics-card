@@ -1,0 +1,60 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/lucky845/workspace/MyWorkspace/WebProjects/github-profile-statistics-card",
+  "unit": "src/services/svg/",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "src-services-svg-",
+  "exports": [
+    {
+      "name": "getThemeConfig",
+      "file": "src/services/svg/svgService.ts",
+      "line": 21,
+      "params": [
+        {
+          "name": "themeName",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "ThemeOptions",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "generateCard",
+      "file": "src/services/svg/svgService.ts",
+      "line": 49,
+      "params": [
+        {
+          "name": "cardType",
+          "ts_type": "CardType",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "data",
+          "ts_type": "any",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "themeName",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}

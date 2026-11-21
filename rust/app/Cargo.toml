@@ -1,0 +1,38 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Front door: the whole HTTP surface, served over TCP by src/main.rs and over Vercel's bridge by api/index.rs"
+
+[lib]
+name = "app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+# json: the platform fetches post GraphQL and read JSON bodies.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+# The ported units. Cargo exposes a dependency under its lib target name, so the svg crate — whose
+# napi artifact needs `[lib] name = "src_services_svg_"` — is imported under that same name. The
+# platforms crate keeps the default lib name, which hyphenates to `platforms_rs`.
+platforms-rs = { path = "../platforms-rs" }
+src_services_svg_ = { path = "../svg", package = "svg" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+dom_query = { version = "0.28", default-features = false }
+# The process families on /metrics: CPU seconds, start time and resident size come from the OS,
+# and std does not expose any of them.
+libc = "0.2"
+# The shared cache tier. Optional at runtime: with no REDIS_URL the process behaves exactly as a
+# single-binary deployment did, so a container without Redis keeps working unchanged.
+redis = { version = "1.8", features = ["tokio-comp", "connection-manager", "aio"] }
+
+# The cors tests drive a real Router through `oneshot`; `Next` cannot be built by hand.
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

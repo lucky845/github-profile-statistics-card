@@ -9,52 +9,52 @@ on:
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # 仓库已是纯 Rust：没有 package.json、tsconfig、jest、node_modules 参与任何环节。
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: '20'
-          cache: npm
+          components: clippy
 
-      # 必须带 devDependencies，否则 tsc / tsc-alias 缺失，构建产物为空
-      - name: Install dependencies
-        run: npm ci --include=dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
 
+      # Cargo.lock 是构建契约：依赖漂移必须在这里失败，而不是在镜像构建时。
       - name: Build
-        run: npm run build
+        run: cargo build --release --locked --workspace
 
-      - name: Verify build artifacts
+      - name: Test
+        run: cargo test --locked --workspace
+
+      # --all-targets 让测试代码也被 lint：单测里的 panic/indexing 同样是代码，不该因为
+      # "只在测试里跑"就免检。
+      - name: Lint
+        run: cargo clippy --release --locked --all-targets --workspace -- -D warnings
+
+      # 二进制必须自足：只允许 libc 这类系统库，不许有 Node 运行时或外部模块。
+      - name: Verify the binary is self-contained
         run: |
-          test -f dist/src/app.js || { echo "dist/src/app.js 缺失，构建产物不完整"; exit 1; }
-          test -d dist/src/views || { echo "views 未复制到 dist"; exit 1; }
-          # 首页由 home.controller.ts 在读取 views/index.html 失败时回落到内置 HTML，
-          # 所以"views 在"不代表"线上是新的"。这里直接核对 seed 首页的唯一标题串。
-          test -f dist/src/views/index.html || { echo "dist/src/views/index.html 缺失"; exit 1; }
-          grep -q "个人主页统计卡片" dist/src/views/index.html || { echo "views/index.html 不是当前版本首页"; exit 1; }
+          test -x target/release/app || { echo "二进制缺失，构建产物不完整"; exit 1; }
+          echo "--- ldd ---"
+          ldd target/release/app || true
+          if ldd target/release/app 2>/dev/null | grep -qi 'node'; then
+            echo "::error::二进制仍然链接到 Node 运行时"; exit 1
+          fi
 
-      # 精确测量启动各阶段耗时（定位 listen 为何被推迟）
-      - name: Diagnose startup timeline
-        env:
-          NODE_ENV: production
-          PORT: 8083
-        run: |
-          node -e 'const t0=Date.now();const app=require(process.cwd()+"/dist/src/app.js").default;console.log("MODULE_LOADED_MS="+(Date.now()-t0));const t1=Date.now();const s=app.listen(8083,()=>{console.log("LISTEN_CB_MS="+(Date.now()-t1)+" TOTAL_MS="+(Date.now()-t0));s.close();process.exit(0)});setTimeout(()=>{console.log("PROBE_TIMEOUT_MS="+(Date.now()-t0));process.exit(1)},60000)'
-
-      # 干净环境启动冒烟：没有 PostgreSQL/MongoDB/Redis 时必须降级启动而不是崩溃
+      # 干净环境启动冒烟：不配 GITHUB_TOKEN / BILIBILI_SESSDATA 也必须能起来。
       - name: Start server and smoke test
         env:
-          NODE_ENV: production
           PORT: 8080
         run: |
           set -uo pipefail
-          node dist/src/app.js > server.log 2>&1 &
+          ./target/release/app > server.log 2>&1 &
           echo $! > server.pid
           ready=0
-          for i in $(seq 1 90); do
-            # 用 /livez 等启动：/health 在无数据库的干净环境里仍返回 200 但 status=unhealthy，
-            # 语义是"连通性"不是"进程活着"，混用会让启动判断和服务健康判断纠缠在一起
+          for i in $(seq 1 60); do
+            # 用 /livez 等启动：/health 报的是外部平台状态，缺上游凭据时会一直 unhealthy。
             if curl -fsS -m 2 http://127.0.0.1:8080/livez > /dev/null 2>&1; then
               echo "服务在 ${i} 秒内就绪"
               ready=1
@@ -63,27 +63,53 @@ jobs:
             sleep 1
           done
 
-          echo "--- 进程状态 ---"
-          ps -p "$(cat server.pid)" -o pid,stat,etime,cmd 2>/dev/null || echo "进程已退出"
-          echo "--- 监听端口 ---"
-          (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null || true) | grep -E ':8080' || echo "8080 未监听"
-          echo "--- 服务日志全文 ---"
-          cat server.log 2>/dev/null || echo "无 server.log"
-
           if [ "$ready" != "1" ]; then
-            echo "::error::服务在 90 秒内未就绪（端口 8080 无法访问）"
+            echo "--- 进程状态 ---"
+            ps -p "$(cat server.pid)" -o pid,stat,etime,cmd 2>/dev/null || echo "进程已退出"
+            echo "--- 服务日志全文 ---"
+            cat server.log 2>/dev/null || echo "无 server.log"
+            echo "::error::服务在 60 秒内未就绪（端口 8080 无法访问）"
             exit 1
           fi
 
-          echo "--- /health（干净环境里 database 为 unhealthy 属预期，只验证接口可用）---"
+          # 零子进程：曾经的 Node 兜底转发进程必须彻底不存在。
+          children=$(pgrep -P "$(cat server.pid)" | wc -l)
+          echo "子进程数: $children"
+          test "$children" -eq 0 || { echo "::error::二进制拉起了子进程，Node 兜底进程回归了"; exit 1; }
+
+          echo "--- /health ---"
           curl -fsS -m 10 http://127.0.0.1:8080/health
           echo
-          echo "--- 主页可访问 ---"
+          echo "--- 主页 ---"
           curl -fsS -m 10 http://127.0.0.1:8080/ | grep -q "个人主页统计卡片" && echo "主页 OK"
+          echo "--- 404 形态 ---"
+          curl -s -o /dev/null -w 'status=%{http_code}\n' http://127.0.0.1:8080/definitely-not-a-route
+
+      # Vercel 入口与服务端二进制共用 app::router()，但走的是另一条运行时（bridge + dev server）。
+      # vercel_runtime 在没有 bridge 环境时会自己起一个 dev server，所以这里能直接验它。
+      - name: Vercel entry point smoke
+        run: |
+          set -uo pipefail
+          ./target/release/index > vercel.log 2>&1 &
+          echo $! > vercel.pid
+          for i in $(seq 1 30); do
+            curl -fsS -m 2 http://127.0.0.1:3000/livez > /dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS -m 5 http://127.0.0.1:3000/health > /dev/null && echo "vercel /health OK"
+          curl -fsS -m 5 http://127.0.0.1:3000/ | grep -q "个人主页统计卡片" && echo "vercel 主页 OK"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 http://127.0.0.1:3000/definitely-not-a-route)
+          test "$code" = "404" || { echo "::error::Vercel 入口 404 形态不对: $code"; exit 1; }
+          kill "$(cat vercel.pid)" 2>/dev/null || true
 
       - name: Stop server
         if: always()
         run: |
           [ -f server.pid ] && kill "$(cat server.pid)" 2>/dev/null || true
-          echo "--- 终止时日志尾部 ---"
           tail -40 server.log 2>/dev/null || true
+
+      # Dockerfile 是部署契约：镜像里不允许出现 Node。
+      - name: Docker image smoke
+        run: |
+          docker build -t gpsc-ci .
+          docker run --rm gpsc-ci sh -c 'command -v node || echo "no node in image"'

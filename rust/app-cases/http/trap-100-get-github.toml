@@ -1,0 +1,27 @@
+[request]
+method = "GET"
+path = "/github/a%C2%A0b"
+
+[response]
+status = 400
+
+[response.headers]
+content-security-policy = "default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data: *;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+content-type = "text/html; charset=utf-8"
+cross-origin-opener-policy = "same-origin"
+cross-origin-resource-policy = "same-origin"
+origin-agent-cluster = "?1"
+ratelimit-limit = "[..]"
+ratelimit-remaining = "[..]"
+ratelimit-reset = "[..]"
+referrer-policy = "no-referrer"
+strict-transport-security = "max-age=15552000; includeSubDomains"
+vary = "Origin"
+x-cache-key = "github:a�b:default"
+x-cache-status = "MISS"
+x-content-type-options = "nosniff"
+x-dns-prefetch-control = "off"
+x-download-options = "noopen"
+x-frame-options = "DENY"
+x-permitted-cross-domain-policies = "none"
+x-xss-protection = "[..]"

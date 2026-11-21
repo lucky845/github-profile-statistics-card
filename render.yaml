@@ -1,26 +1,32 @@
 services:
   - type: web
     name: github-profile-statistics-card
-    runtime: node
+    # 后端是单个 Rust 二进制，没有 npm/tsc/node_modules。node 运行时在这个仓库里已经不存在，
+    # 所以这里必须是 docker：runtime: node 会让 Render 去跑 npm ci，而那份构建产物已无服务入口。
+    runtime: docker
     plan: free
     region: singapore   # 离中国大陆最近的一个区，冷路径少跨半个地球
     branch: main
-    # 必须带 devDependencies，否则没有 tsc，构建直接失败
-    buildCommand: npm ci --include=dev && npm run build
-    startCommand: node dist/src/app.js
-    # 活跃探针用 /livez：/health 报告的是数据库连通性，缺 DB 时会一直 unhealthy
+    # Dockerfile 是唯一构建契约（多阶段：rust builder -> debian slim runner，镜像里不含 Node）。
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # 活跃探针用 /livez：/health 报告的是外部平台连通性，缺上游凭据时会一直 unhealthy。
     healthCheckPath: /livez
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NODE_VERSION
-        value: "20"
-      # PORT 由 Render 自动注入，app.config.ts 已读取 process.env.PORT
-      - key: MONGODB_URI
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
+      # PORT 由 Render 自动注入，二进制读 std::env::var("PORT")。
+      # 匿名 GitHub API 只有 60 次/小时/IP，共享出口很容易打满，卡片会退化成「暂无数据」。
       - key: GITHUB_TOKEN
+        sync: false
+      # 哔哩哔哩接口对无 Cookie 请求返回 -352 风控码。不配也能跑，拿到的是全 0 的真实卡片。
+      - key: BILIBILI_SESSDATA
+        sync: false
+      # Redis 共享缓存层。配了才有跨实例/跨冷启动共享；不配则退化为纯进程内缓存。
+      # 值为空、由控制台填：密码不应该进 git。四个变量与原版 Node 完全一致。
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_USERNAME
+        sync: false
+      - key: REDIS_PASSWORD
         sync: false

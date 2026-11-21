@@ -1,0 +1,137 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/lucky845/workspace/MyWorkspace/WebProjects/github-profile-statistics-card",
+  "unit": "src/services/platforms/",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "platforms-rs",
+  "exports": [
+    {
+      "name": "renderGallery",
+      "file": "src/services/platforms/gallery.ts",
+      "line": 36,
+      "params": [
+        {
+          "name": "baseUrl",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "theme",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "recordOk",
+      "file": "src/services/platforms/health.ts",
+      "line": 26,
+      "params": [
+        {
+          "name": "platform",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "recordFail",
+      "file": "src/services/platforms/health.ts",
+      "line": 32,
+      "params": [
+        {
+          "name": "platform",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "reason",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "snapshotHealth",
+      "file": "src/services/platforms/health.ts",
+      "line": 39,
+      "params": [],
+      "returns": "Record<string, PlatformHealth>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "resetHealth",
+      "file": "src/services/platforms/health.ts",
+      "line": 46,
+      "params": [],
+      "returns": "void",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "fail",
+      "file": "src/services/platforms/types.ts",
+      "line": 37,
+      "params": [
+        {
+          "name": "reason",
+          "ts_type": "(| 'NOT_FOUND'\n  | 'RATE_LIMITED'\n  | 'INVALID_INPUT'\n  /** 上游认不出这个 id，但服务本身是好的 —— 例如掘金返回 user_id=0 的空壳 */\n  | 'DATA_UNAVAILABLE'\n  | 'UPSTREAM_ERROR')",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "message",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "StatsResult<never>",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "createCardHandler",
+      "file": "src/services/platforms/cardHandler.ts",
+      "line": 43,
+      "reason": "uses `PlatformStatsSource`, which has function members"
+    },
+    {
+      "name": "ok",
+      "file": "src/services/platforms/types.ts",
+      "line": 34,
+      "reason": "generic over `T`: values of any shape, functions included"
+    }
+  ]
+}

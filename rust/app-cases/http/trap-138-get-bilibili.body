@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="495" height="200" viewBox="0 0 495 200" role="img" aria-label="哔哩哔哩统计卡片">
+    <title>lkrmak 的哔哩哔哩统计</title>
+    <rect width="495" height="200" rx="8" ry="8" fill="#ffffff" stroke="#e1e4e8" stroke-width="1"/>
+    <circle cx="23" cy="36.4" r="3" fill="#00aeec"/>
+    <text x="32" y="42" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="16" font-weight="600" fill="#24292e">哔哩哔哩</text>
+    <text x="20" y="62" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#586069">UP 主数据</text>
+    <line x1="20" y1="76" x2="475" y2="76" stroke="#e1e4e8" stroke-width="1"/>
+    <text x="20" y="124" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#24292e" font-variant-numeric="tabular-nums">0</text>
+      <text x="20" y="142" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#586069">粉丝</text>
+    <text x="133.75" y="124" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#24292e" font-variant-numeric="tabular-nums">0</text>
+      <text x="133.75" y="142" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#586069">关注</text>
+    <text x="247.5" y="124" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#24292e" font-variant-numeric="tabular-nums">0</text>
+      <text x="247.5" y="142" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#586069">获赞</text>
+    <text x="361.25" y="124" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#24292e" font-variant-numeric="tabular-nums">0</text>
+      <text x="361.25" y="142" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#586069">播放</text>
+    
+    <text x="20" y="186" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#586069">Bilibili Statistics</text>
+    <text x="475" y="186" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Noto Sans SC,PingFang SC,Microsoft YaHei,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#586069" text-anchor="end">更新于 2026-11-21</text>
+  </svg>
