@@ -1,0 +1,24 @@
+[request]
+method = "GET"
+path = "/api/cache/stra%C3%9Fe"
+
+[response]
+status = 404
+
+[response.headers]
+content-security-policy = "default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data: *;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests"
+content-type = "application/json; charset=utf-8"
+cross-origin-opener-policy = "same-origin"
+cross-origin-resource-policy = "same-origin"
+origin-agent-cluster = "?1"
+referrer-policy = "no-referrer"
+strict-transport-security = "max-age=15552000; includeSubDomains"
+vary = "Origin"
+x-cache-key = "http:GET:_api_cache_stra_C3_9Fe:"
+x-cache-status = "MISS"
+x-content-type-options = "nosniff"
+x-dns-prefetch-control = "off"
+x-download-options = "noopen"
+x-frame-options = "DENY"
+x-permitted-cross-domain-policies = "none"
+x-xss-protection = "[..]"

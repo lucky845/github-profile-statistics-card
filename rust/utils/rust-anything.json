@@ -1,0 +1,216 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/Users/lucky845/workspace/MyWorkspace/WebProjects/github-profile-statistics-card",
+  "unit": "src/utils/",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "src-utils-",
+  "exports": [
+    {
+      "name": "encWbi",
+      "file": "src/utils/bilibili.utils.ts",
+      "line": 19,
+      "params": [
+        {
+          "name": "params",
+          "ts_type": "{ [key: string]: string | number | object }",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "img_key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "sub_key",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "getWbiKeys",
+      "file": "src/utils/bilibili.utils.ts",
+      "line": 45,
+      "params": [
+        {
+          "name": "SESSDATA",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": true,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatCount",
+      "file": "src/utils/format.ts",
+      "line": 10,
+      "params": [
+        {
+          "name": "n",
+          "ts_type": "number | null | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatPercent",
+      "file": "src/utils/format.ts",
+      "line": 19,
+      "params": [
+        {
+          "name": "pct",
+          "ts_type": "number | null | undefined",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "createRequest",
+      "file": "src/utils/http.utils.ts",
+      "line": 27,
+      "params": [
+        {
+          "name": "timeout",
+          "ts_type": "number",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "config",
+          "ts_type": "AxiosRequestConfig",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "createRequestLoggerMiddleware",
+      "file": "src/utils/logger.ts",
+      "line": 165,
+      "params": [],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "firstString",
+      "file": "src/utils/request.util.ts",
+      "line": 22,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "(string | string[] | undefined | null)",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "asyncDbUpdate",
+      "file": "src/utils/db-update.utils.ts",
+      "line": 11,
+      "reason": "checks `instanceof`: class identity does not survive the bridge"
+    },
+    {
+      "name": "AppError",
+      "file": "src/utils/errors.ts",
+      "line": 4,
+      "reason": "class: extends another class, public field `statusCode`, public field `isOperational`, public field `errorCode`, public field `details`, public field `isPrivate`"
+    },
+    {
+      "name": "NotFoundError",
+      "file": "src/utils/errors.ts",
+      "line": 33,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "ValidationError",
+      "file": "src/utils/errors.ts",
+      "line": 47,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "DatabaseError",
+      "file": "src/utils/errors.ts",
+      "line": 61,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "ExternalApiError",
+      "file": "src/utils/errors.ts",
+      "line": 75,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "RateLimitError",
+      "file": "src/utils/errors.ts",
+      "line": 89,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "SecurityError",
+      "file": "src/utils/errors.ts",
+      "line": 102,
+      "reason": "class: extends another class"
+    },
+    {
+      "name": "formatDate",
+      "file": "src/utils/format.ts",
+      "line": 25,
+      "reason": "checks `instanceof`: class identity does not survive the bridge"
+    },
+    {
+      "name": "createRequestWithRetry",
+      "file": "src/utils/http.utils.ts",
+      "line": 73,
+      "reason": "takes or returns a function"
+    },
+    {
+      "name": "PostgreSQLManager",
+      "file": "src/utils/pgManager.ts",
+      "line": 7,
+      "reason": "class: public field `isConnected`, static method `getInstance`, async or generator method `ensureConnection`, async or generator method `connect`, async or generator method `disconnect`, async or generator method `executeOperation`, async or generator method `transactionalOperation`, async or generator method `initializeDatabase`, async or generator method `cleanExpiredData`"
+    }
+  ]
+}

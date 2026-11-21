@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+    <rect width="400" height="200" fill="#ffffff" rx="6px" ry="6px" stroke="#e1e4e8" stroke-width="2"/>
+    <circle cx="70" cy="70" r="40" fill="#0366d6"/>
+    <text x="230" y="60" font-family="Segoe UI, Tahoma, Geneva, Verdana, sans-serif" font-size="18px" font-weight="bold" fill="#24292e">测试用户</text>
+    <text x="230" y="90" font-family="Segoe UI, Tahoma, Geneva, Verdana, sans-serif" font-size="14px" fill="#586069">这是主题测试卡片</text>
+    <rect x="70" y="120" width="260" height="1" fill="#e1e4e8"/>
+    <text x="130" y="150" font-family="Segoe UI, Tahoma, Geneva, Verdana, sans-serif" font-size="14px" fill="#24292e">数据1: 123</text>
+    <text x="250" y="150" font-family="Segoe UI, Tahoma, Geneva, Verdana, sans-serif" font-size="14px" fill="#24292e">数据2: 456</text>
+    <text x="200" y="180" font-family="Segoe UI, Tahoma, Geneva, Verdana, sans-serif" font-size="12px" text-anchor="middle" fill="#586069">主题: 默认</text>
+  </svg>

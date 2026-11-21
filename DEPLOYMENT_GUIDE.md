@@ -1,171 +1,115 @@
-# GitHub Profile Statistics Card - 部署指南与架构说明
+# GitHub Profile Statistics Card — 部署指南与架构说明
 
-## 项目概述
+## 项目是什么
 
-这是一个功能丰富的开源项目，用于生成GitHub、LeetCode、CSDN、掘金和B站的个人统计数据卡片，支持SVG格式输出，可嵌入到GitHub个人资料页面或任何支持图片的位置。
+生成 GitHub、LeetCode、CSDN、掘金、哔哩哔哩个人统计卡片的服务，输出**自包含 SVG**，可直接嵌进 GitHub 个人资料页或任何能显示图片的位置。
 
-## 架构优化成果
+后端是**单个 Rust 二进制**：进程内没有任何 Node、没有 npm 依赖、没有数据库连接、没有 Redis 连接。启动即服务，退出即结束。
 
-### 1. 核心架构改进
+## 架构
 
 ```mermaid
 flowchart TD
-    Client[客户端请求] --> ExpressApp[Express应用]
-    ExpressApp --> Metrics[性能监控中间件]
-    Metrics --> Theme[主题处理中间件]
-    Theme --> Cache[缓存中间件]
-    Cache --> Validate[参数验证中间件]
-    Validate --> Controller[控制器]
-    Controller --> Service[服务层]
-    Service --> ExternalAPI[外部API调用]
-    Service --> SvgGenerator[SVG生成器]
-    SvgGenerator --> SvgSanitizer[SVG净化服务]
-    Service --> MongoDB[(MongoDB数据库)]
-    Service --> MemoryCache[(内存缓存)]
-    Service --> Redis[(Redis缓存)]
-    Metrics --> Prometheus[Prometheus指标收集]
+    Client[客户端 / GitHub camo] --> Axum[Axum 单二进制]
+    Axum --> Cache[缓存层 cache.rs]
+    Cache -->|HIT| Client
+    Cache -->|MISS| Metrics[计数层 metrics.rs]
+    Metrics --> Router[frontdoor::router]
+    Router --> Home["/ · /health · /livez · /api/theme/test"]
+    Router --> CacheApi["/api/cache/stats · DELETE /api/cache/clear"]
+    Router --> MetricsApi["/metrics · /metrics/json · /stats"]
+    Router --> Platforms["/github · /leetcode · /csdn · /juejin · /bilibili"]
+    Platforms --> Upstream[平台上游 API]
+    Platforms --> Svg[svg 单元：generateCard + 主题表]
+    Svg --> Client
+    Router -->|未命中任何路由| NotFound[404 双形态]
 ```
 
-### 2. 关键优化亮点
+两层的顺序是行为的一部分，不是随意摆放：
 
-#### 2.1 错误处理机制
-- **统一错误响应格式**：实现了标准化的错误响应对象，包含错误码、错误信息和详细描述
-- **分层错误处理**：业务错误、网络错误、安全错误等不同类型的错误有专门的处理逻辑
-- **错误日志增强**：记录详细的错误上下文，便于问题定位
-- **优雅降级**：当外部API调用失败时，尝试使用缓存数据返回
+1. **cache 在外层**（`axum` 里最后 `.layer()` 的在最外层）。缓存 HIT 直接返回，**不进计数层**——与原 Express 的 `app.ts:66 cache → :71 metrics` 挂载顺序一致。反过来会让 HIT 也计数，`/stats` 的 `requests.total` 立即虚高。
+2. **metrics 在内层**，只统计真正走到路由的请求。
 
-#### 2.2 安全增强
-- **SVG内容过滤**：实现了专业的SVG净化服务，移除潜在的XSS攻击向量
-- **输入验证**：严格的参数验证，防止注入攻击
-- **CORS配置优化**：安全的跨域资源共享策略
-- **限流保护**：防止恶意请求和DDoS攻击
+## 运行要求
 
-#### 2.3 缓存优化
-- **多级缓存策略**：MongoDB持久化缓存 + Node-Cache内存缓存 + Redis高性能缓存
-- **智能缓存键生成**：基于用户ID、请求参数和主题的唯一缓存键
-- **可配置TTL**：针对不同数据源设置合理的缓存过期时间
-- **缓存命中率监控**：实时跟踪缓存效果并提供优化依据
-- **Redis缓存支持**：使用Redis作为主要缓存系统，提供更高的性能和可扩展性
-- **GitHub服务缓存优化**：实现5分钟缓存策略，显著减少重复请求的响应时间
+- Linux x86_64 / aarch64（Debian bookworm 或同代 glibc），或 macOS（本地开发）
+- 内存：约 30 MB 常驻（无 V8 堆、无连接池）
+- 外网：需要能访问 `api.github.com`、`leetcode.com` / `leetcode.cn`、`blog.csdn.net`、`api.juejin.cn`、`api.bilibili.com` 与 `m.bilibili.com`
+- **不需要**数据库、Redis、MongoDB、消息队列
 
-#### 2.4 监控与可观测性
-- **Prometheus集成**：全面的指标收集，包括请求计数、响应时间、错误率等
-- **健康检查端点**：提供系统运行状态和资源使用情况
-- **实时统计API**：可视化系统运行指标
-- **内存使用监控**：防止内存泄漏和资源耗尽
+## 环境变量
 
-#### 2.5 测试覆盖
-- **单元测试**：控制器、服务层、中间件的全面测试
-- **边界情况测试**：各种异常输入和错误场景的处理验证
-- **性能测试**：缓存效果和响应时间基准测试
-- **安全测试**：XSS防护和输入验证测试
+核心三个，全部可选（另有 Redis 四个变量，见下一节）：
 
-## 部署指南
+| 变量 | 默认 | 作用 |
+| --- | --- | --- |
+| `PORT` | `8080` | 监听端口。云平台（Render/Railway/Fly）会自动注入，二进制直接读 |
+| `GITHUB_TOKEN` | 空 | GitHub 个人访问令牌。**强烈推荐**：匿名额度只有 60 次/小时/**出口 IP**，部署在共享出口上几分钟就会打满，之后 GitHub 卡片会退化成「该平台暂无此用户的数据」。配置后额度是 5000 次/小时 |
+| `BILIBILI_SESSDATA` | 空 | 哔哩哔哩登录 Cookie 里的 `SESSDATA`。不带时上游对 `x/space/upstat`、`x/relation/stat` 返回 `-352` 风控码，卡片会显示**全 0 的真实数据**（不是报错卡） |
 
-### 1. 环境要求
+其它历史变量（`MONGODB_URI`、`DATABASE_URL`、`USE_MEMORY_CACHE`、`NODE_ENV`、`RATE_LIMIT_*`、`*_CACHE_TTL`）**已无任何代码读取**，配了也不生效，可以从平台上一并删掉。
 
-- Node.js 16.x 或更高版本
-- npm 8.x 或更高版本
-- MongoDB 5.x 或更高版本（可选，用于持久化缓存）
-- Redis 6.x 或更高版本（可选，用于高性能缓存）
-- 服务器推荐配置：2GB RAM，1个CPU核心（支持中等流量）
+> `REDIS_*` 不在此列：缓存层已恢复，这四个变量会被真实读取，见下一节。
 
-### 2. 安装步骤
+## 缓存：两层，第二层可选
 
-#### 2.1 克隆代码库
+两个变量名任选其一即可，与原版 Node 完全兼容，**不需要改名**：
 
 ```bash
-git clone https://github.com/yourusername/github-profile-statistics-card.git
-cd github-profile-statistics-card
-```
+# 方式一：单个 URL（云平台常用）
+REDIS_URL=rediss://default:密码@主机:6379
 
-#### 2.2 安装依赖
-
-```bash
-npm install
-```
-
-#### 2.3 配置环境变量
-
-创建 `.env` 文件，根据需要设置以下环境变量：
-
-```dotenv
-# 服务器配置
-PORT=3000
-NODE_ENV=production
-
-# MongoDB连接信息（可选）
-MONGODB_URI=mongodb://localhost:27017/github-stats-card
-MONGODB_USERNAME=<your_mongodb_username>
-MONGODB_PASSWORD=<your_mongodb_password>
-
-# Redis连接信息（可选，用于高性能缓存）
-REDIS_HOST=localhost
+# 方式二：拆分变量（老配置，原样可用）
+REDIS_HOST=主机
 REDIS_PORT=6379
 REDIS_USERNAME=default
-REDIS_PASSWORD=<your_redis_password>
-
-# API限流配置
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX=100
-
-# 缓存配置
-DEFAULT_CACHE_TTL=300
-GITHUB_CACHE_TTL=300
-LEETCODE_CACHE_TTL=1800
-CSDN_CACHE_TTL=1800
-JUEJIN_CACHE_TTL=1800
-BILIBILI_CACHE_TTL=1800
-
-# 请求超时设置（毫秒）
-REQUEST_TIMEOUT=10000
+REDIS_PASSWORD=密码
 ```
 
-#### 2.4 构建项目
+`REDIS_URL` 优先；没有它才回落拆分变量。密码里的 `@ : /` 会被正确转义。
+
+| 层 | 何时启用 | 寿命 | 作用 |
+| --- | --- | --- | --- |
+| L1 进程内 | 始终 | 响应的 `s-maxage`（10–60 分钟） | 零网络开销，最快路径 |
+| L2 Redis | 配了 `REDIS_URL` **或** `REDIS_HOST` 时 | 同上 | 跨实例 / 跨冷启动共享 |
+
+TTL 取自响应头的 `s-maxage`，所以「改平台的 s-maxage」会同时改掉 CDN 看到的头和本进程存的时长。
+
+**两套变量都没配时，行为与单二进制部署完全一致**：不建连、不写、计数器不变。这让录制基线（153 条 case）继续有意义。
+
+为什么值得配：GitHub 匿名额度只有 **60 次/小时/出口 IP**，而 `/github/{user}` 每次回源要打 2 个 REST 端点。多实例部署时每个实例都会各打一次上游，配额会被实例数除。实测 5 次冷启动：无 Redis 全部回源，有 Redis 只回源 1 次。
+
+清缓存会同时清两层（`DELETE /api/cache/clear?all=true`），且**不用 `FLUSHDB`**——只按 `http:` 前缀 `SCAN`+`DEL`，以免误删同一 Redis 库里别的应用的数据。
+
+## 本地运行
 
 ```bash
-npm run build
+cargo build --release --workspace
+GITHUB_TOKEN=ghp_xxx PORT=3000 ./target/release/app
 ```
 
-#### 2.5 启动服务
+打开 <http://127.0.0.1:3000/>；卡片在 `/github/<username>`。
 
-##### 开发环境
-
-```bash
-npm run dev
-```
-
-##### 生产环境
-
-```bash
-npm start
-```
-
-### 3. Docker部署
-
-#### 3.1 构建Docker镜像
+## Docker 部署（推荐）
 
 ```bash
 docker build -t github-stats-card .
-```
-
-#### 3.2 运行Docker容器
-
-```bash
-docker run -d \
-  -p 3000:3000 \
+docker run -d -p 3000:3000 \
   -e PORT=3000 \
-  -e MONGODB_URI=mongodb://mongodb:27017/github-stats-card \
+  -e GITHUB_TOKEN=ghp_xxx \
   --name github-stats-card \
   github-stats-card
 ```
 
-#### 3.3 Docker Compose（推荐）
+镜像构成（`Dockerfile` 多阶段）：
 
-创建 `docker-compose.yml` 文件：
+- **builder**：`rust:1.100-slim-bookworm`，`cargo build --release --locked`。**构建上下文只有 `rust/`**——首页模板在 `rust/app/views/index.html`，编译期被 `include_str!` 编进二进制。仓库里已经没有任何 JS/TS、没有 `package.json`、没有 `node_modules`。
+- **runner**：`debian:bookworm-slim` + `ca-certificates` + `curl`（供 HEALTHCHECK），非 root 用户 `app`（uid 10001）。
+- 最终镜像约 **158 MB**（实测），`command -v node` 返回空。
 
 ```yaml
-version: '3'
+# docker-compose.yml —— 不内置 redis service：Redis 是可选的外部依赖，
+# 推荐直接连托管实例（Render Key Value / Upstash / Redis Labs）。
 services:
   app:
     build: .
@@ -173,105 +117,99 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - MONGODB_URI=mongodb://mongodb:27017/github-stats-card
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - NODE_ENV=production
-    depends_on:
-      - mongodb
-      - redis
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BILIBILI_SESSDATA=${BILIBILI_SESSDATA}
+      # 可选：配了才有跨实例共享缓存，不配则纯进程内
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_USERNAME=${REDIS_USERNAME}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 3s
       retries: 3
-
-  mongodb:
-    image: mongo:5
-    volumes:
-      - mongo-data:/data/db
-    restart: always
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  redis:
-    image: redis:6
-    restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    command: redis-server --appendonly yes
-
-volumes:
-  mongo-data:
 ```
 
-启动服务：
+> compose 里引用 `${GITHUB_TOKEN}` 时由 shell/compose 自身的 .env 提供，**不要把 token 写进 Dockerfile 或提交到仓库**。
+
+## 托管平台
+
+| 平台 | 配置方式 |
+| --- | --- |
+| **Render** | `render.yaml` 已写 `runtime: docker` + `dockerfilePath: ./Dockerfile` + `healthCheckPath: /livez`。Render 注入 `PORT` |
+| **Railway** | `railway.json` 已写 `build.builder: DOCKERFILE`；Railway 发现 Dockerfile 时本来也会走 Docker 构建 |
+| **任意容器平台** | 直接用仓库根的 `Dockerfile`，注入 `PORT` |
+| **Vercel** | ✅ **支持，走官方 Rust runtime**（Beta）。入口是 `api/index.rs`，`vercel.json` 把所有路径 rewrite 到它。详见下节 |
+
+探针语义区分（所有平台一致）：
+
+- `/livez` —— 「进程还活着吗」。恒 200，不触达任何上游，**健康检查请用这个**
+- `/health` —— 「上游都通吗」。未配 `GITHUB_TOKEN` / `BILIBILI_SESSDATA` 或上游限流时会报告 unhealthy，但进程本身仍正常服务
+
+用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
+
+## Vercel 部署
+
+Vercel 提供**官方 Rust runtime**（Beta，全套餐可用），运行在 Fluid compute 上。本仓库已经接好：
+
+```
+Cargo.toml          ← 根 workspace + Vercel 入口的 [[bin]]
+api/index.rs        ← serverless 入口（Vercel 把 api/*.rs 各编译成一个函数）
+vercel.json         ← 把所有路径 rewrite 到 /api/index
+.vercelignore       ← 排除 1.2G 的 target/
+rust/app/src/lib.rs ← 真正的路由栈，两个入口共用
+```
+
+### 为什么只有一个函数
+
+`rust/app/src/lib.rs` 里的 `router()` 同时被 `src/main.rs`（TCP / Docker）和 `api/index.rs`（Vercel）调用。**这是刻意的**：一份 stack，两个运行时，加一层中间件不可能只加在一边。
+
+而把所有路径 rewrite 到**同一个函数**，是因为这个应用的行为依赖"路径如何不匹配"——大小写不敏感的挂载、单个尾斜杠、`//` 折叠、以及一个会回看原始路径的 404。把这些拆进 Vercel 的 rewrite 表，等于把路由语义搬到一个表达不了它们的层。
+
+### 部署步骤
+
+1. 推到 GitHub，在 Vercel 里 Import 这个仓库
+2. Framework Preset 选 **Other**（不要选 Next.js，那会去找 `package.json`）
+3. Root Directory 保持仓库根
+4. 环境变量（可选，但强烈建议）：
+   - `GITHUB_TOKEN` — 匿名配额只有 60 次/小时，**且 serverless 每次冷启动都是新进程，进程内缓存几乎不起作用**，不加 token 很容易在真实流量下打满
+   - `BILIBILI_SESSDATA` — 缺省时 B 站数据会退化
+5. Deploy
+
+或走 CLI：
 
 ```bash
-docker-compose up -d
+vercel deploy
 ```
 
-### 3.4 Redis Cloud配置
+### 本地验证 Vercel 入口
 
-为了提升应用性能和响应速度，推荐使用Redis Cloud服务。Redis Cloud提供了简单易用的云托管Redis解决方案。
+`vercel_runtime` 在没有 bridge 环境时会自己起一个 dev server（端口 3000），所以**不部署也能测**：
 
-1. 注册 [Redis Cloud](https://redis.com/try-free/) 账户（提供30天免费试用）
-2. 创建新的Redis数据库实例
-3. 获取连接信息：
-   - Redis主机地址（Endpoint）
-   - Redis端口（Port）
-   - Redis密码（Password）
-4. 将这些信息配置到环境变量中：
-
-```dotenv
-REDIS_HOST=your-redis-host.redislabs.com
-REDIS_PORT=12345
-REDIS_USERNAME=default
-REDIS_PASSWORD=your-redis-password
+```bash
+cargo build --release --workspace
+./target/release/index
+# 另一个终端
+curl -s http://127.0.0.1:3000/health
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/github/octocat
 ```
 
-Redis Cloud的优势：
-- 无需自行维护Redis服务器
-- 自动备份和故障恢复
-- 可视化监控面板
-- 多区域部署支持
-- 自动扩缩容能力
+### Vercel 上与 Docker 的行为差异
 
-### 3.5 Redis 连接池优化
+| 项 | Docker / 本地 | Vercel |
+|---|---|---|
+| 进程内缓存 | 常驻，跨请求有效 | **随实例存活**，冷启动即清空；多实例之间不共享 |
+| `/api/cache/stats` | 反映本进程累计流量 | 每次冷启动归零，数值只代表当前实例 |
+| 限流（300/15min） | 进程内计数，重启归零 | 同上；多实例各算各的，**实际阈值会被实例数放大** |
+| 请求体大小 / 超时 | 自己控制 | 受 Vercel 套餐限制（`vercel.json` 里已设 `maxDuration: 60`） |
 
-为了有效管理Redis连接并避免连接数过多导致的问题（如"ERR max number of clients reached"错误），本项目实现了Redis连接池机制：
+这些不是移植缺陷，是**无状态运行时的固有属性**。缓存语义在两边都正确，只是生命周期不同。需要跨实例共享缓存时，只能外接 Redis —— 那属于另一轮改动。
 
-#### 连接池优势：
-- **连接数控制**：限制最大连接数为10，适合免费Redis服务
-- **连接复用**：通过连接池复用连接，减少连接建立和关闭的开销
-- **资源优化**：避免频繁创建和销毁连接，降低系统资源消耗
-- **性能提升**：减少连接握手时间，提高响应速度
+## 反向代理（Nginx）
 
-#### 连接池配置参数：
-- `minimum`: 最小连接数（默认1）
-- `maximum`: 最大连接数（默认10）
-- `acquireTimeout`: 获取连接超时时间（默认5000ms）
-- `cleanupDelay`: 清理延迟时间（默认3000ms）
-
-#### 适用场景：
-- 使用免费Redis服务（连接数有限制）
-- 高并发请求场景
-- 需要优化系统资源使用的情况
-
-连接池配置已针对免费Redis服务进行了优化，默认最大连接数设置为10，完全满足免费Redis服务的连接数限制。
-
-此外，针对GitHub服务进行了特别优化，实现了5分钟缓存策略，显著减少了对Redis的直接访问次数，进一步降低了连接数需求。
-
-### 4. 反向代理配置
-
-如果使用Nginx作为反向代理，推荐以下配置：
+二进制自己不做 TLS、不做压缩，这些交给前面的 Nginx：
 
 ```nginx
 server {
@@ -279,117 +217,108 @@ server {
     server_name stats.example.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
     }
 
-    # 静态文件缓存优化
-    location ~* \.(svg)$ {
-        proxy_pass http://localhost:3000;
-        expires 10m;
-        add_header Cache-Control "public, max-age=600";
+    # 卡片响应已自带 Cache-Control，这里不要用 expires 覆盖它：
+    # 成功卡片是 public, max-age=300, s-maxage=3600, stale-while-revalidate=86400，
+    # 失败卡片是 public, max-age=60 —— 覆盖会让错误卡片被 CDN 缓存一小时。
+    location ~ ^/(github|leetcode|csdn|juejin|bilibili)/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
 
-## 监控与维护
+## 观测
 
-### 1. 监控端点
+- **`/livez`** —— 存活探针，`{"status":"alive","uptime":N}`
+- **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）与 `platforms`
+- **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
+- **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
+- **`/stats`** —— `{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}`
+- **`/api/cache/stats`** —— 缓存计数器（HTTP 层与 storage 层共用一套）
+- **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）
 
-- **Prometheus指标**：`/metrics` - 用于Prometheus抓取
-- **JSON格式指标**：`/metrics/json` - 用于API调用和调试
-- **健康检查**：`/health` - 系统运行状态
-- **统计信息**：`/stats` - 应用关键指标汇总
+## 缓存
 
-### 2. 常见问题排查
+进程内缓存，无外部依赖：
 
-#### 2.1 缓存不生效
-- 检查缓存TTL配置是否合理
-- 确认缓存键生成逻辑是否正确
-- 查看缓存服务日志，验证缓存操作
+- **HTTP 层**：只缓存 GET/HEAD，`2xx` 且响应头不含 `no-store` 且 body < 512 KB 才回填；TTL 上限 60 秒，容量 500 条，超出按写入顺序淘汰最旧。`/health` 不参与缓存。
+- **storage 层**：平台取数缓存（`BILIBILI:{uid}` 等），与 HTTP 层**共用同一份计数器**。
+- 命中响应带 `X-Cache-Status: HIT` 与 `X-Cache-Key`。
 
-#### 2.2 外部API调用失败
-- 检查网络连接和代理设置
-- 验证请求头和用户代理配置
-- 查看是否触发了目标平台的限流
+**缓存是进程内的**：重启即清空，多实例之间不共享。这不是妥协——参考实现原本用 Redis 做跨实例共享，而本项目已移除全部外部依赖；如果确实需要多实例共享，应该在前面加一层 CDN（卡片响应已带 `s-maxage`，CDN 天然按 URL 缓存），而不是把 Redis 加回来。
 
-#### 2.3 性能问题
-- 监控内存使用情况，防止内存泄漏
-- 调整缓存策略，提高缓存命中率
-- 优化数据库查询，添加适当索引
+## 常见问题
 
-### 3. 扩展建议
+**卡片显示「该平台暂无此用户的数据」**
 
-- **CDN集成**：使用Cloudflare等CDN进一步缓存静态SVG内容
-- **水平扩展**：配置Redis等分布式缓存，支持多实例部署
-- **监控告警**：集成Grafana和Alertmanager，设置性能和可用性告警
-- **自动扩缩容**：在Kubernetes环境中配置HPA，根据负载自动调整实例数
-- **Redis优化**：使用Redis Cloud等托管服务获得更好的性能和可靠性
-- **缓存策略调优**：根据不同数据源的特点调整缓存TTL和淘汰策略
+1. GitHub 卡片：先查限流。`curl -sI https://api.github.com/users/<name>` 看 `x-ratelimit-remaining`，为 0 就是匿名额度打满，配 `GITHUB_TOKEN`
+2. CSDN 卡片：确认容器能访问 `blog.csdn.net`。CSDN 有 IP 风控，机房出口被 TLS 拒绝（`tlsv1 alert internal error`）时卡片会退化成这个错误卡
+3. 哔哩哔哩卡片：显示**全 0** 而不是错误卡，说明上游全部被风控，配 `BILIBILI_SESSDATA`
 
-## API文档
+**改完代码怎么验证**
 
-### 1. GitHub统计
+```bash
+cargo build --locked --workspace
+cargo test  --locked --workspace
+cargo clippy --locked --all-targets --workspace -- -D warnings
+```
+
+Vercel 入口（`api/index.rs`）与服务端二进制共用 `rust/app/src/lib.rs` 的路由栈。`vercel_runtime` 在没有 bridge 环境时会自动起 dev server，所以改完可以本地直接验：
+
+```bash
+cargo build --release --workspace
+./target/release/index        # 监听 3000
+```
+
+行为契约不是手写断言，是 `rust/app-cases/` 里录制的 **153 条 HTTP case**，用 `rust-anything app replay` 重放。当前基线：**148/153**，5 条失败全部是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS` 差异，原始 Node 实现同样失败这 5 条。
+
+## API
 
 ```
 GET /github/:username?theme=light
-```
-
-### 2. LeetCode统计
-
-```
 GET /leetcode/:username?theme=light&cn=false
-```
-
-### 3. CSDN统计
-
-```
 GET /csdn/:userId?theme=light
-```
-
-### 4. 掘金统计
-
-```
 GET /juejin/:userId?theme=light
-```
-
-### 5. B站统计
-
-```
 GET /bilibili/:uid?theme=light
 ```
 
-### 6. 可用主题
+公共查询参数：
 
-- `light` - 明亮主题（默认，未知主题也回落到此项）
-- `dark` - 暗黑主题
-- `github-dark-dimmed` - GitHub 暗色变体 `#22272e`
-- `transparent` - 透明背景
+- `theme`：`light`（默认）/ `dark` / `github-dark-dimmed` / `transparent`。未知值静默回落 `light`
+- `cacheSeconds`：1–86400，越界或非数字回落 120
+- `nocache=true`：跳过读取缓存
 
-## 性能优化最佳实践
+主题：
 
-1. **合理设置缓存时间**：根据数据源的更新频率调整TTL
-2. **启用数据库索引**：为频繁查询的字段添加索引
-3. **配置适当的超时时间**：避免长时间阻塞请求处理
-4. **使用连接池**：优化数据库连接和HTTP客户端
-5. **定期重启服务**：对于长期运行的生产环境，设置定期重启机制防止内存泄漏
+- `light` —— 明亮（默认，未知主题也回落此项）
+- `dark` —— 暗黑
+- `github-dark-dimmed` —— GitHub 暗色变体 `#22272e`
+- `transparent` —— 透明背景
 
-## 贡献指南
+## 性能提示
 
-欢迎提交Issue和Pull Request。贡献前请确保：
+1. **CDN 优先于缓存层**：卡片响应带 `s-maxage=3600`，Cloudflare 一类 CDN 直接按 URL 缓存，命中时连进程都不用来
+2. **配 `GITHUB_TOKEN`**：这是唯一会因额度耗尽而降级的依赖
+3. **不要把 `/metrics` 暴露到公网**：它含进程内部状态，只应给抓取端访问
+4. 单实例足够：无状态、无外部连接，水平扩展只是复制进程
 
-1. 编写单元测试，确保代码覆盖率
-2. 遵循项目的代码风格规范
-3. 添加适当的注释和文档
-4. 验证功能在不同环境下正常工作
+## 贡献
+
+```bash
+cargo test --workspace --locked          # 96 个单元测试
+cargo clippy --locked -- -D warnings   # CI 会以 -D warnings 跑
+```
+
 
 ## 许可证
 
-本项目采用MIT许可证。详情请查看LICENSE文件。
+MIT，见 [LICENSE](LICENSE)。

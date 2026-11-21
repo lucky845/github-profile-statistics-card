@@ -1,0 +1,12 @@
+# Vercel 上传源码后自己执行 cargo build，本地的 target/ 是 1.2G 的构建产物，传上去只会拖慢甚至失败。
+target/
+**/target/
+
+# 录制产物与回放报告只服务本地验证，不属于部署输入。
+rust/app-cases/
+
+# 文档与编辑器
+*.md
+!README.md
+.idea/
+.DS_Store
