@@ -85,12 +85,14 @@ jobs:
           echo "--- 404 形态 ---"
           curl -s -o /dev/null -w 'status=%{http_code}\n' http://127.0.0.1:8080/definitely-not-a-route
 
-      # Vercel 入口与服务端二进制共用 app::router()，但走的是另一条运行时（bridge + dev server）。
-      # vercel_runtime 在没有 bridge 环境时会自己起一个 dev server，所以这里能直接验它。
+      # Vercel 入口与服务端二进制共用 app::router()，但它是独立的二进制：Vercel 的 Rust 框架
+      # 检测到 Cargo.toml + src/main.rs 后会自己编译它，进程只需监听 $PORT。这里直接跑它验证。
       - name: Vercel entry point smoke
+        env:
+          PORT: 3000
         run: |
           set -uo pipefail
-          ./target/release/index > vercel.log 2>&1 &
+          ./target/release/gpsc-vercel > vercel.log 2>&1 &
           echo $! > vercel.pid
           for i in $(seq 1 30); do
             curl -fsS -m 2 http://127.0.0.1:3000/livez > /dev/null 2>&1 && break

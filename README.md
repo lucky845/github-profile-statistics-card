@@ -137,13 +137,21 @@ docker run -d -p 3000:3000 \
 
 ### Vercel
 
-走 **官方 Rust runtime**（Beta），入口是 `api/index.rs`：
+走 **官方 Rust 框架**。Vercel 按 `Cargo.toml` + `src/main.rs` 两个文件检测项目，构建器是 `@vercel/rust`：
 
 ```bash
 vercel deploy
 ```
 
-在 Vercel 控制台导入仓库时，Framework Preset 选 **Other**（不要选 Next.js，那会去找 `package.json`）。
+**Framework Preset 必须选 `Rust`，不能选 `Other` 或 `Container`**：
+
+| 选项 | 结果 |
+|---|---|
+| `Rust` | ✅ 用 `@vercel/rust` 构建，进程监听 `$PORT`，proxy 转换协议 |
+| `Other` | ❌ 检测不到 Rust，构建器不会被挂上，服务不启动 |
+| `Container` | ❌ 会去构建根 `Dockerfile`，与 `src/main.rs` 入口无关 |
+
+`vercel.json` 里已写死 `projectSettings.framework: "rust"`，正常情况下不需要手动选。
 
 ⚠️ **Vercel 与 Docker 有一处真实差异**：进程内缓存与限流计数**随实例存活**，冷启动即清空、多实例各算各的。所以限流的 300/15min 实际会被实例数放大，`/api/cache/stats` 也只代表当前实例。
 
@@ -151,7 +159,7 @@ vercel deploy
 
 ### 托管平台
 
-- **Vercel**：`vercel.json` 已配全路径 rewrite 到 `/api/index`
+- **Vercel**：`vercel.json` 已配 `projectSettings.framework: rust`
 - **Render**：`render.yaml` 已配 `runtime: docker` + `healthCheckPath: /livez`
 - **Railway**：`railway.json` 已配 `build.builder: DOCKERFILE`
 

@@ -1,9 +1,10 @@
 //! The whole front door, in one place.
 //!
-//! Two entry points share this: `src/main.rs` serves it over TCP (Docker, local dev), and
-//! `api/index.rs` hands it to Vercel's Rust runtime. Keeping the stack here rather than in
-//! `main.rs` is what guarantees the two deployments answer identically — a layer added in one
-//! place cannot be forgotten in the other.
+//! Two entry points share this: `rust/app/src/main.rs` serves it over TCP (Docker, local dev), and
+//! the repo-root `src/main.rs` serves the same stack for Vercel, where the Rust framework starts a
+//! plain server on `$PORT` and proxies to it. Keeping the stack here rather than in either
+//! `main.rs` is what guarantees the two deployments answer identically — a layer added in one place
+//! cannot be forgotten in the other.
 
 pub mod frontdoor;
 pub mod servers;

@@ -3,7 +3,7 @@ name = "app"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "Front door: the whole HTTP surface, served over TCP by src/main.rs and over Vercel's bridge by api/index.rs"
+description = "Front door: the whole HTTP surface, served over TCP by src/main.rs and by the repo-root Vercel entry point (src/main.rs)"
 
 [lib]
 name = "app"

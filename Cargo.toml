@@ -1,24 +1,21 @@
-# Vercel 的 Rust runtime 在仓库根目录执行 cargo build，所以 workspace 必须落在根上。
-# 根上同时是一个 package：它的唯一用途是编译 api/index.rs 这个 serverless 入口。
-# 服务端二进制（Docker / 本地）仍然是 rust/app 里的那个，两者共用同一个 lib。
+# Vercel 的 Rust 框架要求仓库根有 [package] + src/main.rs，本 crate 就是那个入口。
+# 服务端二进制（Docker / 本地）仍是 rust/app 里的那个，两者共用同一个 app lib。
 [package]
 name = "gpsc-vercel"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
-[[bin]]
-name = "index"
-path = "api/index.rs"
-
 [dependencies]
 app = { path = "rust/app" }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-tower = "0.5"
-vercel_runtime = { version = "2.4", features = ["axum"] }
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
 
 [workspace]
 members = ["rust/app", "rust/svg", "rust/utils", "rust/platforms-rs"]
+# workspace 里有两个 bin（app 是服务端二进制、gpsc-vercel 是 Vercel 入口）。把默认成员钉在根包上，
+# 让 `cargo build` 与 Vercel 的 `cargo build -p ...` 都只有一个明确答案。
+default-members = ["."]
 
 [profile.release]
 codegen-units = 1

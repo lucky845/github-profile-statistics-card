@@ -141,7 +141,7 @@ services:
 | **Render** | `render.yaml` 已写 `runtime: docker` + `dockerfilePath: ./Dockerfile` + `healthCheckPath: /livez`。Render 注入 `PORT` |
 | **Railway** | `railway.json` 已写 `build.builder: DOCKERFILE`；Railway 发现 Dockerfile 时本来也会走 Docker 构建 |
 | **任意容器平台** | 直接用仓库根的 `Dockerfile`，注入 `PORT` |
-| **Vercel** | ✅ **支持，走官方 Rust runtime**（Beta）。入口是 `api/index.rs`，`vercel.json` 把所有路径 rewrite 到它。详见下节 |
+| **Vercel** | ✅ **支持，走官方 Rust 框架**。入口是仓库根的 `src/main.rs`，`@vercel/rust` 负责构建。详见下节 |
 
 探针语义区分（所有平台一致）：
 
@@ -155,16 +155,16 @@ services:
 Vercel 提供**官方 Rust runtime**（Beta，全套餐可用），运行在 Fluid compute 上。本仓库已经接好：
 
 ```
-Cargo.toml          ← 根 workspace + Vercel 入口的 [[bin]]
-api/index.rs        ← serverless 入口（Vercel 把 api/*.rs 各编译成一个函数）
-vercel.json         ← 把所有路径 rewrite 到 /api/index
-.vercelignore       ← 排除 1.2G 的 target/
+Cargo.toml          ← 根 workspace，根 package 就是 Vercel 入口
+src/main.rs         ← Vercel 入口：监听 $PORT 的普通 axum 服务
+vercel.json         ← framework: rust（高于自动检测）
+.vercelignore       ← 排除 target/ 等构建产物
 rust/app/src/lib.rs ← 真正的路由栈，两个入口共用
 ```
 
 ### 为什么只有一个函数
 
-`rust/app/src/lib.rs` 里的 `router()` 同时被 `src/main.rs`（TCP / Docker）和 `api/index.rs`（Vercel）调用。**这是刻意的**：一份 stack，两个运行时，加一层中间件不可能只加在一边。
+`rust/app/src/lib.rs` 里的 `router()` 同时被 `rust/app/src/main.rs`（TCP / Docker）和仓库根的 `src/main.rs`（Vercel）调用。**这是刻意的**：一份 stack，两个运行时，加一层中间件不可能只加在一边。
 
 而把所有路径 rewrite 到**同一个函数**，是因为这个应用的行为依赖"路径如何不匹配"——大小写不敏感的挂载、单个尾斜杠、`//` 折叠、以及一个会回看原始路径的 404。把这些拆进 Vercel 的 rewrite 表，等于把路由语义搬到一个表达不了它们的层。
 
@@ -186,15 +186,17 @@ vercel deploy
 
 ### 本地验证 Vercel 入口
 
-`vercel_runtime` 在没有 bridge 环境时会自己起一个 dev server（端口 3000），所以**不部署也能测**：
+Vercel 入口就是一个监听 `$PORT` 的普通 axum 服务，**不部署也能直接跑**：
 
 ```bash
-cargo build --release --workspace
-./target/release/index
+cargo build --release
+PORT=3000 ./target/release/gpsc-vercel
 # 另一个终端
 curl -s http://127.0.0.1:3000/health
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/github/octocat
 ```
+
+> **为什么不是 `api/index.rs`**：Vercel 的 Rust 检测条件是 `Cargo.toml` **与** `src/main.rs` 同时存在。放在 `api/` 下不满足检测，手动选 `Other` 也不会挂上 `@vercel/rust` 构建器——表现就是"选了也不运行"。这是排查时踩过的坑。
 
 ### Vercel 上与 Docker 的行为差异
 
@@ -272,11 +274,11 @@ cargo test  --locked --workspace
 cargo clippy --locked --all-targets --workspace -- -D warnings
 ```
 
-Vercel 入口（`api/index.rs`）与服务端二进制共用 `rust/app/src/lib.rs` 的路由栈。`vercel_runtime` 在没有 bridge 环境时会自动起 dev server，所以改完可以本地直接验：
+Vercel 入口与服务端二进制共用 `rust/app/src/lib.rs` 的路由栈，所以改完可以本地直接验：
 
 ```bash
-cargo build --release --workspace
-./target/release/index        # 监听 3000
+cargo build --release
+PORT=3000 ./target/release/gpsc-vercel
 ```
 
 行为契约不是手写断言，是 `rust/app-cases/` 里录制的 **153 条 HTTP case**，用 `rust-anything app replay` 重放。当前基线：**148/153**，5 条失败全部是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS` 差异，原始 Node 实现同样失败这 5 条。
