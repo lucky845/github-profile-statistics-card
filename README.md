@@ -121,6 +121,7 @@ Docker 与 Vercel 跑的是**同一份二进制**——两者的区别只是由�
 | `PORT` | `8080` | 监听端口，云平台会自动注入 |
 | `GITHUB_TOKEN` | 空 | GitHub 个人访问令牌。**强烈推荐**：匿名额度只有 60 次/小时/出口 IP，共享出口上几分钟就打满，之后 GitHub 卡片退化成「暂无数据」。配置后 5000 次/小时 |
 | `BILIBILI_SESSDATA` | 空 | 哔哩哔哩登录 Cookie 里的 `SESSDATA`。不带时上游返回 `-352` 风控码 |
+| `PUBLIC_BASE_URL` | 空 | **Vercel 必配**。首页画廊用公开域名拼示例链接。留空则用请求的 `Host` 头——Vercel 的 `Host` 是带部署哈希的预览域名，位于 SSO 后面，用它拼出的图片会全部返回 302 |
 | `REDIS_URL` 或 `REDIS_HOST`/`REDIS_PORT`/`REDIS_USERNAME`/`REDIS_PASSWORD` | 空 | **可选**。配置后启用 Redis 共享缓存层：TTL 按响应的 `s-maxage`（10–60 分钟），跨实例/跨冷启动共享。多实例部署强烈建议配上。两种写法任选，与原版 Node 兼容 |
 
 ### Docker（推荐）
