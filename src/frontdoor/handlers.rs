@@ -407,23 +407,47 @@ async fn theme_test(req: Request) -> Response {
     Reply::new(StatusCode::OK, "image/svg+xml; charset=utf-8", body).into_response()
 }
 
-/// The gallery and the theme pills come from the same two ported units the card routes use, so
-/// the home page needs nothing from the original.
-async fn home(req: Request) -> Response {
-    let query = parse_query(req.uri().query());
+/// The origin the gallery should embed in its example URLs.
+///
+/// The original used `${req.protocol}://${req.get('host')}`, and that is still the fallback. It
+/// breaks on Vercel, and the breakage is easy to misread as "the server returns 302":
+///
+/// - Vercel answers on a per-deployment hostname
+///   (`<project>-<hash>-<team>.vercel.app`), and that hostname sits behind SSO. A card URL built
+///   from it redirects to `vercel.com/sso-api` — a 302 for every image on the page.
+/// - The `Host` header carries that same per-deployment hostname, so trusting it produces the
+///   unusable links. Vercel does not send `x-forwarded-host`, so there is nothing better to read
+///   from the request.
+///
+/// Hence `PUBLIC_BASE_URL`: set it to the production domain and every generated link is stable
+/// across deployments. When it is unset (local runs, plain Docker) the request's own host is the
+/// right answer again, so the fallback stays.
+fn public_base_url(req: &Request) -> String {
+    if let Some(value) = std::env::var("PUBLIC_BASE_URL")
+        .ok()
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+    {
+        return value;
+    }
     let host = req
         .headers()
         .get(axum::http::header::HOST)
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("localhost")
-        .to_string();
+        .unwrap_or("localhost");
     let scheme = req
         .headers()
         .get("x-forwarded-proto")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("http")
-        .to_string();
-    let base_url = format!("{scheme}://{host}");
+        .unwrap_or("http");
+    format!("{scheme}://{host}")
+}
+
+/// The gallery and the theme pills come from the same two ported units the card routes use, so
+/// the home page needs nothing from the original.
+async fn home(req: Request) -> Response {
+    let query = parse_query(req.uri().query());
+    let base_url = public_base_url(&req);
     let requested = query
         .iter()
         .find(|(k, _)| k == "theme")
@@ -548,4 +572,72 @@ fn iso_now() -> String {
         (seconds_of_day % 3600) / 60,
         seconds_of_day % 60
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The three cases below read and write the same process-wide variable, and cargo runs tests
+    /// on several threads. Without this lock they interleave and fail in ways that look like bugs
+    /// in `public_base_url` but are only test scheduling.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Builds a request the way a proxy hands it over, so public_base_url can be exercised against
+    /// real headers instead of a hand-made struct.
+    fn request(host: &str, proto: Option<&str>) -> Request {
+        let mut builder = axum::http::Request::builder()
+            .uri("/")
+            .header(axum::http::header::HOST, host);
+        if let Some(proto) = proto {
+            builder = builder.header("x-forwarded-proto", proto);
+        }
+        builder.body(axum::body::Body::empty()).expect("request")
+    }
+
+    #[test]
+    fn a_plain_request_falls_back_to_its_own_host() {
+        let _guard = env_guard();
+        // The local and Docker case: no PUBLIC_BASE_URL, so the request's host is the truth.
+        unsafe { std::env::remove_var("PUBLIC_BASE_URL") };
+        assert_eq!(
+            public_base_url(&request("127.0.0.1:8080", None)),
+            "http://127.0.0.1:8080"
+        );
+        assert_eq!(
+            public_base_url(&request("example.com", Some("https"))),
+            "https://example.com"
+        );
+    }
+
+    #[test]
+    fn a_configured_origin_wins_over_the_host_header() {
+        let _guard = env_guard();
+        // This is the Vercel case: the Host header carries a per-deployment hostname behind SSO,
+        // and emitting it turns every gallery image into a 302. PUBLIC_BASE_URL overrides it.
+        unsafe { std::env::set_var("PUBLIC_BASE_URL", "https://cards.example.com/") };
+        assert_eq!(
+            public_base_url(&request("project-abc123-team.vercel.app", Some("https"))),
+            "https://cards.example.com",
+            "a trailing slash must be trimmed, or every generated URL gets a double slash"
+        );
+        unsafe { std::env::remove_var("PUBLIC_BASE_URL") };
+    }
+
+    #[test]
+    fn an_empty_configured_origin_is_the_same_as_unset() {
+        let _guard = env_guard();
+        // Deployments often define a variable with an empty value; that must not produce a bare
+        // "https://" prefix.
+        unsafe { std::env::set_var("PUBLIC_BASE_URL", "   ") };
+        assert_eq!(
+            public_base_url(&request("fallback.example", Some("https"))),
+            "https://fallback.example"
+        );
+        unsafe { std::env::remove_var("PUBLIC_BASE_URL") };
+    }
 }

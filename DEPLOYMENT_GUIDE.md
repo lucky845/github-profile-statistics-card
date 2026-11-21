@@ -168,6 +168,18 @@ src/lib.rs ← 真正的路由栈，两个入口共用
 
 而把所有路径 rewrite 到**同一个函数**，是因为这个应用的行为依赖"路径如何不匹配"——大小写不敏感的挂载、单个尾斜杠、`//` 折叠、以及一个会回看原始路径的 404。把这些拆进 Vercel 的 rewrite 表，等于把路由语义搬到一个表达不了它们的层。
 
+### 必配：PUBLIC_BASE_URL
+
+```bash
+PUBLIC_BASE_URL=https://你的项目.vercel.app
+```
+
+首页画廊的示例链接要用公开域名拼。**不配这一项，Vercel 上的卡片会全部 302 跳到 SSO 登录页。**
+
+原因：Vercel 给每个部署分配一个带哈希的域名（`<project>-<hash>-<team>.vercel.app`），它是**受 SSO 保护的**，而 `Host` 头带的就是这个域名。首页照它拼出来的图片地址全都指向 SSO 后面，于是浏览器拿到 302 而不是 SVG。Vercel 不发送 `x-forwarded-host`，所以请求里没有更好的信息可读，只能由环境变量显式指定。
+
+本地与 Docker 不需要它：那里的 `Host` 头就是对的。
+
 ### 部署步骤
 
 1. 推到 GitHub，在 Vercel 里 Import 这个仓库

@@ -20,6 +20,10 @@ services:
       # 哔哩哔哩接口对无 Cookie 请求返回 -352 风控码。不配也能跑，拿到的是全 0 的真实卡片。
       - key: BILIBILI_SESSDATA
         sync: false
+      # 首页画廊的示例卡片链接要用公开域名拼。留空则退回请求的 Host 头——在 Render 上那是对的，
+      # 在 Vercel 上不行：Host 是带部署哈希的预览域名，位于 SSO 后面，用它拼出的图片全是 302。
+      - key: PUBLIC_BASE_URL
+        sync: false
       # Redis 共享缓存层。配了才有跨实例/跨冷启动共享；不配则退化为纯进程内缓存。
       # 值为空、由控制台填：密码不应该进 git。四个变量与原版 Node 完全一致。
       - key: REDIS_HOST
