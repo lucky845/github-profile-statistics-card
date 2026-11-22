@@ -145,9 +145,14 @@ pub fn sanitize_id(name: &str) -> String {
 ///
 /// Order is observable on the home page, whose recorded body has github first. It does not affect
 /// routing: no name is a prefix of another, so `platform_of` finds the same entry in any order.
+///
+/// `name` is not a literal here but the platform module's own `PLATFORM` constant. That constant
+/// is also what the module passes to `metrics::note_external_call`, so the route name and the
+/// /stats tally key are the same string by construction -- renaming one cannot leave the other
+/// counting into a key nobody publishes.
 pub const PLATFORMS: [PlatformDesc; 5] = [
     PlatformDesc {
-        name: "github",
+        name: github::PLATFORM,
         param: "username",
         title: "GitHub 统计",
         sample: "lucky845",
@@ -162,7 +167,7 @@ pub const PLATFORMS: [PlatformDesc; 5] = [
         card: card_github,
     },
     PlatformDesc {
-        name: "leetcode",
+        name: leetcode::PLATFORM,
         param: "username",
         title: "LeetCode 统计",
         sample: "lucky845",
@@ -177,7 +182,7 @@ pub const PLATFORMS: [PlatformDesc; 5] = [
         card: card_leetcode,
     },
     PlatformDesc {
-        name: "csdn",
+        name: csdn::PLATFORM,
         param: "userId",
         title: "CSDN 统计",
         sample: "testuser",
@@ -194,7 +199,7 @@ pub const PLATFORMS: [PlatformDesc; 5] = [
         card: card_csdn,
     },
     PlatformDesc {
-        name: "juejin",
+        name: juejin::PLATFORM,
         param: "user_id",
         title: "掘金统计",
         sample: "testuser",
@@ -210,7 +215,7 @@ pub const PLATFORMS: [PlatformDesc; 5] = [
         card: card_juejin,
     },
     PlatformDesc {
-        name: "bilibili",
+        name: bilibili::PLATFORM,
         param: "uid",
         title: "哔哩哔哩统计",
         sample: "89389361",

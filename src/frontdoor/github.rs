@@ -23,6 +23,10 @@ const CACHE_TTL_SECONDS: u64 = 600;
 /// The upstream budget the original gives one call (getJson's default timeout).
 const UPSTREAM_TIMEOUT_MS: u64 = 8000;
 
+/// This platform's name in `registry`. Both the route and the /stats tally read it, so a
+/// rename cannot update one and leave the other counting into a name nobody publishes.
+pub const PLATFORM: &str = "github";
+
 const SHORT_CACHE: &str = "public, max-age=60";
 const NO_STORE: &str = "no-store";
 const NOT_FOUND_MESSAGE: &str = "未找到该用户";
@@ -53,7 +57,7 @@ fn api_token() -> Option<&'static str> {
 /// request built, so both calls a card makes count and any call added later counts without a
 /// second edit. The original never incremented its counter, which is why the field read 0 forever.
 fn with_api_headers(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    super::metrics::note_github_call();
+    super::metrics::note_external_call(PLATFORM);
     let builder = builder
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", USER_AGENT);

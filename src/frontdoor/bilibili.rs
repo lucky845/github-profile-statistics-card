@@ -24,6 +24,10 @@ const SUCCESS_CACHE: &str = "public, max-age=300, s-maxage=3600, stale-while-rev
 /// bilibili-storage.service.ts caches a profile for 120 seconds.
 const STORAGE_TTL_SECONDS: u64 = 120;
 
+/// This platform's name in `registry`. Both the route and the /stats tally read it, so a
+/// rename cannot update one and leave the other counting into a name nobody publishes.
+pub const PLATFORM: &str = "bilibili";
+
 const UPSTREAM_TIMEOUT_MS: u64 = 5000;
 
 /// createRequestWithRetry(.., 2, 1000) at the caller's default: two attempts, 1s apart.
@@ -61,6 +65,9 @@ fn session_cookie() -> &'static str {
 
 /// A GET whose failure is a value: the original wraps each call in .catch(.. => null).
 async fn fetch_text(url: &str) -> Option<String> {
+    // Charged here rather than in fetch_json, which is a thin wrapper over this function: bumping
+    // both would count every JSON endpoint twice for one request.
+    super::metrics::note_external_call(PLATFORM);
     for attempt in 0..ATTEMPTS {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS << (attempt - 1))).await;
