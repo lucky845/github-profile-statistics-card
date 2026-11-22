@@ -20,6 +20,10 @@ use super::handlers::{CardOutcome, card_reply};
 /// both exist only to keep repeat traffic off CSDN.
 const CACHE_TTL_SECONDS: u64 = 300;
 
+/// This platform's name in `registry`. Both the route and the /stats tally read it, so a
+/// rename cannot update one and leave the other counting into a name nobody publishes.
+pub const PLATFORM: &str = "csdn";
+
 const UPSTREAM_TIMEOUT_MS: u64 = 8000;
 const RETRY_DELAY_MS: u64 = 800;
 const PROFILE_URL: &str = "https://blog.csdn.net/";
@@ -250,6 +254,9 @@ fn client() -> &'static reqwest::Client {
 
 /// createRequestWithRetry(fn, 2, 800): two retries, 800ms apart, only for transport-level failures.
 async fn fetch_page(user_id: &str) -> Option<String> {
+    // One bump per profile fetch, outside the retry loop: the retries below are the same request
+    // being repeated, and the tally answers "how much traffic did CSDN receive from us".
+    super::metrics::note_external_call(PLATFORM);
     let url = format!("{PROFILE_URL}{user_id}");
     let referer = format!("{PROFILE_URL}{user_id}");
     let mut last: Option<String> = None;

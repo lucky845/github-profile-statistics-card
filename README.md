@@ -94,7 +94,7 @@
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
 | `/metrics` | GET | Prometheus 文本格式指标 |
 | `/metrics/json` | GET | 同上，JSON 格式 |
-| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.externalApis.github` 与 `.leetcode` 都是真实计数 |
+| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.externalApis` 为每个已注册平台各给一个计数，全部是真实出站请求数 |
 | `/api/cache/stats` | GET | 缓存计数器 |
 | `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=` |
 

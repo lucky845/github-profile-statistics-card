@@ -20,6 +20,10 @@ const SUCCESS_CACHE: &str = "public, max-age=300, s-maxage=1800, stale-while-rev
 /// createRequest(5000): a single attempt may take five seconds.
 const UPSTREAM_TIMEOUT_MS: u64 = 5000;
 
+/// This platform's name in `registry`. Both the route and the /stats tally read it, so a
+/// rename cannot update one and leave the other counting into a name nobody publishes.
+pub const PLATFORM: &str = "leetcode";
+
 /// createRequestWithRetry(.., 2, 800): two attempts, 800ms apart.
 const ATTEMPTS: u32 = 2;
 const RETRY_DELAY_MS: u64 = 800;
@@ -159,7 +163,7 @@ async fn post(url: &str, origin: &str, referer: &str, query: &str, variables: Va
     let body = json!({ "query": query, "variables": variables });
     // One bump per region attempt, which is where the original puts it: inside the region's try
     // block, ahead of createRequestWithRetry, so the retries inside a region do not count again.
-    super::metrics::note_leetcode_call();
+    super::metrics::note_external_call(PLATFORM);
     for attempt in 0..ATTEMPTS {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;

@@ -22,6 +22,7 @@ use serde_json::{Value, json};
 
 use super::cache;
 use super::headers::Reply;
+use super::registry;
 
 /// prom-client's contentType for the text exposition format.
 pub const TEXT_CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
@@ -38,14 +39,44 @@ static REQUESTS_TOTAL: AtomicU64 = AtomicU64::new(0);
 /// total since boot; kept identical rather than inventing an hourly window the recording never had.
 static REQUESTS_LAST_HOUR: AtomicU64 = AtomicU64::new(0);
 
-/// global.leetcodeApiCallCount, bumped by leetcode.service.ts:55 (CN) and :103 (US).
-static LEETCODE_API_CALLS: AtomicU64 = AtomicU64::new(0);
+/// One outbound-call tally per registered platform, in `registry::PLATFORMS` order.
+///
+/// The length comes from the registry rather than a literal, so a platform added there has a
+/// counter before anyone remembers to add one. The original had two counters -- one live
+/// (leetcodeApiCallCount), one dead and returned as a constant 0 (githubApiCallCount) -- and the
+/// port published those same two fields for all five platforms, so three of the five tallies were
+/// decoration. The other half of that bug was fixed for `/health`'s `platforms` field; this is
+/// the same disease in `/stats`' `externalApis`.
+static EXTERNAL_API_CALLS: [AtomicU64; registry::PLATFORMS.len()] =
+    [const { AtomicU64::new(0) }; registry::PLATFORMS.len()];
 
-/// global.githubApiCallCount. The original declared it, initialised it to zero and read it in
-/// /stats, but never incremented it anywhere -- so the field was a constant 0 that looked like a
-/// measurement. Rust had inherited the same dead value; it is now charged here, from
-/// `github::with_api_headers`, which every outbound GitHub request passes through exactly once.
-static GITHUB_API_CALLS: AtomicU64 = AtomicU64::new(0);
+/// The slot a platform's tally lives in, looked up by the same name the router matches.
+fn external_slot(platform: &str) -> Option<usize> {
+    registry::all().iter().position(|desc| desc.name == platform)
+}
+
+/// Charge one outbound call to a platform.
+///
+/// Called where the request is assembled, not where it succeeds: a call that times out still left
+/// the process and still counted against the upstream's quota, so counting only successful ones
+/// would under-report exactly when it matters. Retries inside one fetch are not charged again --
+/// the tally answers "how much traffic did this platform receive", not "how many attempts".
+///
+/// An unregistered name is ignored rather than panicking. It cannot happen from the platform
+/// modules -- each passes its own `PLATFORM` constant, and
+/// `every_platform_module_names_a_registered_platform` proves those constants are all in the
+/// registry -- so the only way to reach it is a future caller typing a name by hand. Failing the
+/// request over a bookkeeping miss would be the wrong trade: the card is fine, the number is not.
+pub fn note_external_call(platform: &str) {
+    if let Some(index) = external_slot(platform) {
+        EXTERNAL_API_CALLS[index].fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// The tally for one platform, or 0 when it is not registered.
+pub fn external_calls(platform: &str) -> u64 {
+    external_slot(platform).map_or(0, |index| EXTERNAL_API_CALLS[index].load(Ordering::Relaxed))
+}
 
 /// metricsMiddleware, reduced to the counters /stats reads. The duration and error instruments it
 /// also fills go to the private registry, which has no HTTP route in the original either.
@@ -53,20 +84,6 @@ pub async fn middleware(req: Request, next: Next) -> Response {
     REQUESTS_TOTAL.fetch_add(1, Ordering::Relaxed);
     REQUESTS_LAST_HOUR.fetch_add(1, Ordering::Relaxed);
     next.run(req).await
-}
-
-/// One bump per region attempt, the way the original bumps the counter before it builds a request.
-pub fn note_leetcode_call() {
-    LEETCODE_API_CALLS.fetch_add(1, Ordering::Relaxed);
-}
-
-/// One bump per outbound GitHub API request.
-///
-/// Called from `github::with_api_headers`, the single place a request is assembled, so the two
-/// calls a card makes (profile + repos) both count and a third added later cannot be forgotten.
-/// A request that times out still counts: it left the process, and upstream quota counts it too.
-pub fn note_github_call() {
-    GITHUB_API_CALLS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// The process numbers collectDefaultMetrics reads on the platforms this binary builds for.
@@ -360,8 +377,11 @@ pub fn json_response() -> Response {
 }
 
 /// GET /stats: the two request counters, the cache counters, and the external API tallies.
-/// Both tallies are live: GitHub is charged at request construction, LeetCode per region attempt
-/// (the original had a live LeetCode counter and a dead GitHub one; the dead one is fixed here).
+///
+/// Every registered platform gets a tally, built by walking `registry::PLATFORMS`, so the shape
+/// follows the registry instead of a hand-written pair of keys. The original published two
+/// counters for five platforms: one live, one never incremented. This endpoint now answers with
+/// five numbers that all move.
 pub fn stats_response() -> Response {
     // The counters keep the shape the original published; the envelope is what changed. /metrics
     // and /metrics/json are untouched on purpose -- a scraper parses those, and /metrics/json is
@@ -372,15 +392,27 @@ pub fn stats_response() -> Response {
             "lastHour": REQUESTS_LAST_HOUR.load(Ordering::Relaxed),
         },
         "cache": cache::stats(),
-        "externalApis": {
-            "github": GITHUB_API_CALLS.load(Ordering::Relaxed),
-            "leetcode": LEETCODE_API_CALLS.load(Ordering::Relaxed),
-        },
+        "externalApis": external_api_tallies(),
     });
     super::r::R::ok(data)
         .reply(StatusCode::OK)
         .cache_control(LIVE_CACHE_CONTROL)
         .into_response()
+}
+
+/// `{github: N, leetcode: N, csdn: N, juejin: N, bilibili: N}`, in registry order.
+///
+/// A Map (serde_json with preserve_order) keeps that order in the serialized body, which is what
+/// makes the output diffable against a recorded case and readable by eye.
+fn external_api_tallies() -> Value {
+    let mut tallies = serde_json::Map::new();
+    for desc in registry::all() {
+        tallies.insert(
+            desc.name.to_string(),
+            Value::from(external_calls(desc.name)),
+        );
+    }
+    Value::Object(tallies)
 }
 
 /// The route handlers. axum only accepts async functions, so the three endpoints that build
@@ -490,12 +522,104 @@ mod tests {
     #[test]
     fn a_process_that_has_answered_requests_reports_them() {
         let before = REQUESTS_TOTAL.load(Ordering::Relaxed);
-        note_leetcode_call();
+        let platform = registry::all()[0].name;
+        let calls_before = external_calls(platform);
+        note_external_call(platform);
         let body = stats_response().into_response();
         // The response is built from the same atomics the middleware bumps; read them directly so
         // a concurrently running test cannot make this flaky.
         assert!(REQUESTS_TOTAL.load(Ordering::Relaxed) >= before);
-        assert!(LEETCODE_API_CALLS.load(Ordering::Relaxed) >= 1);
+        assert!(external_calls(platform) > calls_before);
         assert_eq!(body.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn every_registered_platform_has_its_own_slot() {
+        // The tally table is indexed by registry position; this pins that mapping so a platform
+        // cannot end up charging somebody else's counter.
+        let slots: Vec<Option<usize>> = registry::all().iter().map(|desc| external_slot(desc.name)).collect();
+        let expected: Vec<Option<usize>> = (0..registry::all().len()).map(Some).collect();
+        assert_eq!(slots, expected, "every platform has exactly the slot its position says");
+        assert_eq!(external_slot("definitely-not-a-platform"), None);
+    }
+
+    #[test]
+    fn charging_a_platform_moves_that_tally_and_only_that_tally() {
+        let target = registry::all()[2].name;
+        let before: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
+        for _ in 0..1000 {
+            note_external_call(target);
+        }
+        let after: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
+        let charged = before[2];
+        assert!(
+            after[2] >= charged + 1000,
+            "1000 calls to {target} moved its tally from {charged} to {}",
+            after[2]
+        );
+        // Slots other than the target must not be the ones being charged. Other tests may add to
+        // them concurrently, so this asserts "not decreased" rather than "unchanged" -- the exact
+        // check above is what rules out a shared slot.
+        for (index, (before, after)) in before.iter().zip(&after).enumerate() {
+            if index != 2 {
+                assert!(after >= before, "slot {index} went backwards: {before} -> {after}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unregistered_name_is_ignored_rather_than_charged_to_someone() {
+        // Called through the same path a platform module uses, so this is the "typo in the name"
+        // case: it must not silently land on slot 0.
+        let before: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
+        note_external_call("definitely-not-a-platform");
+        let after: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
+        assert_eq!(before, after, "an unknown name must not increment any real platform");
+        assert_eq!(external_calls("definitely-not-a-platform"), 0);
+    }
+
+    #[test]
+    fn every_platform_module_names_a_registered_platform() {
+        // Each module passes its own PLATFORM constant to note_external_call. If a module's
+        // constant were not in the registry table, its tally would go nowhere -- the same class of
+        // bug as the three dead tallies this change removed. The list is enumerated rather than
+        // derived because the modules are the thing being checked against the registry.
+        // Paths are spelled from `crate::` because inside this test module `super` is `metrics`,
+        // not `frontdoor`.
+        let modules = [
+            crate::frontdoor::github::PLATFORM,
+            crate::frontdoor::leetcode::PLATFORM,
+            crate::frontdoor::csdn::PLATFORM,
+            crate::frontdoor::juejin::PLATFORM,
+            crate::frontdoor::bilibili::PLATFORM,
+        ];
+        assert_eq!(
+            modules.len(),
+            registry::all().len(),
+            "a platform module is missing from this check, or registered without one"
+        );
+        for platform in modules {
+            assert!(
+                external_slot(platform).is_some(),
+                "{platform} is not in registry::PLATFORMS, so its calls are never counted"
+            );
+        }
+    }
+
+    #[test]
+    fn the_stats_body_publishes_one_tally_per_registered_platform_in_order() {
+        let tallies = external_api_tallies();
+        let object = tallies.as_object().expect("externalApis is an object");
+        let keys: Vec<&str> = object.keys().map(|key| key.as_str()).collect();
+        let expected: Vec<&str> = registry::all().iter().map(|desc| desc.name).collect();
+        assert_eq!(
+            keys, expected,
+            "externalApis must follow the registry, not a hand-written subset -- this is exactly \
+             how github and leetcode ended up being the only two keys"
+        );
+        // Every value is a number, so a consumer can sum them without finding a null.
+        for (key, value) in object {
+            assert!(value.is_u64(), "{key} is not a number: {value}");
+        }
     }
 }

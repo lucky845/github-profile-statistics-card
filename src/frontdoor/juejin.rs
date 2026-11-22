@@ -21,6 +21,10 @@ const SUCCESS_CACHE: &str = "public, max-age=300, s-maxage=600, stale-while-reva
 /// createRequest(5000): a single attempt may take five seconds.
 const UPSTREAM_TIMEOUT_MS: u64 = 5000;
 
+/// This platform's name in `registry`. Both the route and the /stats tally read it, so a
+/// rename cannot update one and leave the other counting into a name nobody publishes.
+pub const PLATFORM: &str = "juejin";
+
 /// createRequestWithRetry(.., 3, 1000): three attempts, backing off 1s then 2s.
 const ATTEMPTS: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;
@@ -52,6 +56,8 @@ fn client() -> &'static reqwest::Client {
 /// A GET with the original's retry policy: a 4xx is deterministic and stops immediately, anything
 /// else gets another attempt after an exponentially growing delay.
 async fn get_json(url: &str, referer: &str) -> Option<Value> {
+    // One bump per call, before the retry loop.
+    super::metrics::note_external_call(PLATFORM);
     for attempt in 0..ATTEMPTS {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS << (attempt - 1))).await;
@@ -87,6 +93,9 @@ async fn post_json(referer: &str, user_id: &str) -> Option<Value> {
         "sort_type": 2,
         "limit": 20,
     });
+    // A card calls this and get_json, so a juejin card charges two calls -- the same accounting as
+    // github, where a card fetches the profile and the repo list.
+    super::metrics::note_external_call(PLATFORM);
     for attempt in 0..ATTEMPTS {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS << (attempt - 1))).await;

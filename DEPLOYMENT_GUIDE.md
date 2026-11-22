@@ -261,8 +261,10 @@ server {
   - `memory` 只报 `{ "rss": N }` —— 常驻内存字节数，真实测量。原版 `process.memoryUsage()` 的另外四个键（`heapTotal` / `heapUsed` / `external` / `arrayBuffers`）是 V8 的账目，Rust 进程没有对应物，**不再输出**：留着恒 0 的键和 `/metrics` 里删掉的 `nodejs_*` 族是同一种谎。读 `memory.rss` 的消费者不受影响；读 V8 四键的消费者本来读到的就是常数 0。
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
-- **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}}`
-  - `externalApis` 两个数都是真的：`github` 在构造出站请求时 +1（一次 GitHub 卡片要请求 profile 与 repos，各计一次），`leetcode` 按区域尝试 +1。原版 Node 只声明了 `githubApiCallCount` 从未递增，这里补上了。
+- **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode,csdn,juejin,bilibili}}}`
+  - `externalApis` **每个已注册平台一个键，全部是真实出站请求数**，键集合与顺序由 `src/frontdoor/registry.rs` 的平台表派生，接入新平台自动有这个键。原版 Node 只声明了 `githubApiCallCount` 却从未递增，而输出也只有 `github`/`leetcode` 两个键——这里把两条都补上了。
+  - 计数点在"请求被构造出来"的那一刻，不是"请求成功"的那一刻：超时的请求同样占用上游配额，只统计成功会恰好在出问题时少报。重试不重复计，这个数回答的是"给上游送了多少流量"。
+  - 一张卡片实际发几次上游请求，就计几次：`github` 2 次（profile + repos），`leetcode` 按区域尝试次数，`csdn` 1 次（抓 profile 页），`juejin` 2 次（用户 GET 与文章列表 POST 并发），`bilibili` 4 次（空间页 + stat + upstat + card）。
   - 响应带 `Cache-Control: no-store`，详见「缓存」一节。
 - **`/api/cache/stats`** —— 缓存计数器（HTTP 层与 storage 层共用一套）
 - **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）
