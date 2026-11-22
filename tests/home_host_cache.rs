@@ -87,16 +87,17 @@ fn two_hosts_get_their_own_gallery_urls() {
 
 /// The flip side: skipping the process cache for `/` must not turn it off everywhere.
 ///
-/// `/livez` is the probe of choice because it answers 200 with no upstream call and no counter of
-/// its own. A 404 would not do: `cache::middleware` only stores successful responses
-/// (`src/frontdoor/cache.rs:324`), so a 404 is a MISS on every request and would prove nothing
-/// about the guard's scope.
+/// `/api/theme/test` is the witness because it answers 200 with no upstream call, no counter of its
+/// own, and no `Cache-Control` -- a plain cacheable route. A 404 would not do: `cache::middleware`
+/// only stores successful responses (`src/frontdoor/cache.rs:324`), so a 404 is a MISS on every
+/// request and would prove nothing about the guard's scope. `/livez` no longer works either: it
+/// now answers `no-store` (see `tests/live_diagnostics.rs`), so it is a MISS by design.
 #[test]
 fn other_paths_still_use_the_cache() {
     let _env = env_guard();
 
     let status_of = || {
-        let (status, headers, _) = get("/livez", None);
+        let (status, headers, _) = get("/api/theme/test", None);
         assert_eq!(status, StatusCode::OK);
         headers
             .get("x-cache-status")

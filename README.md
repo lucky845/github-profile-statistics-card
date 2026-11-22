@@ -45,7 +45,7 @@
 | 参数 | 说明 |
 | --- | --- |
 | `theme` | `light`（默认）/ `dark` / `github-dark-dimmed` / `transparent`。传未知主题回落 `light`，不报错 |
-| `nocache=true` | 跳过服务端缓存，强制回源（排查上游数据问题时用） |
+| `nocache=true` | 绕开**平台取数缓存**，让这一次真的回源（排查上游数据问题时用）。注意它不绕开 HTTP 响应缓存：它只是换了一个缓存键（`?` 带着 `nocache=true`），所以同一个 URL 连打第二次仍然命中 HTTP 缓存。要每次都回源，得换 key（例如加时间戳）或先 `DELETE /api/cache/clear?all=true` |
 
 ### 各平台卡片包含什么
 
@@ -94,11 +94,13 @@
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
 | `/metrics` | GET | Prometheus 文本格式指标 |
 | `/metrics/json` | GET | 同上，JSON 格式 |
-| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数） |
+| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.externalApis.github` 与 `.leetcode` 都是真实计数 |
 | `/api/cache/stats` | GET | 缓存计数器 |
 | `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=` |
 
 **探针语义要分清**：`/livez` 恒 200，`/health` 反映上游状态。用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
+
+**诊断端点都不缓存**：`/livez`、`/health`、`/metrics`、`/metrics/json`、`/stats`、`/api/cache/stats` 一律带 `Cache-Control: no-store`。响应体是当前读数，缓存住等于把上一秒的数字再发一次——Prometheus 会抓到陈旧指标，`/stats` 连读两次数字不动。
 
 ### JSON 响应统一信封
 

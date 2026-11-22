@@ -172,7 +172,7 @@
         <tr><td><code>/health</code></td><td>服务与各平台数据源的健康状态</td></tr>
       </tbody>
     </table>
-    <p class="note">以上 JSON 端点统一返回 <code>{ code, msg, data }</code>，<code>code</code> 与 HTTP 状态码一致，原响应体下移进 <code>data</code>。<code>/metrics</code> 与 <code>/metrics/json</code> 是给抓取器的，不套信封。</p>
+    <p class="note">以上 JSON 端点统一返回 <code>{ code, msg, data }</code>，<code>code</code> 与 HTTP 状态码一致，原响应体下移进 <code>data</code>。<code>/metrics</code> 与 <code>/metrics/json</code> 是给抓取器的，不套信封。诊断端点（<code>/health</code>、<code>/livez</code>、<code>/stats</code> 等）一律 <code>Cache-Control: no-store</code>，响应体是当前读数而不是文档。</p>
 
     <footer>
       卡片数据来自各平台公开接口，按 <code>cacheSeconds</code> 缓存以避免触发上游限流。

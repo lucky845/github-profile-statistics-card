@@ -48,7 +48,12 @@ fn api_token() -> Option<&'static str> {
 }
 
 /// Every GitHub call carries the same headers; the token only changes whether one of them is there.
+///
+/// This is also where `/stats` gets its `externalApis.github` number: the tally is charged per
+/// request built, so both calls a card makes count and any call added later counts without a
+/// second edit. The original never incremented its counter, which is why the field read 0 forever.
 fn with_api_headers(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    super::metrics::note_github_call();
     let builder = builder
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", USER_AGENT);

@@ -40,6 +40,12 @@ static REQUESTS_LAST_HOUR: AtomicU64 = AtomicU64::new(0);
 /// global.leetcodeApiCallCount, bumped by leetcode.service.ts:55 (CN) and :103 (US).
 static LEETCODE_API_CALLS: AtomicU64 = AtomicU64::new(0);
 
+/// global.githubApiCallCount. The original declared it, initialised it to zero and read it in
+/// /stats, but never incremented it anywhere -- so the field was a constant 0 that looked like a
+/// measurement. Rust had inherited the same dead value; it is now charged here, from
+/// `github::with_api_headers`, which every outbound GitHub request passes through exactly once.
+static GITHUB_API_CALLS: AtomicU64 = AtomicU64::new(0);
+
 /// metricsMiddleware, reduced to the counters /stats reads. The duration and error instruments it
 /// also fills go to the private registry, which has no HTTP route in the original either.
 pub async fn middleware(req: Request, next: Next) -> Response {
@@ -51,6 +57,15 @@ pub async fn middleware(req: Request, next: Next) -> Response {
 /// One bump per region attempt, the way the original bumps the counter before it builds a request.
 pub fn note_leetcode_call() {
     LEETCODE_API_CALLS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// One bump per outbound GitHub API request.
+///
+/// Called from `github::with_api_headers`, the single place a request is assembled, so the two
+/// calls a card makes (profile + repos) both count and a third added later cannot be forgotten.
+/// A request that times out still counts: it left the process, and upstream quota counts it too.
+pub fn note_github_call() {
+    GITHUB_API_CALLS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// The process numbers collectDefaultMetrics reads on the platforms this binary builds for.
@@ -277,19 +292,35 @@ fn render_json_of(families: &[Family]) -> Value {
     Value::Array(entries)
 }
 
+/// The cache policy for every endpoint whose body is a live reading.
+///
+/// Without this they fell through to `createCacheMiddleware`'s default TTL and the process cache
+/// answered a five-minute-old snapshot: a Prometheus scrape read stale gauges, and `/stats`
+/// repeated the numbers from the previous request. A diagnostics endpoint that lies about "now"
+/// is worse than one that is slow.
+///
+/// `no-store` is also what stops the write: the middleware refuses to store a response that
+/// carries it. The `X-Cache-*` markers are still stamped, and the body is never rewritten.
+pub const LIVE_CACHE_CONTROL: &str = "no-store";
+
 /// GET /metrics.
 pub fn text_response() -> Response {
-    Reply::new(StatusCode::OK, TEXT_CONTENT_TYPE, render_text()).into_response()
+    Reply::new(StatusCode::OK, TEXT_CONTENT_TYPE, render_text())
+        .cache_control(LIVE_CACHE_CONTROL)
+        .into_response()
 }
 
 /// GET /metrics/json.
 pub fn json_response() -> Response {
     let body = serde_json::to_string(&render_json()).unwrap_or_default();
-    Reply::new(StatusCode::OK, JSON_CONTENT_TYPE, body).into_response()
+    Reply::new(StatusCode::OK, JSON_CONTENT_TYPE, body)
+        .cache_control(LIVE_CACHE_CONTROL)
+        .into_response()
 }
 
 /// GET /stats: the two request counters, the cache counters, and the external API tallies.
-/// The GitHub tally has no increment site in the original, so it stays zero there and here.
+/// Both tallies are live: GitHub is charged at request construction, LeetCode per region attempt
+/// (the original had a live LeetCode counter and a dead GitHub one; the dead one is fixed here).
 pub fn stats_response() -> Response {
     // The counters keep the shape the original published; the envelope is what changed. /metrics
     // and /metrics/json are untouched on purpose -- a scraper parses those, and /metrics/json is
@@ -301,12 +332,13 @@ pub fn stats_response() -> Response {
         },
         "cache": cache::stats(),
         "externalApis": {
-            "github": 0,
+            "github": GITHUB_API_CALLS.load(Ordering::Relaxed),
             "leetcode": LEETCODE_API_CALLS.load(Ordering::Relaxed),
         },
     });
     super::r::R::ok(data)
         .reply(StatusCode::OK)
+        .cache_control(LIVE_CACHE_CONTROL)
         .into_response()
 }
 

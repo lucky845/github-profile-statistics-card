@@ -259,6 +259,8 @@ server {
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
 - **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}}`
+  - `externalApis` 两个数都是真的：`github` 在构造出站请求时 +1（一次 GitHub 卡片要请求 profile 与 repos，各计一次），`leetcode` 按区域尝试 +1。原版 Node 只声明了 `githubApiCallCount` 从未递增，这里补上了。
+  - 响应带 `Cache-Control: no-store`，详见「缓存」一节。
 - **`/api/cache/stats`** —— 缓存计数器（HTTP 层与 storage 层共用一套）
 - **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）
 
@@ -267,6 +269,7 @@ server {
 进程内缓存，无外部依赖：
 
 - **HTTP 层**：只缓存 GET/HEAD，`2xx` 且响应头不含 `no-store` 且 body < 512 KB 才回填；TTL 取响应的 `s-maxage`（上限 3600 秒），容量 500 条，超出按写入顺序淘汰最旧。`/health` 不参与缓存。
+- **诊断端点一律 `Cache-Control: no-store`**：`/livez`、`/health`、`/metrics`、`/metrics/json`、`/stats`、`/api/cache/stats`。这些响应体是**当前读数**，不是文档：缓存住就等于把「上一秒的计数器」当答案再发一次。没有 `no-store` 时它们会落到默认 300 秒 TTL，实测第一次 `MISS`、之后全是 `HIT`——Prometheus 抓到的是上一轮的值，`/stats` 连读两次数字不动。由于中间件只按 `no-store` 判定是否回填，写这个词就够了，不需要在中间件里再加路径白名单。
 - **首页 `/` 例外**：首页 HTML 把请求的 `Host` 烤进画廊图片 URL，缓存 key（method:path:query）不含 host，进缓存会让第一个访问的 host 的链接污染所有后续 host，故首页**跳过进程内缓存**（安全头与 `X-Cache-*` 标记照常输出；共享缓存仍按完整 URL 缓存，不受影响）。
 - **storage 层**：平台取数缓存（`BILIBILI:{uid}` 等），与 HTTP 层**共用同一份计数器**。
 - 命中响应带 `X-Cache-Status: HIT` 与 `X-Cache-Key`。
@@ -321,7 +324,7 @@ GET /bilibili/:uid?theme=light
 
 - `theme`：`light`（默认）/ `dark` / `github-dark-dimmed` / `transparent`。未知值静默回落 `light`
 - `cacheSeconds`：1–86400，越界或非数字回落 120
-- `nocache=true`：跳过读取缓存
+- `nocache=true`：绕开**平台取数缓存**（`BILIBILI:{uid}` 那一层），让这一次真的回源。它**不**绕开 HTTP 响应缓存——它只是把 `nocache=true` 带进缓存键，所以同一个 URL 连打第二次依然 `HIT`。要每次都回源就换 key 或先清缓存。与 Node 版行为一致（原版 `skipCache` 也只挂在平台中间件上）
 
 主题：
 
