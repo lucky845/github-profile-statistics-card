@@ -264,19 +264,28 @@ pub async fn middleware(req: Request, next: Next) -> Response {
     if path == "/health" {
         return next.run(req).await;
     }
+    // The homepage bakes the request's Host into every gallery image URL, so its body varies with
+    // the host. The cache key is host-agnostic (method:path:query), so storing it would let the
+    // first host's URLs answer every other host -- the "only the first URL renders" bug. The page is
+    // a cheap static render, so it is served fresh and never enters the process cache; its
+    // Cache-Control still lets shared caches cache it, keyed by the full URL (which carries the
+    // host). Security headers and the cache markers are still stamped, so only the read and write
+    // below are skipped.
+    let host_dependent = path == "/";
     let query = super::handlers::parse_query(req.uri().query());
     let key = super::keys::default_key(method.as_str(), &path, &query);
 
     // L1 first. A hit here is the cheapest possible answer and never touches the network, which is
     // why the local map still earns its place in front of Redis.
-    if let Some(hit) = get(&key) {
+    if !host_dependent && let Some(hit) = get(&key) {
         return replay(hit, &key, "HIT");
     }
 
     // L2. Only reached when L1 has no live entry, and only when a shared tier is configured —
     // without `REDIS_URL` this is the same local miss the single-binary build already took, so the
     // counters keep meaning what they meant.
-    if super::remote::configured()
+    if !host_dependent
+        && super::remote::configured()
         && let Some(remote) = super::remote::get(&key).await
     {
         // Warm L1 from L2 so the next request in this process skips Redis too. The TTL used for
@@ -324,7 +333,7 @@ pub async fn middleware(req: Request, next: Next) -> Response {
     let cacheable_body = status.is_success()
         && !cache_control.contains("no-store")
         && bytes.len() < MAX_BODY_BYTES;
-    if cacheable_body {
+    if cacheable_body && !host_dependent {
         let ttl = shared_ttl_seconds(&cache_control);
         let stored = cacheable(&headers);
         set(&key, bytes.to_vec(), stored.clone(), ttl);
