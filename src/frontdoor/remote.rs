@@ -228,6 +228,16 @@ mod tests {
 
     use super::connection_url;
 
+    // These four cases set and clear the same process-wide variables, and cargo runs tests on
+    // several threads. Without this lock they interleave -- one test's remove_var wipes another
+    // test's set_var -- and fail in ways that look like connection_url bugs but are only test
+    // scheduling. The same lock exists in handlers.rs and cache.rs for the same reason.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     struct EnvGuard(&'static [&'static str]);
 
     impl EnvGuard {
@@ -259,6 +269,7 @@ mod tests {
 
     #[test]
     fn a_url_wins_over_the_legacy_variables() {
+        let _env = env_guard();
         let _guard = EnvGuard::take(ALL);
         unsafe {
             std::env::set_var("REDIS_URL", "rediss://cache.example:6380");
@@ -269,6 +280,7 @@ mod tests {
 
     #[test]
     fn the_legacy_set_builds_the_same_shape() {
+        let _env = env_guard();
         let _guard = EnvGuard::take(ALL);
         unsafe {
             std::env::set_var("REDIS_HOST", "redis.example");
@@ -284,6 +296,7 @@ mod tests {
 
     #[test]
     fn a_password_with_url_metacharacters_is_escaped() {
+        let _env = env_guard();
         let _guard = EnvGuard::take(ALL);
         unsafe {
             std::env::set_var("REDIS_HOST", "redis.example");
@@ -300,6 +313,7 @@ mod tests {
 
     #[test]
     fn nothing_configured_is_no_shared_tier() {
+        let _env = env_guard();
         let _guard = EnvGuard::take(ALL);
         assert_eq!(connection_url(), None);
     }

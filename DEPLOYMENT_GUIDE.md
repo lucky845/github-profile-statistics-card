@@ -264,7 +264,8 @@ server {
 
 进程内缓存，无外部依赖：
 
-- **HTTP 层**：只缓存 GET/HEAD，`2xx` 且响应头不含 `no-store` 且 body < 512 KB 才回填；TTL 上限 60 秒，容量 500 条，超出按写入顺序淘汰最旧。`/health` 不参与缓存。
+- **HTTP 层**：只缓存 GET/HEAD，`2xx` 且响应头不含 `no-store` 且 body < 512 KB 才回填；TTL 取响应的 `s-maxage`（上限 3600 秒），容量 500 条，超出按写入顺序淘汰最旧。`/health` 不参与缓存。
+- **首页 `/` 例外**：首页 HTML 把请求的 `Host` 烤进画廊图片 URL，缓存 key（method:path:query）不含 host，进缓存会让第一个访问的 host 的链接污染所有后续 host，故首页**跳过进程内缓存**（安全头与 `X-Cache-*` 标记照常输出；共享缓存仍按完整 URL 缓存，不受影响）。
 - **storage 层**：平台取数缓存（`BILIBILI:{uid}` 等），与 HTTP 层**共用同一份计数器**。
 - 命中响应带 `X-Cache-Status: HIT` 与 `X-Cache-Key`。
 
@@ -277,6 +278,15 @@ server {
 1. GitHub 卡片：先查限流。`curl -sI https://api.github.com/users/<name>` 看 `x-ratelimit-remaining`，为 0 就是匿名额度打满，配 `GITHUB_TOKEN`
 2. CSDN 卡片：确认容器能访问 `blog.csdn.net`。CSDN 有 IP 风控，机房出口被 TLS 拒绝（`tlsv1 alert internal error`）时卡片会退化成这个错误卡
 3. 哔哩哔哩卡片：显示**全 0** 而不是错误卡，说明上游全部被风控，配 `BILIBILI_SESSDATA`
+
+**为什么 Node 版在 Vercel 上一切正常，Rust 版只有某个域名能显示？**
+
+两版代码都有同一个缺陷：首页画廊按 ``${req.protocol}://${req.get('host')}`` 拼图片 URL，而响应缓存的 key（method:path:query）**不含 host**。同一个进程先后服务两个不同 host 时，第一个 host 的链接会污染后续所有请求。区别在运行时模型放大了这个窗口：
+
+- **Node 版**：Vercel 上是 `@vercel/node` serverless 函数。每次冷启动都是新进程，L1 内存缓存随进程生灭；且 L1 TTL 封顶 **60 秒**。污染窗口 = 「同一 warm 实例 + 60 秒内 + 先后两个不同 host」，固定域名访问时几乎不可能触发。
+- **Rust 版**：Vercel Rust runtime 是监听 `$PORT` 的**常驻进程**，L1 跨请求存活，TTL 取 `s-maxage` 上限 **3600 秒**。污染窗口 = 「谁先来谁占坑一小时」。多域名（预览域名、带哈希域名、主域名）打同一进程时，第一个请求的 host 就是唯一赢家。
+
+修复：首页跳过进程内缓存（见「缓存」一节）。Vercel 上的带哈希域名另有 SSO 保护问题，配 `PUBLIC_BASE_URL`（见上文）。
 
 **改完代码怎么验证**
 
