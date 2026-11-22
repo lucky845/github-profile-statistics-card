@@ -254,6 +254,8 @@ server {
 
 - **`/livez`** —— 存活探针，`{"code":200,"msg":"ok","data":{"status":"alive","uptime":N}}`
 - **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）与 `platforms`
+  - `platforms` 是**真实调用计数**，不是占位：每个被请求过的平台一条 `{ok, fail, lastOkAt?, lastFailureAt?, lastError?}`，`lastError` 取 `NOT_FOUND` / `RATE_LIMITED` / `DATA_UNAVAILABLE` / `UPSTREAM_ERROR`。上游静默失效（掘金返回空壳、CSDN 返 521）时这里能直接看出来。从未被请求过的平台不出现——空对象是「还没人问」，不是「全挂了」。
+  - 计数在进程内累积、重启清零；`/health` 自身不参与缓存也不计数，所以监控轮询不会把数字算成流量。
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
 - **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}}`

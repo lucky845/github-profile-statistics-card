@@ -90,7 +90,7 @@
 | --- | --- | --- |
 | `/` | GET | 首页（主题预览与卡片画廊） |
 | `/livez` | GET | 存活探针：进程还在吗。**健康检查用这个** |
-| `/health` | GET | 连通性：上游平台都通吗。缺 token 或上游限流时返回 unhealthy |
+| `/health` | GET | 连通性：上游平台都通吗。缺 token 或上游限流时返回 unhealthy。`data.platforms` 是各平台真实调用计数（`ok`/`fail`/`lastError`），能看出静默失效 |
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
 | `/metrics` | GET | Prometheus 文本格式指标 |
 | `/metrics/json` | GET | 同上，JSON 格式 |
