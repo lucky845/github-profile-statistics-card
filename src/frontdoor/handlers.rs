@@ -346,8 +346,100 @@ async fn cache_stats() -> Response {
     super::cache::stats_response()
 }
 
+/// Names the environment variable that turns DELETE /api/cache/clear on.
+const CACHE_CLEAR_TOKEN: &str = "CACHE_CLEAR_TOKEN";
+
+/// The token the deployment configured, if any.
+///
+/// A blank value counts as unset. Platforms routinely define a variable with an empty value, and
+/// reading that as "the expected token is the empty string" would accept `Authorization: Bearer`
+/// with nothing after it -- the one guess an attacker always tries first.
+fn configured_clear_token() -> Option<String> {
+    std::env::var(CACHE_CLEAR_TOKEN)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+/// The bearer credential the request presented, or `None` if the header is absent or malformed.
+fn presented_clear_token(req: &Request) -> Option<String> {
+    let value = req
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
+    let mut parts = value.split_whitespace();
+    let scheme = parts.next()?;
+    let token = parts.next()?;
+    // A third field means the header is not `Bearer <token>`. Picking one of the words and hoping
+    // would make the accepted syntax depend on the order a proxy happened to write them in.
+    if parts.next().is_some() || !scheme.eq_ignore_ascii_case("Bearer") {
+        return None;
+    }
+    Some(token.to_string())
+}
+
+/// Compares two credentials without letting the answer leak through timing.
+///
+/// `==` on strings stops at the first differing byte, so the time it takes to say "no" tracks how
+/// much of the guess was right. This walks the whole expected value every time, reading 0 past the
+/// end of a short guess so the loop keeps its shape, and folds the length difference into the same
+/// accumulator.
+fn same_token(presented: &str, expected: &str) -> bool {
+    let presented = presented.as_bytes();
+    let expected = expected.as_bytes();
+    let mut diff = u8::from(presented.len() != expected.len());
+    for (index, byte) in expected.iter().enumerate() {
+        diff |= presented.get(index).copied().unwrap_or(0) ^ byte;
+    }
+    diff == 0
+}
+
+/// Answers the request when it may not clear the cache, or `None` when it may.
+///
+/// This is default-deny on purpose. The original exposed this endpoint with no credential at all
+/// (`bae577b^:src/app.ts:92`), and that was survivable there because clearing only emptied one
+/// process's map. This port adds a shared L2 tier, so one anonymous DELETE now reaches every
+/// instance at once and sends the whole fleet at an upstream that allows 60 requests an hour.
+/// An endpoint nobody configured is therefore a closed endpoint, not an open one: the failure mode
+/// of "I deployed and forgot the variable" has to be a 403, not a stampede.
+fn clear_closed_because(req: &Request) -> Option<Response> {
+    let Some(expected) = configured_clear_token() else {
+        let status = StatusCode::FORBIDDEN;
+        return Some(
+            super::r::R::err(
+                status,
+                format!("Cache clearing is disabled: {CACHE_CLEAR_TOKEN} is not set"),
+            )
+            .reply(status)
+            .cache_control(super::metrics::LIVE_CACHE_CONTROL)
+            .into_response(),
+        );
+    };
+    if presented_clear_token(req).is_some_and(|token| same_token(&token, &expected)) {
+        return None;
+    }
+    let status = StatusCode::UNAUTHORIZED;
+    let mut response = super::r::R::err(status, "Unauthorized: this endpoint requires a bearer token")
+        .reply(status)
+        .cache_control(super::metrics::LIVE_CACHE_CONTROL)
+        .into_response();
+    // RFC 9110 requires a 401 to name the scheme the client should present; without it a browser
+    // or a curl user has no way to know a bearer token is what was wanted.
+    response.headers_mut().insert(
+        axum::http::header::WWW_AUTHENTICATE,
+        axum::http::HeaderValue::from_static("Bearer"),
+    );
+    Some(response)
+}
+
 /// manualCacheClearHandler: DELETE /api/cache/clear?all=true|group=..|pattern=..
 async fn cache_clear(req: Request) -> Response {
+    // The gate sits inside the handler rather than in a layer so there is exactly one path to
+    // clearing: a future route that forgets the layer cannot also forget this call.
+    if let Some(refusal) = clear_closed_because(&req) {
+        return refusal;
+    }
     let query = parse_query(req.uri().query());
     let take = |name: &str| {
         query

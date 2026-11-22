@@ -39,7 +39,7 @@ flowchart TD
 
 ## 环境变量
 
-核心三个，全部可选（另有 Redis 四个变量，见下一节）：
+核心四个，全部可选（另有 Redis 四个变量，见下一节）：
 
 | 变量 | 默认 | 作用 |
 | --- | --- | --- |
@@ -47,6 +47,7 @@ flowchart TD
 | `GITHUB_TOKEN` | 空 | GitHub 个人访问令牌。**强烈推荐**：匿名额度只有 60 次/小时/**出口 IP**，部署在共享出口上几分钟就会打满，之后 GitHub 卡片会退化成「该平台暂无此用户的数据」。配置后额度是 5000 次/小时 |
 | `BILIBILI_SESSDATA` | 空 | 哔哩哔哩登录 Cookie 里的 `SESSDATA`。不带时上游对 `x/space/upstat`、`x/relation/stat` 返回 `-352` 风控码，卡片会显示**全 0 的真实数据**（不是报错卡） |
 | `TRUST_PROXY` | 空（视为 `0`） | **只在有反向代理时配**。限流按客户端计数，默认用 TCP 对端地址；填代理层数后改为读 `X-Forwarded-For` 里代理追加的那几项。直连（`docker run -p 3000:3000`）不要配，配错会让限流对不上人 |
+| `CACHE_CLEAR_TOKEN` | 空（= 端点关闭） | `DELETE /api/cache/clear` 的 Bearer 凭据。**留空时该端点一律 403**，不是「无鉴权放行」。见下方「清缓存的凭据」 |
 
 其它历史变量（`MONGODB_URI`、`DATABASE_URL`、`USE_MEMORY_CACHE`、`NODE_ENV`、`RATE_LIMIT_*`、`*_CACHE_TTL`）**已无任何代码读取**，配了也不生效，可以从平台上一并删掉。
 
@@ -100,6 +101,46 @@ TTL 取自响应头的 `s-maxage`，所以「改平台的 s-maxage」会同时�
 为什么值得配：GitHub 匿名额度只有 **60 次/小时/出口 IP**，而 `/github/{user}` 每次回源要打 2 个 REST 端点。多实例部署时每个实例都会各打一次上游，配额会被实例数除。实测 5 次冷启动：无 Redis 全部回源，有 Redis 只回源 1 次。
 
 清缓存会同时清两层（`DELETE /api/cache/clear?all=true`），且**不用 `FLUSHDB`**——只按 `http:` 前缀 `SCAN`+`DEL`，以免误删同一 Redis 库里别的应用的数据。
+
+正因为会清到共享层，这个端点在移植时补上了凭据：一次匿名调用在原版只清一个进程的 map，在这里会让所有实例同时回源，而 GitHub 匿名额度只有 60 次/小时。详见下一节。
+
+### 清缓存的凭据：`CACHE_CLEAR_TOKEN`
+
+`DELETE /api/cache/clear` 在新版 Node 里是无鉴权的（`bae577b^:src/app.ts:92` 直接把 `manualCacheClearHandler` 挂在路由上），那在**只有进程内缓存**时还过得去：一次调用只清掉一个进程的 map，下一个请求回源一次就补回来了。
+
+移植时加了 Redis 共享层，风险性质就变了。同一行代码现在做的是「让整个舰队同时回源」，而 GitHub 匿名额度只有 60 次/小时/出口 IP，`/github/{user}` 每次回源还要打 2 个端点。一次误触就够把当天额度烧完，之后所有 GitHub 卡片退化成「暂无数据」。
+
+所以这里是**默认拒绝**，而不是「原样搬过来 + 建议加个网关」：
+
+| 状态 | 行为 |
+| --- | --- |
+| 没配 `CACHE_CLEAR_TOKEN` | 一律 `403`，`msg` 点名缺的是哪个变量 |
+| 配了，但没带凭据 / scheme 不对 / 值不对 | `401` + `WWW-Authenticate: Bearer` |
+| 配了，凭据正确 | 按 `?all=` / `?group=` / `?pattern=` 正常执行 |
+
+三个实现细节值得知道，因为它们各自挡掉一种真实的绕过：
+
+1. **空值视为未配置。** 平台经常定义一个值为空的环境变量。把空串读成「期望令牌是空串」，会让 `Authorization: Bearer`（后面什么都没有）成为第一个被猜中的口令。
+2. **长度参与比较。** 令牌比较是手写的、不因提前失配而短路的循环。但如果只走循环，`Bearer <正确值>EXTRA` 也会通过——循环只遍历期望值，多出来的字节它不看。长度差异必须折进同一个累加器。
+3. **scheme 必须字面是 `Bearer`（大小写不敏感）。** 否则 `Basic <正确令牌>` 也能进，检查就退化成「有某个词，然后是秘密」。
+
+```bash
+# 未配置时：
+$ curl -s -X DELETE 'http://127.0.0.1:8080/api/cache/clear?all=true'
+{"code":403,"msg":"Cache clearing is disabled: CACHE_CLEAR_TOKEN is not set","data":null}
+
+# 配置后：
+$ CACHE_CLEAR_TOKEN=s3cret-token PORT=3000 ./target/release/app &
+$ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE 'http://127.0.0.1:3000/api/cache/clear?all=true'
+401
+$ curl -s -X DELETE -H 'Authorization: Bearer s3cret-token' \
+    'http://127.0.0.1:3000/api/cache/clear?all=true'
+{"code":200,"msg":"Cleared all cache","data":{"deletedCount":"all"}}
+```
+
+令牌只从环境变量读，没有写进仓库的默认值。生成一个就够：`openssl rand -hex 32`。换令牌等于让旧值立刻失效，不需要重启以外的任何操作。
+
+拒绝响应同样带 `Cache-Control: no-store`：一条被 CDN 记住的 403 会活得比产生它的那个环境变量还久，改完配置也解不开。
 
 ## 本地运行
 
@@ -291,7 +332,7 @@ server {
   - 一张卡片实际发几次上游请求，就计几次：`github` 2 次（profile + repos），`leetcode` 按区域尝试次数，`csdn` 1 次（抓 profile 页），`juejin` 2 次（用户 GET 与文章列表 POST 并发），`bilibili` 4 次（空间页 + stat + upstat + card）。
   - 响应带 `Cache-Control: no-store`，详见「缓存」一节。
 - **`/api/cache/stats`** —— 缓存计数器（HTTP 层与 storage 层共用一套）
-- **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）
+- **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）。**需要凭据**：必须带 `Authorization: Bearer <CACHE_CLEAR_TOKEN>`，未配置该变量时返回 403；见下方「清缓存的凭据」
 
 ## 缓存
 

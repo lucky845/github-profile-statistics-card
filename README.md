@@ -45,7 +45,7 @@
 | 参数 | 说明 |
 | --- | --- |
 | `theme` | `light`（默认）/ `dark` / `github-dark-dimmed` / `transparent`。传未知主题回落 `light`，不报错 |
-| `nocache=true` | 绕开**平台取数缓存**，让这一次真的回源（排查上游数据问题时用）。注意它不绕开 HTTP 响应缓存：它只是换了一个缓存键（`?` 带着 `nocache=true`），所以同一个 URL 连打第二次仍然命中 HTTP 缓存。要每次都回源，得换 key（例如加时间戳）或先 `DELETE /api/cache/clear?all=true` |
+| `nocache=true` | 绕开**平台取数缓存**，让这一次真的回源（排查上游数据问题时用）。注意它不绕开 HTTP 响应缓存：它只是换了一个缓存键（`?` 带着 `nocache=true`），所以同一个 URL 连打第二次仍然命中 HTTP 缓存。要每次都回源，得换 key（例如加时间戳）或先调 `DELETE /api/cache/clear?all=true`（需要凭据，见下方） |
 
 ### 各平台卡片包含什么
 
@@ -96,7 +96,7 @@
 | `/metrics/json` | GET | 同上，JSON 格式 |
 | `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.externalApis` 为每个已注册平台各给一个计数，全部是真实出站请求数 |
 | `/api/cache/stats` | GET | 缓存计数器 |
-| `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=` |
+| `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=`。**需要凭据**：配了 `CACHE_CLEAR_TOKEN` 后须带 `Authorization: Bearer <token>`，没配则一律 403（见下方「清缓存的凭据」） |
 
 **探针语义要分清**：`/livez` 恒 200，`/health` 反映上游状态。用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
 
@@ -142,6 +142,7 @@ Docker 与 Vercel 跑的是**同一份二进制**——两者的区别只是由�
 | `BILIBILI_SESSDATA` | 空 | 哔哩哔哩登录 Cookie 里的 `SESSDATA`。不带时上游返回 `-352` 风控码 |
 | `PUBLIC_BASE_URL` | 空 | **Vercel 必配**。首页画廊用公开域名拼示例链接。留空则用请求的 `Host` 头——Vercel 的 `Host` 是带部署哈希的预览域名，位于 SSO 后面，用它拼出的图片会全部返回 302 |
 | `TRUST_PROXY` | 空（视为 `0`） | **只在有反向代理时配**。限流按客户端计数，默认用 TCP 对端地址；填代理层数后改为读 `X-Forwarded-For` 里代理追加的那几项。填错的后果是限流对不上人（多了误伤、少了被绕过），详见下方「限流键」 |
+| `CACHE_CLEAR_TOKEN` | 空 | **清缓存端点的凭据**。留空表示该端点关闭（任何调用都是 403）；填了则要求 `Authorization: Bearer <该值>`。详见下方「清缓存的凭据」 |
 | `REDIS_URL` 或 `REDIS_HOST`/`REDIS_PORT`/`REDIS_USERNAME`/`REDIS_PASSWORD` | 空 | **可选**。配置后启用 Redis 共享缓存层：TTL 按响应的 `s-maxage`（10–60 分钟），跨实例/跨冷启动共享。多实例部署强烈建议配上。两种写法任选，与原版 Node 兼容 |
 
 ### Docker（推荐）
@@ -183,6 +184,27 @@ vercel deploy
 - `TRUST_PROXY=2` — 前面两层（例如 CDN + 源站 Nginx）
 
 只有**你运维的那几层**追加的项才会被读取，更左边的值仍是访客自己写的。链里出现任何一项不是合法地址，整条头就被丢弃并回落到对端地址——不做「跳过垃圾项继续数」，否则加个垃圾前缀就能把计数挪到别人头上。`docker run -p 3000:3000` 直连时**不要配**这个变量。
+
+**清缓存的凭据（`CACHE_CLEAR_TOKEN`）**：`DELETE /api/cache/clear` 在本项目里比原版更危险，因为它会一并清掉 Redis 共享层——一次调用不是清掉一个进程的 map，而是让整个舰队同时回源。而 GitHub 匿名额度只有 60 次/小时，一次误触就够把当天额度烧完。所以这个端点**默认关闭**：
+
+- 不配 `CACHE_CLEAR_TOKEN` → 任何调用都返回 `403`，`msg` 会点名缺的是哪个变量。这是刻意的取舍：忘记配置的后果必须是「关着的门」，不能是「敞开的门」。
+- 配了 → 必须带 `Authorization: Bearer <token>`。没带、scheme 不是 `Bearer`、值不对，一律 `401` 并带 `WWW-Authenticate: Bearer`（RFC 9110 要求 401 点明该用哪种 scheme）。
+- 令牌比较走的是不因提前失配而短路的手写比较，长度不同也计入结果——否则 `Bearer <正确值>EXTRA` 会被当成合法凭据。
+- `CACHE_CLEAR_TOKEN=` 这种空值等同未配置。平台经常定义一个空变量，把空串当成「期望令牌是空串」会让 `Authorization: Bearer`（后面什么都没有）成为第一个被猜中的口令。
+
+```bash
+# 未配置：
+$ curl -s -X DELETE 'http://127.0.0.1:8080/api/cache/clear?all=true'
+{"code":403,"msg":"Cache clearing is disabled: CACHE_CLEAR_TOKEN is not set","data":null}
+
+# 配置后，凭据正确：
+$ CACHE_CLEAR_TOKEN=s3cret-token ./target/release/app &
+$ curl -s -X DELETE -H 'Authorization: Bearer s3cret-token' \
+    'http://127.0.0.1:8080/api/cache/clear?all=true'
+{"code":200,"msg":"Cleared all cache","data":{"deletedCount":"all"}}
+```
+
+拒绝响应同样带 `Cache-Control: no-store`：一条被共享缓存记住的 403 会比产生它的那个设置活得更久。
 
 ### 托管平台
 
