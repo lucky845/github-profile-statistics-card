@@ -122,6 +122,89 @@ fn a_github_card_request_moves_the_github_call_counter() {
     );
 }
 
+/// `/health` used to publish `process.memoryUsage()`'s five V8 keys as literal zeros. Only
+/// `rss` describes a Rust process, so only `rss` is published -- and it is the real resident
+/// size, not a placeholder. A key kept at zero is worse than a missing key: it answers.
+#[test]
+fn health_reports_a_real_resident_size_and_drops_the_v8_keys() {
+    let (status, _, body) = get("/health");
+    assert_eq!(status, StatusCode::OK);
+    let envelope: serde_json::Value = serde_json::from_str(&body).expect("a JSON envelope");
+    let memory = &envelope["data"]["memory"];
+    let keys: Vec<&str> = memory
+        .as_object()
+        .unwrap_or_else(|| panic!("no memory object in /health: {body}"))
+        .keys()
+        .map(|key| key.as_str())
+        .collect();
+    assert_eq!(keys, vec!["rss"], "memory should carry rss only, got {keys:?}");
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        let rss = memory["rss"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("rss is not a measurement in /health: {body}"));
+        assert!(rss > 0, "a live process holds pages, got rss={rss}");
+    }
+}
+
+/// The number `/livez` publishes is the process's age, measured from the kernel -- not a
+/// stopwatch started by the first probe.
+///
+/// What this catches is a value that is undefined, constant, or simply older than the process:
+/// a hardcoded 0, a value fixed at module init, or a handler reading a different source than
+/// the one `/metrics` reports. It cannot, by itself, tell the kernel-measured age from a
+/// stopwatch started at the same moment the test took its reference reading -- that distinction
+/// is what the end-to-end check does (start the binary, wait, ask once). The comment says so
+/// because an assertion that claims more than it tests is the same species of lie as the
+/// numbers this change removed.
+#[test]
+fn livez_reports_the_process_age_not_the_first_probes_age() {
+    // The one-second sleep is load-bearing: the defect this pins answered `uptime: 0` on the
+    // first request because it started its stopwatch at that request. Waiting past the first
+    // second means a truthful answer is at least 1, and the buggy one is still 0. Without the
+    // sleep both implementations report 0 in a freshly started test process and the assertion
+    // below would pass for the wrong reason.
+    std::thread::sleep(std::time::Duration::from_millis(1_100));
+    // Taken before the request, so a handler reading its own clock at request time cannot
+    // produce a smaller number than this even by a tick.
+    let age_before = app::frontdoor::metrics::readings()
+        .uptime_seconds
+        .expect("this test runs on a platform that can read the process start time");
+    assert!(age_before >= 1, "the sleep above should put this process past its first second");
+    let (status, _, body) = get("/livez");
+    assert_eq!(status, StatusCode::OK);
+    let envelope: serde_json::Value = serde_json::from_str(&body).expect("a JSON envelope");
+    let uptime = envelope["data"]["uptime"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no uptime in /livez: {body}"));
+    assert!(
+        uptime >= age_before,
+        "/livez answered uptime={uptime}s but this process was already {age_before}s old"
+    );
+    // And it is not some pre-computed constant from an earlier phase either.
+    assert!(uptime <= age_before + 5, "/livez answered uptime={uptime}s, implausibly above {age_before}s");
+}
+
+/// `/health` and `/livez` must agree on the process's age: they read the same kernel value.
+/// A second-granularity allowance covers the two reads landing either side of a tick.
+#[test]
+fn health_and_livez_report_the_same_age() {
+    let (_, _, livez_body) = get("/livez");
+    let livez: serde_json::Value = serde_json::from_str(&livez_body).expect("a JSON envelope");
+    let uptime = livez["data"]["uptime"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no uptime in /livez: {livez_body}"));
+    let (_, _, health_body) = get("/health");
+    let health: serde_json::Value = serde_json::from_str(&health_body).expect("a JSON envelope");
+    let health_uptime = health["data"]["uptime"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no uptime in /health: {health_body}"));
+    assert!(
+        health_uptime.abs_diff(uptime) <= 1,
+        "/livez says {uptime}s and /health says {health_uptime}s"
+    );
+}
+
 /// The `github` tally out of `/stats`, placed where the envelope nests it.
 fn github_calls() -> u64 {
     let (status, _, body) = get("/stats");

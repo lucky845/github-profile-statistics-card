@@ -253,9 +253,12 @@ server {
 ## 观测
 
 - **`/livez`** —— 存活探针，`{"code":200,"msg":"ok","data":{"status":"alive","uptime":N}}`
-- **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）与 `platforms`
+  - `uptime` 是**进程真实年龄**（秒，向下取整），取自内核记录的进程启动时刻（macOS `proc_pidinfo(PROC_PIDTBSDINFO)`、Linux `/proc/self/stat` 的 starttime + `/proc/stat` 的 btime），与 `/metrics` 的 `process_start_time_seconds` 同源。不是「首次探活以来」的计时器——那样启动一分钟的服务第一次探活会答 `uptime: 0`。
+  - 读不到启动时刻的平台（非 macOS / Linux）答 `uptime: null`，不是 `0`：`0` 会被读成「刚启动」，`null` 才是「这个构建测不出来」。
+- **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）、`platforms`、`memory` 与 `uptime`（同上，同源同语义）
   - `platforms` 是**真实调用计数**，不是占位：每个被请求过的平台一条 `{ok, fail, lastOkAt?, lastFailureAt?, lastError?}`，`lastError` 取 `NOT_FOUND` / `RATE_LIMITED` / `DATA_UNAVAILABLE` / `UPSTREAM_ERROR`。上游静默失效（掘金返回空壳、CSDN 返 521）时这里能直接看出来。从未被请求过的平台不出现——空对象是「还没人问」，不是「全挂了」。
   - 计数在进程内累积、重启清零；`/health` 自身不参与缓存也不计数，所以监控轮询不会把数字算成流量。
+  - `memory` 只报 `{ "rss": N }` —— 常驻内存字节数，真实测量。原版 `process.memoryUsage()` 的另外四个键（`heapTotal` / `heapUsed` / `external` / `arrayBuffers`）是 V8 的账目，Rust 进程没有对应物，**不再输出**：留着恒 0 的键和 `/metrics` 里删掉的 `nodejs_*` 族是同一种谎。读 `memory.rss` 的消费者不受影响；读 V8 四键的消费者本来读到的就是常数 0。
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
 - **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}}`

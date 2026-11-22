@@ -370,9 +370,15 @@ async fn cache_clear(req: Request) -> Response {
 }
 
 async fn livez() -> Response {
+    // The real time since this process started, read from the kernel rather than counted from
+    // the first probe. This handler used to call a `process_uptime()` whose `OnceLock` was
+    // initialised on first use -- so the number was "seconds since something first asked", and
+    // a process eight seconds old answered `uptime: 0`. `process.uptime()` in the original was
+    // the true age; this is the same number measured the same way.
+    let uptime = super::metrics::readings().uptime_seconds;
     let body = super::r::R::ok(serde_json::json!({
         "status": "alive",
-        "uptime": process_uptime(),
+        "uptime": measured(uptime),
     }))
     .body();
     // No X-Cache-Key here: the middleware stamps one from the path the client sent, and a key
@@ -397,9 +403,10 @@ async fn health() -> Response {
     // is 200 because the process answered at all, while `data.status` is the upstream verdict.
     // Folding the two together would make a rate-limited upstream look like a dead process to
     // anything that parses the body.
+    let readings = super::metrics::readings();
     let body = super::r::R::ok(serde_json::json!({
         "status": "unhealthy",
-        "uptime": process_uptime(),
+        "uptime": measured(readings.uptime_seconds),
         "database": {
             "status": "unhealthy",
             "pool": { "isConnected": false, "poolSize": 0 },
@@ -410,13 +417,12 @@ async fn health() -> Response {
         // the counters and dropped the wiring, so this endpoint claimed no platform had ever been
         // called. It is the one place an operator can see a source failing silently.
         "platforms": platforms::port::snapshot_health().unwrap_or(Value::Null),
-        "memory": {
-            "rss": 0,
-            "heapTotal": 0,
-            "heapUsed": 0,
-            "external": 0,
-            "arrayBuffers": 0,
-        },
+        // Resident set size is real and measurable. The other four keys the original published
+        // (heapTotal, heapUsed, external, arrayBuffers) are V8 accounting with no Rust
+        // counterpart -- printing zeros for them is the same lie as the deleted nodejs_*
+        // families on /metrics, so they are gone rather than faked. A consumer reading
+        // `memory.rss` keeps working; one reading the V8 keys was already reading constants.
+        "memory": { "rss": measured(readings.resident_bytes) },
     }))
     .body();
     // skipCache keeps /health out of the process cache, so it carries no X-Cache-* headers. That
@@ -590,15 +596,13 @@ pub fn parse_query(raw: Option<&str>) -> Vec<(String, String)> {
     super::query::parse(raw)
 }
 
-/// Seconds since the process started, floored the way Math.floor(process.uptime()) does.
-fn process_uptime() -> u64 {
-    use std::sync::OnceLock;
-    static START: OnceLock<SystemTime> = OnceLock::new();
-    let start = START.get_or_init(SystemTime::now);
-    SystemTime::now()
-        .duration_since(*start)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or(0)
+/// A measurement, or `null` when the process could not take it.
+///
+/// The distinction is the whole point of the field: `0` is an answer a probe would believe -- a
+/// brand new process, a process holding no memory -- while `null` says "this build cannot tell
+/// you". A platform without procfs (or an unreadable structure) lands here.
+fn measured(value: Option<u64>) -> Value {
+    value.map_or(Value::Null, Value::from)
 }
 
 /// new Date().toISOString(), to the millisecond.
