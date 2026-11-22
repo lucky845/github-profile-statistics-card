@@ -255,6 +255,7 @@ server {
 - **`/livez`** —— 存活探针，`{"code":200,"msg":"ok","data":{"status":"alive","uptime":N}}`
   - `uptime` 是**进程真实年龄**（秒，向下取整），取自内核记录的进程启动时刻（macOS `proc_pidinfo(PROC_PIDTBSDINFO)`、Linux `/proc/self/stat` 的 starttime + `/proc/stat` 的 btime），与 `/metrics` 的 `process_start_time_seconds` 同源。不是「首次探活以来」的计时器——那样启动一分钟的服务第一次探活会答 `uptime: 0`。
   - 读不到启动时刻的平台（非 macOS / Linux）答 `uptime: null`，不是 `0`：`0` 会被读成「刚启动」，`null` 才是「这个构建测不出来」。
+  - 这一条**单元测试盖不全**：`tests/live_diagnostics.rs` 里那条测试的参考读数与秒表起点几乎同时，两种实现都能通过。CI 里另跑 `scripts/process-age.sh`——起进程、等 5 秒、只探一次，要求 `uptime >= 5`。它探就绪用的是 TCP 连接而不是 `/livez`，因为用 `/livez` 轮询本身就是第一次探测。
 - **`/health`** —— 依赖健康，含 `status`、`database`、`platforms`、`memory` 与 `uptime`（同上，同源同语义）
   - `status` 是**上游通不通**，从下面的 `platforms` 计数派生，两者出自同一次快照，不会自相矛盾。三态：`healthy` 每个被问过的平台最近一次都成功；`unhealthy` 至少一个平台最近一次失败；`unknown` 启动后还没人请求过任何卡片（空对象既不是健康也不是不健康）。只读**最近一次**——失败后恢复的平台会把字段带回 `healthy`，它回答「现在通不通」而不是「有没有出过错」。平局（`lastOkAt == lastFailureAt`，同一毫秒）判给失败：健康字段多报问题会被查，少报问题会被信。
   - `database` 恒为 `{"status":"not_configured","pool":{"isConnected":false,"poolSize":0}}`——本项目不接数据库，这个状态说的是「没配」，不是「坏了」。原版 Node 把它绑在 PostgreSQL 连接状态上，Rust 版没有那个依赖，早先照抄成 `unhealthy`，等于宣称一个从不存在的数据库故障中，运维会去找一条不该存在的连接串。
