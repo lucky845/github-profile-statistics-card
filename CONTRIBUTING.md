@@ -107,6 +107,12 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 
 诊断端点的 `Cache-Control: no-store` 也是 replay 抓不到的一类：录制时 `x-cache-status` 是 `[..]` 通配，把 `no-store` 删掉 replay 照样全绿，但 `/stats` 会开始返回五分钟前的读数。这类"中间件默认值 + 处理函数没设策略"的缺陷，只有直接驱动 `app::router()` 的集成测试抓得住——见 `tests/live_diagnostics.rs`（连打两次断言不得 `HIT`）与 `tests/home_host_cache.rs`（两个 Host 断言不得同体）。
 
+**共享缓存（L2）也是这样。** `gate` 与全量 replay 都在 `REDIS_*` 未配置的状态下跑，所以 `remote.rs` 里 `get`/`set`/`delete`/`delete_prefix`/`clear_all` 这五个函数**没有任何 replay 覆盖**——录制时它们一律走 `connection() -> None` 的早退分支。`tests/remote_cache.rs` 补这一块：它在测试进程里起一个只讲 RESP 的假服务器，`TcpListener::bind("127.0.0.1:0")` 拿随机端口后写入 `REDIS_URL`，于是 CI 不需要 Redis service 也能跑。
+
+那个 fake 实现的是 `remote.rs` 实际发出的命令，并且**保留收到的命令序列供断言**：`SETEX` 有没有带 `EX`、`EX` 的值是不是调用方给的 TTL、`SCAN` 有没有带 `COUNT`。其中 `delete_prefix_walks_every_page_the_server_hands_back` 塞 520 个键（超过 `COUNT 500`），断言删除后该前缀**一个不剩**——那个 `SCAN` 分页循环只会在超过一页时出错，少于 500 个键的测试永远发现不了。改坏它（第一页就 `return`）立刻红。
+
+注意 fake 的 SCAN 游标是**插入序列号**而不是"排序后第几个键"：后者在删掉前一页之后会让游标整体前移，看起来像被测代码漏删，实际是 fake 自己的缺陷。写这类替身时，游标的语义要跟真服务器一致——它是一个位置，不是一个偏移量。
+
 ## 代码风格
 
 - 注释写**为什么**，不写**做了什么**。一个解释"这行在干嘛"的注释是噪音；解释"为什么必须这样而不是那样"的注释才是资产。

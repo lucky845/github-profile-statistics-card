@@ -350,7 +350,7 @@ GET /bilibili/:uid?theme=light
 ## 贡献
 
 ```bash
-cargo test --workspace --locked          # 96 个单元测试
+cargo test --workspace --locked          # 158 个测试（15 个 suite，含集成测试）
 cargo clippy --locked -- -D warnings   # CI 会以 -D warnings 跑
 ```
 
