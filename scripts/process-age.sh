@@ -35,7 +35,9 @@ if [ ! -x "$APP_BIN" ]; then
   exit 1
 fi
 
-LOG="$(mktemp -t process-age)"
+# A template, not `mktemp -t process-age`: BSD mktemp accepts a bare prefix there, GNU
+# mktemp rejects it with "too few X's in template". The template form works on both.
+LOG="$(mktemp "${TMPDIR:-/tmp}/process-age.XXXXXX")"
 APP_PID=""
 cleanup() {
   if [ -n "$APP_PID" ]; then
