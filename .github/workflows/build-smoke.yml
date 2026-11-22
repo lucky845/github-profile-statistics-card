@@ -34,17 +34,20 @@ jobs:
       - name: Lint
         run: cargo clippy --release --locked --all-targets --workspace -- -D warnings
 
-      # 行为契约门：106 条纯本地 case 必须全绿。
+      # 行为契约门：111 条纯本地 case 必须全绿。
       #
-      # 为什么是 106 而不是全部 153：其余 46 条是卡片（每张都要打上游），外加一条
-      # cache-stats（上报本次 run 的计数）。它们依赖 GitHub 匿名配额、CSDN 存活状态
-      # 和录制当天的日期，在 CI 里跑只会得到和代码无关的红灯——实测同样的代码连跑
-      # 两遍能给出 148 和 147 两种结果。这 106 条不打上游、不看时间，5 次连跑稳定
-      # 全绿；改动一个安全头能让它立刻 0/106，所以它不是装饰。
+      # 为什么是 111 而不是全部 153：其余 41 条是**成功渲染的**卡片（每张都要打上游），
+      # 外加一条 cache-stats（上报本次 run 的计数）。它们依赖 GitHub 匿名配额、CSDN
+      # 存活状态和录制当天的日期，在 CI 里跑只会得到和代码无关的红灯——实测同样的代码
+      # 连跑两遍能给出 148 和 147 两种结果。这 111 条不打上游、不看时间，稳定全绿。
+      #
+      # 6 条 404 的卡片故意留在门内：它们由 404 处理器直接渲染、不打上游，守的是
+      # 「平台挂载了但 404 回了 JSON」这类缺陷（juejin 就这么漏了一整代）。撤掉那个
+      # 修复，这道门立刻 110/111。
       #
       # rust-anything 本身是 Node 工具，用它验证不等于二进制依赖 Node——上面那条
       # self-contained 检查依然在，且跑的是 target/release/app 这个纯 Rust 产物。
-      - name: Behaviour gate (106 hermetic replay cases)
+      - name: Behaviour gate (111 hermetic replay cases)
         run: |
           set -uo pipefail
           npm install --global rust-anything@2.1.0 > /dev/null

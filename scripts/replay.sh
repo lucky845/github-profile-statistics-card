@@ -3,7 +3,7 @@
 #
 #   ./scripts/replay.sh          全量 153 条，基线 148/153。问"录制行为有没有漂移"——
 #                                依赖上游实时数据（GitHub/CSDN/力扣…），会随网络和配额波动。
-#   ./scripts/replay.sh gate     106 条纯本地，必须 106/106。问"我这一改有没有搞坏东西"——
+#   ./scripts/replay.sh gate     111 条纯本地，必须 111/111。问"我这一改有没有搞坏东西"——
 #                                不打上游、不吃配额、不看日期，CI 里就该跑这一档。
 #   ./scripts/replay.sh home     单个 case
 #
@@ -19,7 +19,7 @@ cd "$REPO_ROOT" || exit 2
 RECORDED_AT=1795219200  # 2026-11-21T00:00:00Z
 BASELINE_PASSED=148
 TOTAL_CASES=153
-GATE_TOTAL=106
+GATE_TOTAL=111
 
 # 绝对路径：gate 的 corpus 在临时目录里，相对路径的二进制在那儿找不到。
 # REPLAY_APP_BIN 可覆盖——CI 里构建的是 release，没必要为跑 gate 再编一份 debug。
@@ -35,8 +35,13 @@ mode="${1:-all}"
 
 # --- gate: 派生一个只含"不依赖上游"case 的临时 corpus ---
 # 排除两类：
-#   image/svg  (46 条) 每张卡片都要打上游，GitHub 匿名配额 60/小时，CSDN 还会 521。
+#   image/svg 且非 404 (41 条) 每张成功卡片都要打上游，GitHub 匿名配额 60/小时，CSDN 还会 521。
 #   cache-stats (1 条) 上报本次 run 的 hits/misses/keys，天然依赖跑过哪些 case。
+#
+# 但 404 的卡片**要留**：它由 not_found 处理器直接渲染，一个字节都不打上游，稳定可复现。
+# 这 6 条（github 2 条 + leetcode/csdn/juejin/bilibili 各 1 条）正是"某个平台挂载了、
+# 但 404 该回卡片却回了 JSON"这类缺陷的唯一守门人——trap-124 当年钉的就是 juejin 的错误
+# Content-Type。把它们排掉，那个 bug 再犯一次 gate 也会全绿。
 if [ "$mode" = "gate" ]; then
   corpus=$(mktemp -d)
   trap 'rm -rf "$corpus"' EXIT
@@ -45,7 +50,7 @@ if [ "$mode" = "gate" ]; then
   kept=0
   for toml in rust/app-cases/http/*.toml; do
     name=$(basename "$toml" .toml)
-    if grep -q "image/svg" "$toml"; then continue; fi
+    if grep -q "image/svg" "$toml" && ! grep -qx "status = 404" "$toml"; then continue; fi
     if [ "$name" = "cache-stats" ]; then continue; fi
     cp "$toml" "$corpus/rust/app-cases/http/"
     body="${toml%.toml}.body"
