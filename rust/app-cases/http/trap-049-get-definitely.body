@@ -1,1 +1,1 @@
-{"code":"ROUTE_NOT_FOUND","message":"请求的路由不存在","timestamp":"[..]","path":"/definitely/%F0%9F%91%A8%E2%80%8D%F0%9F%91%A9%E2%80%8D%F0%9F%91%A7%20family/a/route"}
+{"code":404,"msg":"请求的路由不存在","data":{"reason":"ROUTE_NOT_FOUND","path":"/definitely/%F0%9F%91%A8%E2%80%8D%F0%9F%91%A9%E2%80%8D%F0%9F%91%A7%20family/a/route","timestamp":"[..]"}}

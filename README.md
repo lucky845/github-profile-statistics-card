@@ -100,6 +100,20 @@
 
 **探针语义要分清**：`/livez` 恒 200，`/health` 反映上游状态。用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
 
+### JSON 响应统一信封
+
+除 `/metrics`（Prometheus 文本）与 `/metrics/json`（prom-client 的数组格式，解析方是抓取器）外，所有 JSON 端点都返回同一个信封：
+
+```json
+{ "code": 200, "msg": "ok", "data": { } }
+```
+
+- `code` —— 与 HTTP 状态码一致（不是恒定 200）。`Dockerfile` 的 `HEALTHCHECK`、`render.yaml` 的 `healthCheckPath`、CI 的冒烟步骤都只读 `curl -fsS` 的退出码，也就是状态码；把它一律改成 200 会直接废掉这些探针。
+- `msg` —— 一句给人看的话。
+- `data` —— 原来的响应体原样下移一层。所以 `/livez` 的 `uptime` 现在在 `data.uptime`，`/api/cache/stats` 的计数在 `data.hits` 等，`/health` 的 `status` 在 `data.status`。
+
+`/health` 上 `code:200` 与 `data.status:"unhealthy"` 并存是刻意的：前者说「进程答话了」，后者说「上游不健康」。合并成一个字段会让限流期的 `/health` 看起来像进程已死。
+
 ## 🛠️ 技术栈
 
 - **Rust** — Axum + Tokio + reqwest

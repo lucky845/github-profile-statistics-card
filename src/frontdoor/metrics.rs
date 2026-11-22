@@ -25,8 +25,8 @@ use super::headers::Reply;
 /// prom-client's contentType for the text exposition format.
 pub const TEXT_CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
 
-/// What res.json() answers with.
-pub const JSON_CONTENT_TYPE: &str = "application/json; charset=utf-8";
+/// What res.json() answers with, re-exported so the one definition lives in `r`.
+pub use super::r::JSON_CONTENT_TYPE;
 
 /// global.requestCount. metrics.middleware.ts bumps it for every request that reaches the
 /// middleware, which means every request the cache did not answer: the cache layer runs first and
@@ -291,7 +291,10 @@ pub fn json_response() -> Response {
 /// GET /stats: the two request counters, the cache counters, and the external API tallies.
 /// The GitHub tally has no increment site in the original, so it stays zero there and here.
 pub fn stats_response() -> Response {
-    let body = json!({
+    // The counters keep the shape the original published; the envelope is what changed. /metrics
+    // and /metrics/json are untouched on purpose -- a scraper parses those, and /metrics/json is
+    // prom-client's own array format, not an answer this app has any business wrapping.
+    let data = json!({
         "requests": {
             "total": REQUESTS_TOTAL.load(Ordering::Relaxed),
             "lastHour": REQUESTS_LAST_HOUR.load(Ordering::Relaxed),
@@ -302,12 +305,9 @@ pub fn stats_response() -> Response {
             "leetcode": LEETCODE_API_CALLS.load(Ordering::Relaxed),
         },
     });
-    Reply::new(
-        StatusCode::OK,
-        JSON_CONTENT_TYPE,
-        serde_json::to_string(&body).unwrap_or_default(),
-    )
-    .into_response()
+    super::r::R::ok(data)
+        .reply(StatusCode::OK)
+        .into_response()
 }
 
 /// The route handlers. axum only accepts async functions, so the three endpoints that build
