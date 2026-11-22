@@ -121,7 +121,7 @@
 ## 🛠️ 技术栈
 
 - **Rust** — Axum + Tokio + reqwest
-- **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB
+- **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB。L2 的五个操作由 `tests/remote_cache.rs` 用进程内 RESP 假服务器覆盖，CI 不需要 Redis service
 - **渲染** — 手写 SVG 生成，无模板引擎
 - **首页** — HTML 在编译期用 `include_str!` 编进二进制
 - **平台扩展** — 一张 `PlatformDesc` 常量表（`src/frontdoor/registry.rs`）描述每个平台，路由分派／限流前缀／404 判定／首页画廊／缓存键分隔符全部从它派生。加平台只改这一处，见 [CONTRIBUTING.md](CONTRIBUTING.md#添加新平台)
