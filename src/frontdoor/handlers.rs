@@ -191,15 +191,22 @@ async fn method_not_allowed(req: Request) -> Response {
     not_found(&path, &query, false)
 }
 
-/// notFoundHandler: the four card prefixes get an SVG, everything else gets JSON.
+/// notFoundHandler: any path that names a platform mount gets an SVG, everything else gets JSON.
+///
+/// The list is derived from `keys::PLATFORMS` rather than spelled out again. A second hardcoded
+/// copy used to live here, and it drifted: juejin was added to PLATFORMS but never to this array,
+/// so `GET /juejin/` answered a JSON 404 where every other platform answered a card. The defect
+/// survived the Node-to-Rust port because the original
+/// (src/middleware/error.middleware.ts:168) had the same four-entry list. Deriving it here means
+/// the next platform is covered by the one registration it already needs.
 ///
 /// `cacheable` is false for anything the cache middleware would not have handled: it only runs for
 /// GET and HEAD, so it never stamped X-Cache-Key on the others.
 fn not_found(path: &str, query: &[(String, String)], cacheable: bool) -> Response {
     let key = keys::default_key("GET", path, query);
-    let is_svg = ["/github/", "/leetcode/", "/csdn/", "/bilibili/"]
+    let is_svg = keys::PLATFORMS
         .iter()
-        .any(|prefix| path.contains(prefix));
+        .any(|(name, _)| path.contains(&format!("/{name}/")));
     if is_svg {
         // res.locals.themeName is never set, so the theme is always the literal "default".
         let body = svg::port::generate_card(
