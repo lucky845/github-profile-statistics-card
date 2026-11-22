@@ -288,11 +288,29 @@ fn render(data: Value, theme: &str) -> String {
 
 fn failure(error: FetchError, theme: &str, key: String) -> Response {
     // STATUS_BY_REASON / MESSAGE_BY_REASON: only NOT_FOUND leaves 200, and only a 200 keeps a TTL.
-    let (status, cache_control, message) = match error {
-        FetchError::NotFound => (StatusCode::NOT_FOUND, NO_STORE, NOT_FOUND_MESSAGE),
-        FetchError::RateLimited => (StatusCode::OK, SHORT_CACHE, RATE_LIMITED_MESSAGE),
-        FetchError::Upstream => (StatusCode::OK, SHORT_CACHE, DATA_UNAVAILABLE_MESSAGE),
+    // GitHub is the one platform with its own tail instead of `card_reply`, so it charges its own
+    // health counters -- the reason names are the ones its adapter used in registry.ts.
+    let (status, cache_control, message, reason) = match error {
+        FetchError::NotFound => (
+            StatusCode::NOT_FOUND,
+            NO_STORE,
+            NOT_FOUND_MESSAGE,
+            "NOT_FOUND",
+        ),
+        FetchError::RateLimited => (
+            StatusCode::OK,
+            SHORT_CACHE,
+            RATE_LIMITED_MESSAGE,
+            "RATE_LIMITED",
+        ),
+        FetchError::Upstream => (
+            StatusCode::OK,
+            SHORT_CACHE,
+            DATA_UNAVAILABLE_MESSAGE,
+            "DATA_UNAVAILABLE",
+        ),
     };
+    super::handlers::record_platform_fail("github", reason);
     // The failure branch of the original never runs the sanitizer.
     let svg = svg::port::generate_card(
         Value::String("error".into()),
@@ -313,6 +331,7 @@ pub async fn card(id: &str, raw_theme: Option<&str>, key: String) -> Response {
         Ok(stats) => stats,
         Err(error) => return failure(error, theme, key),
     };
+    super::handlers::record_platform_ok("github");
     let svg = sanitize_svg(&render(stats, theme));
     Reply::new(StatusCode::OK, "image/svg+xml; charset=utf-8", svg)
         .cache_key(key, "MISS")

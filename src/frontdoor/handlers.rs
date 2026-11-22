@@ -259,6 +259,7 @@ pub fn card_reply(
     key: String,
     success_cache_control: &'static str,
 ) -> Response {
+    record_health(card_type, &outcome);
     let (status, cache_control, body) = match outcome {
         CardOutcome::Rendered(payload) => (
             StatusCode::OK,
@@ -291,6 +292,44 @@ pub fn card_reply(
         reply = reply.cache_control(cache_control);
     }
     reply.into_response()
+}
+
+/// Charge the outcome to its platform's health counters.
+///
+/// This is the Rust replacement for `registry.ts`'s decorator, which wrapped every
+/// `PlatformStatsSource.fetch` and counted `ok`/`fail` around it. The port dropped that layer, so
+/// `record_ok` / `record_fail` existed with tests but no caller and `/health` hardcoded an empty
+/// `platforms` object — an operator asking "is CSDN quietly failing" got `{}`.
+///
+/// The choke point here is the shared tail rather than the fetch: every platform's outcome passes
+/// through `card_reply` (or `github::failure`, which has its own tail for the same reasons the
+/// original's GitHub adapter did). Counting here means a platform cannot be added without its
+/// counters working.
+fn record_health(card_type: &str, outcome: &CardOutcome) {
+    match outcome {
+        CardOutcome::Rendered(_) => record_platform_ok(card_type),
+        CardOutcome::UpstreamUnavailable => record_platform_fail(card_type, "DATA_UNAVAILABLE"),
+        CardOutcome::NotFound => record_platform_fail(card_type, "NOT_FOUND"),
+        CardOutcome::UpstreamError => record_platform_fail(card_type, "UPSTREAM_ERROR"),
+    }
+}
+
+/// One successful fetch, charged to its platform.
+///
+/// A failed counter write must not fail the request: the card is the product, the counters are
+/// diagnostics. These only fail if the map's mutex was poisoned, which would make every later
+/// call fail identically.
+pub(super) fn record_platform_ok(card_type: &str) {
+    let _ = platforms::port::record_ok(card_type.to_string());
+}
+
+/// One failed fetch, charged to its platform with the reason the original recorded.
+///
+/// `reason` is the same vocabulary `registry.ts` used (NOT_FOUND / DATA_UNAVAILABLE /
+/// UPSTREAM_ERROR / RATE_LIMITED), because `/health`'s `lastError` is what an operator greps when
+/// a card starts rendering the fallback copy.
+pub(super) fn record_platform_fail(card_type: &str, reason: &str) {
+    let _ = platforms::port::record_fail(card_type.to_string(), reason.to_string());
 }
 
 fn error_card(message: &str, theme: &str) -> String {
@@ -359,7 +398,11 @@ async fn health() -> Response {
             "pool": { "isConnected": false, "poolSize": 0 },
         },
         "cache": { "shared": super::remote::configured() },
-        "platforms": {},
+        // The real counters, not an empty object. registry.ts used to decorate every source with
+        // recordOk/recordFail and home.controller.ts reported snapshotHealth() here; the port kept
+        // the counters and dropped the wiring, so this endpoint claimed no platform had ever been
+        // called. It is the one place an operator can see a source failing silently.
+        "platforms": platforms::port::snapshot_health().unwrap_or(Value::Null),
         "memory": {
             "rss": 0,
             "heapTotal": 0,
