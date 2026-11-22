@@ -433,6 +433,17 @@ pub async fn stats_endpoint() -> Response {
 mod tests {
     use super::*;
 
+    /// The tallies are process-wide and these tests both read and write them. cargo runs a module's
+    /// tests on several threads, so without this lock the "unknown name changes nothing" assertion
+    /// races the test that charges slot 2 a thousand times -- observed as
+    /// `left: [1, 0, 80, 0, 0] right: [1, 0, 125, 0, 0]`, which looks like a wiring bug and is
+    /// only scheduling.
+    static TALLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn tally_guard() -> std::sync::MutexGuard<'static, ()> {
+        TALLY_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn the_exposition_ends_with_one_newline_and_no_blank_line() {
         let families = families();
@@ -545,6 +556,7 @@ mod tests {
 
     #[test]
     fn charging_a_platform_moves_that_tally_and_only_that_tally() {
+        let _guard = tally_guard();
         let target = registry::all()[2].name;
         let before: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
         for _ in 0..1000 {
@@ -571,6 +583,7 @@ mod tests {
     fn an_unregistered_name_is_ignored_rather_than_charged_to_someone() {
         // Called through the same path a platform module uses, so this is the "typo in the name"
         // case: it must not silently land on slot 0.
+        let _guard = tally_guard();
         let before: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();
         note_external_call("definitely-not-a-platform");
         let after: Vec<u64> = registry::all().iter().map(|desc| external_calls(desc.name)).collect();

@@ -25,6 +25,20 @@ fn guarded() -> std::sync::MutexGuard<'static, ()> {
     guard
 }
 
+/// An id nobody has asked for before in this process.
+///
+/// `guarded()` clears the health counters but not the response cache, and the cache is process-wide.
+/// Two tests asking for the same path would see the second one answered from L1 -- no fetch, no
+/// counter, and a test that fails only when it happens to run second. A per-call nonce makes every
+/// request a real one.
+fn fresh_id(label: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("{label}-{nanos}")
+}
+
 /// A single-thread runtime, so a test can drive the whole stack without `#[tokio::test]`.
 fn blocked_on<F: std::future::Future>(future: F) -> F::Output {
     tokio::runtime::Builder::new_current_thread()
@@ -116,4 +130,89 @@ fn a_platform_entry_carries_the_counters_the_health_module_maintains() {
     // Whichever branch ran left exactly one of the two timestamps behind.
     let stamped = entry.get("lastOkAt").is_some() || entry.get("lastFailureAt").is_some();
     assert!(stamped, "neither timestamp was written: {entry}");
+}
+
+/// The whole `data` object `/health` publishes.
+fn health_data() -> serde_json::Value {
+    let (status, body) = get("/health");
+    assert_eq!(status, StatusCode::OK);
+    let envelope: serde_json::Value = serde_json::from_str(&body).expect("a JSON envelope");
+    envelope["data"].clone()
+}
+
+/// `data.status` used to be the literal string `"unhealthy"` for the life of every process, because
+/// the original read it off a PostgreSQL connection this port does not have. The field now answers
+/// the question the process can actually answer -- are the sources it depends on reachable -- and
+/// that answer has to move when the counters move. A status that cannot change is not a status.
+#[test]
+fn the_verdict_starts_unknown_and_follows_the_counters() {
+    let _guard = guarded();
+    assert_eq!(
+        health_data()["status"],
+        serde_json::json!("unknown"),
+        "nothing has been asked since boot, so nobody knows yet"
+    );
+
+    // juejin has no validators, so this reaches the upstream and leaves a stamp either way. Which
+    // of the two branches ran depends on the network, and both are legitimate: a rendered card is
+    // healthy, a failed fetch is unhealthy. What must not happen is a third answer.
+    let target = format!("/juejin/{}", fresh_id("verdict"));
+    get(&target);
+
+    let data = health_data();
+    let verdict = data["status"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no status string: {data}"));
+    let entry = data["platforms"]
+        .get("juejin")
+        .unwrap_or_else(|| panic!("juejin never reached /health: {}", data["platforms"]));
+    let ok_at = entry["lastOkAt"].as_u64().unwrap_or(0);
+    let fail_at = entry["lastFailureAt"].as_u64().unwrap_or(0);
+    let expected = if fail_at >= ok_at { "unhealthy" } else { "healthy" };
+    assert_eq!(
+        verdict, expected,
+        "the verdict and the evidence it is drawn from disagree: {data}"
+    );
+    assert_ne!(verdict, "unknown", "a platform was asked: {data}");
+}
+
+/// `status` and `platforms` are one snapshot, not two reads. If they were two, a request landing
+/// between them could publish a verdict that contradicts the object printed beside it.
+#[test]
+fn the_verdict_is_derived_from_the_platforms_printed_beside_it() {
+    let _guard = guarded();
+    let csdn = format!("/csdn/{}", fresh_id("verdict-evidence"));
+    let juejin = format!("/juejin/{}", fresh_id("verdict-evidence"));
+    get(&csdn);
+    get(&juejin);
+
+    let data = health_data();
+    let platforms = data["platforms"]
+        .as_object()
+        .unwrap_or_else(|| panic!("no platforms object: {data}"));
+    assert!(!platforms.is_empty(), "two platforms were asked: {data}");
+
+    let any_failed_last = platforms.values().any(|entry| {
+        let ok_at = entry["lastOkAt"].as_u64().unwrap_or(0);
+        let fail_at = entry["lastFailureAt"].as_u64().unwrap_or(0);
+        (ok_at > 0 || fail_at > 0) && fail_at >= ok_at
+    });
+    let expected = if any_failed_last { "unhealthy" } else { "healthy" };
+    assert_eq!(data["status"], serde_json::json!(expected), "{data}");
+}
+
+/// There is no database in this port. Saying `"unhealthy"` claims one exists and is broken, and an
+/// operator reading that goes looking for a connection string that was never meant to exist.
+#[test]
+fn the_database_says_it_is_not_configured_rather_than_broken() {
+    let _guard = guarded();
+    let data = health_data();
+    assert_eq!(
+        data["database"]["status"],
+        serde_json::json!("not_configured"),
+        "no database is wired, so its status must say so: {data}"
+    );
+    // The shape stays, so a probe that parses it keeps working; the pool is honestly empty.
+    assert_eq!(data["database"]["pool"]["isConnected"], serde_json::json!(false));
+    assert_eq!(data["database"]["pool"]["poolSize"], serde_json::json!(0));
 }

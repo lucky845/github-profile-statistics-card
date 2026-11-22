@@ -90,7 +90,7 @@
 | --- | --- | --- |
 | `/` | GET | 首页（主题预览与卡片画廊） |
 | `/livez` | GET | 存活探针：进程还在吗。**健康检查用这个** |
-| `/health` | GET | 连通性：上游平台都通吗。缺 token 或上游限流时返回 unhealthy。`data.platforms` 是各平台真实调用计数（`ok`/`fail`/`lastError`），能看出静默失效 |
+| `/health` | GET | 连通性：上游平台都通吗。`data.status` 三态：`healthy`（问过的平台最近一次都成功）/ `unhealthy`（至少一个最近一次失败）/ `unknown`（启动后还没人问过）。`data.platforms` 是各平台真实调用计数（`ok`/`fail`/`lastError`），能看出静默失效 |
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
 | `/metrics` | GET | Prometheus 文本格式指标 |
 | `/metrics/json` | GET | 同上，JSON 格式 |
@@ -115,6 +115,8 @@
 - `data` —— 原来的响应体原样下移一层。所以 `/livez` 的 `uptime` 现在在 `data.uptime`，`/api/cache/stats` 的计数在 `data.hits` 等，`/health` 的 `status` 在 `data.status`。`uptime` 是进程真实年龄（内核记录的启动时刻），`/health` 的 `memory` 只报真实的 `rss`。
 
 `/health` 上 `code:200` 与 `data.status:"unhealthy"` 并存是刻意的：前者说「进程答话了」，后者说「上游不健康」。合并成一个字段会让限流期的 `/health` 看起来像进程已死。
+
+`data.status` 只看**最近一次**：一个平台失败后恢复，字段会跟着回到 `healthy`——这正是 `record_ok` / `record_fail` 各自打时间戳的用途。所以它不是「有没有出过错」，而是「现在通不通」。
 
 ## 🛠️ 技术栈
 

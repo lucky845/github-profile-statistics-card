@@ -393,30 +393,83 @@ async fn livez() -> Response {
         .into_response()
 }
 
+/// Whether the upstream sources are reachable, read off the counters `/health` prints beside it.
+///
+/// The original took this from `PostgreSQLManager.getConnectionStatus()`: one dependency, one
+/// verdict. There is no database in the port, so the field spent its whole life as the string
+/// `"unhealthy"` -- a verdict on a dependency that does not exist. The honest subject for the same
+/// field is the thing this process really depends on: the platform sources.
+///
+/// Three answers, because two would have to lie about one case:
+///
+/// - `healthy` -- every platform that has been asked answered successfully the last time it was
+///   asked. A source that failed once and recovered afterwards counts as healthy: `record_ok` and
+///   `record_fail` stamp their timestamps precisely so the latest answer can outvote the history,
+///   and a field that stays red forever after one 521 cannot be used to decide anything.
+/// - `unhealthy` -- at least one platform's most recent answer was a failure. This is the case the
+///   field exists for: an upstream going dark while the process keeps answering 200.
+/// - `unknown` -- nothing has been asked since boot. An empty object means "nobody has tried",
+///   which is neither healthy nor unhealthy; publishing either would be the same mistake as the
+///   constant this replaced, just with a friendlier word.
+///
+/// Ties go to the failure. `lastOkAt == lastFailureAt` means both landed in the same millisecond
+/// and there is no way to order them, so the pessimistic reading wins -- a health field that
+/// occasionally over-reports trouble is usable, one that under-reports it is not.
+fn upstream_verdict(platforms: &Value) -> &'static str {
+    let Some(entries) = platforms.as_object() else {
+        return "unknown";
+    };
+    if entries.is_empty() {
+        return "unknown";
+    }
+    for entry in entries.values() {
+        let ok_at = entry.get("lastOkAt").and_then(Value::as_u64).unwrap_or(0);
+        let fail_at = entry.get("lastFailureAt").and_then(Value::as_u64).unwrap_or(0);
+        // An entry with neither stamp was never charged. That cannot happen through record_ok or
+        // record_fail today, and if it starts happening the right answer is "no evidence", not
+        // "broken" -- the empty-object case, one level down.
+        if ok_at == 0 && fail_at == 0 {
+            continue;
+        }
+        if fail_at >= ok_at {
+            return "unhealthy";
+        }
+    }
+    "healthy"
+}
+
 /// The original reports database and platform health; the recording wildcards the body, so the
 /// shape matters and the values do not.
 async fn health() -> Response {
-    // `database` keeps its shape for probes that parse it, and stays unhealthy because there is
-    // no database. `cache` is the honest answer for the layer that replaced it: whether a shared
-    // tier is configured, which decides if two instances see each other's entries.
-    // `status` stays inside `data` on purpose: the envelope's `code` mirrors the HTTP status, which
-    // is 200 because the process answered at all, while `data.status` is the upstream verdict.
+    // `status` is the upstream verdict, derived from the counters below -- see `upstream_verdict`.
+    // It stays inside `data` on purpose: the envelope's `code` mirrors the HTTP status, which is
+    // 200 because the process answered at all, while `data.status` is "are the sources reachable".
     // Folding the two together would make a rate-limited upstream look like a dead process to
     // anything that parses the body.
+    //
+    // One snapshot feeds both the verdict and the body. Reading the counters twice could publish a
+    // verdict that disagrees with the `platforms` object printed right next to it.
+    let platforms = platforms::port::snapshot_health().unwrap_or(Value::Null);
+    let status = upstream_verdict(&platforms);
     let readings = super::metrics::readings();
     let body = super::r::R::ok(serde_json::json!({
-        "status": "unhealthy",
+        "status": status,
         "uptime": measured(readings.uptime_seconds),
+        // No database is wired -- this is a cache and a set of fetchers -- so its status says
+        // exactly that. It used to say "unhealthy", which claims a database exists and is broken;
+        // an operator reading that goes looking for a connection string that was never meant to be
+        // there. The shape is kept for probes that parse it, the pool is honestly empty.
         "database": {
-            "status": "unhealthy",
+            "status": "not_configured",
             "pool": { "isConnected": false, "poolSize": 0 },
         },
         "cache": { "shared": super::remote::configured() },
         // The real counters, not an empty object. registry.ts used to decorate every source with
         // recordOk/recordFail and home.controller.ts reported snapshotHealth() here; the port kept
         // the counters and dropped the wiring, so this endpoint claimed no platform had ever been
-        // called. It is the one place an operator can see a source failing silently.
-        "platforms": platforms::port::snapshot_health().unwrap_or(Value::Null),
+        // called. It is the one place an operator can see a source failing silently. The same
+        // snapshot fed `status` above, so the verdict cannot contradict the evidence printed here.
+        "platforms": platforms,
         // Resident set size is real and measurable. The other four keys the original published
         // (heapTotal, heapUsed, external, arrayBuffers) are V8 accounting with no Rust
         // counterpart -- printing zeros for them is the same lie as the deleted nodejs_*
@@ -698,5 +751,82 @@ mod tests {
             "https://fallback.example"
         );
         unsafe { std::env::remove_var("PUBLIC_BASE_URL") };
+    }
+
+    // The tests below pin the verdict down one branch at a time. They are unit tests rather than
+    // router round trips because the answer depends on the counters, and the counters depend on
+    // whether a real upstream answered -- a test that waits for CSDN to fail is a test that fails
+    // on a Tuesday for reasons that have nothing to do with this function.
+
+    #[test]
+    fn nothing_asked_yet_is_unknown_rather_than_healthy() {
+        // The state every process boots into. Calling it "healthy" would be a green light nobody
+        // earned; calling it "unhealthy" is the constant this function replaced.
+        assert_eq!(super::upstream_verdict(&serde_json::json!({})), "unknown");
+    }
+
+    #[test]
+    fn a_missing_counters_object_is_unknown_rather_than_a_panic() {
+        // snapshot_health() failing hands back Null. A health endpoint that panics because its own
+        // bookkeeping is unavailable is worse than one that says "I do not know".
+        assert_eq!(super::upstream_verdict(&serde_json::Value::Null), "unknown");
+        assert_eq!(
+            super::upstream_verdict(&serde_json::json!("not an object")),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn every_platform_answering_last_time_is_healthy() {
+        let platforms = serde_json::json!({
+            "csdn": { "ok": 4, "fail": 0, "lastOkAt": 500 },
+            "juejin": { "ok": 1, "fail": 0, "lastOkAt": 900 },
+        });
+        assert_eq!(super::upstream_verdict(&platforms), "healthy");
+    }
+
+    #[test]
+    fn one_platform_failing_last_time_makes_the_whole_verdict_unhealthy() {
+        // The case the field exists for: one source goes dark while the other four keep working
+        // and the process keeps answering 200.
+        let platforms = serde_json::json!({
+            "csdn": { "ok": 4, "fail": 0, "lastOkAt": 500 },
+            "juejin": { "ok": 3, "fail": 1, "lastOkAt": 100, "lastFailureAt": 900 },
+        });
+        assert_eq!(super::upstream_verdict(&platforms), "unhealthy");
+    }
+
+    #[test]
+    fn a_source_that_failed_and_then_recovered_is_healthy() {
+        // The ordering is the whole point of stamping both timestamps: a platform that threw one
+        // 521 an hour ago must not leave the endpoint red forever. If this ever regresses, the
+        // field becomes a boolean "has anything ever failed", which cannot decide anything.
+        let platforms = serde_json::json!({
+            "csdn": { "ok": 5, "fail": 2, "lastOkAt": 900, "lastFailureAt": 500 },
+        });
+        assert_eq!(super::upstream_verdict(&platforms), "healthy");
+    }
+
+    #[test]
+    fn a_tie_between_the_two_stamps_is_read_as_a_failure() {
+        // Both landed in the same millisecond, so the stamps cannot order them. The pessimistic
+        // reading is the usable one: a health field that over-reports trouble gets investigated,
+        // one that under-reports it gets trusted.
+        let platforms = serde_json::json!({
+            "csdn": { "ok": 1, "fail": 1, "lastOkAt": 700, "lastFailureAt": 700 },
+        });
+        assert_eq!(super::upstream_verdict(&platforms), "unhealthy");
+    }
+
+    #[test]
+    fn an_entry_with_no_stamps_at_all_is_not_evidence_of_a_failure() {
+        // Cannot happen through record_ok/record_fail today. If it starts happening, "no evidence"
+        // is the honest reading, and it must not be mistaken for a failure stamp of 0 < ok of 0...
+        // which is exactly the trap: 0 == 0 would be a tie, and a tie is a failure.
+        let platforms = serde_json::json!({
+            "csdn": { "ok": 0, "fail": 0 },
+            "juejin": { "ok": 2, "fail": 0, "lastOkAt": 800 },
+        });
+        assert_eq!(super::upstream_verdict(&platforms), "healthy");
     }
 }
