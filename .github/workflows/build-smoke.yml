@@ -73,7 +73,9 @@ jobs:
           fi
 
           # 零子进程：曾经的 Node 兜底转发进程必须彻底不存在。
-          children=$(pgrep -P "$(cat server.pid)" | wc -l)
+          # pgrep 无匹配时返回 1，pipefail 会让这条管道以 1 退出、bash -e 直接杀脚本——
+          # 于是「健康态（零子进程）」反而成了假失败。用 || true 只保留 wc 的计数。
+          children=$(pgrep -P "$(cat server.pid)" | wc -l || true)
           echo "子进程数: $children"
           test "$children" -eq 0 || { echo "::error::二进制拉起了子进程，Node 兜底进程回归了"; exit 1; }
 
