@@ -182,8 +182,12 @@ cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此
 
 ## 🔜 即将支持
 
-- 知乎
-- 微博
+知乎与微博处于可行性评估阶段，**尚未排期接入**。两者对未登录流量均全面封锁，实测（2026-11-22）如下：
+
+- **知乎**：`/people/:id` 返回 403 `zh-zse-ck` 反爬页；`api/v4/members/:id` 返回 403 `need_login`；热榜接口 401；移动端 `m.zhihu.com` 的 `js-initialData` 为登录页（`logged=false`，所有实体为空）。需真实登录会话（`z_c0` + `d_c0` 双 cookie）。
+- **微博**：`weibo.com/u/:uid` 返回 `Sina Visitor System` 游客验证页；`m.weibo.cn/api/container/getIndex` 返回 432 风控码；`weibo.cn` 移动版用户页为空壳（无统计数据）。
+
+接入需引入需用户自备、会过期的登录态，与项目「匿名可跑、凭据可选」的现有模式冲突，暂不实施。
 
 ## 📝 开源协议
 
