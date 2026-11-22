@@ -64,6 +64,18 @@ jobs:
             echo "::error::二进制仍然链接到 Node 运行时"; exit 1
           fi
 
+      # 进程年龄的端到端检查：单元测试抓不住的那一半。
+      #
+      # /livez 的 uptime 曾经来自一个 OnceLock，在「第一次被问到」时才起表 —— 一个跑了 8 秒的
+      # 进程回答 uptime: 0。tests/live_diagnostics.rs 里那条测试区分不了这个缺陷：那个秒表的
+      # 起点和测试自己取基准的时刻几乎同时，两种实现给出的数都 >= 1。
+      #
+      # 能区分的是跨进程的观察：起进程、沉默等待、只问一次。沉默这段是必须的 —— 下面的
+      # 「Start server and smoke test」用 /livez 轮询就绪，那种轮询本身就是第一次探测，会把
+      # 秒表该有的提前量交给它。所以这里改探 TCP 端口（不产生 HTTP 请求），等满 5 秒再问。
+      - name: Process age is measured from the kernel (end-to-end)
+        run: APP_BIN="$PWD/target/release/app" ./scripts/process-age.sh
+
       # 干净环境启动冒烟：不配 GITHUB_TOKEN / BILIBILI_SESSDATA 也必须能起来。
       - name: Start server and smoke test
         env:

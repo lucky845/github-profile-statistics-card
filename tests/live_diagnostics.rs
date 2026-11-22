@@ -153,10 +153,13 @@ fn health_reports_a_real_resident_size_and_drops_the_v8_keys() {
 /// What this catches is a value that is undefined, constant, or simply older than the process:
 /// a hardcoded 0, a value fixed at module init, or a handler reading a different source than
 /// the one `/metrics` reports. It cannot, by itself, tell the kernel-measured age from a
-/// stopwatch started at the same moment the test took its reference reading -- that distinction
-/// is what the end-to-end check does (start the binary, wait, ask once). The comment says so
-/// because an assertion that claims more than it tests is the same species of lie as the
-/// numbers this change removed.
+/// stopwatch started at the same moment the test took its reference reading -- that is the one
+/// distinction it is blind to, and it is not a small one: the stopwatch is exactly the defect.
+///
+/// `scripts/process-age.sh` covers that half across a process boundary (start, wait, ask once),
+/// and CI runs it. The division of labour is written down here so nobody deletes the script on
+/// the grounds that "the unit test already covers uptime": it does not, and an assertion that
+/// claims more than it tests is the same species of lie as the numbers this change removed.
 #[test]
 fn livez_reports_the_process_age_not_the_first_probes_age() {
     // The one-second sleep is load-bearing: the defect this pins answered `uptime: 0` on the

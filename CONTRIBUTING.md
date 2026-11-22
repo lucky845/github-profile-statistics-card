@@ -113,6 +113,23 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 
 注意 fake 的 SCAN 游标是**插入序列号**而不是"排序后第几个键"：后者在删掉前一页之后会让游标整体前移，看起来像被测代码漏删，实际是 fake 自己的缺陷。写这类替身时，游标的语义要跟真服务器一致——它是一个位置，不是一个偏移量。
 
+**进程年龄（`/livez` 与 `/health` 的 `uptime`）还有第三种缺口。** 它既不是 replay 能抓的（录制时 `uptime` 是 `[..]` 通配），也不是单元测试能抓的：`tests/live_diagnostics.rs` 里那条 `livez_reports_the_process_age_not_the_first_probes_age` 先睡 1.1 秒再断言 `uptime >= age_before`，它能抓住硬编码 0、模块初始化定值、读了另一个数据源，但**抓不住回归成"第一次被问到时才起表"**——那个秒表的起点与测试取基准的时刻几乎同时，两种实现给出的数都 `>= 1`。
+
+能区分两者的只有跨进程的观察：起进程 → 沉默等待 → 只问一次。`scripts/process-age.sh` 就是这段观察，CI 里紧跟 self-contained 检查跑：
+
+```bash
+APP_BIN=target/release/app ./scripts/process-age.sh   # 等 5 秒，默认端口 8090
+WAIT_SECONDS=8 PORT=8090 ./scripts/process-age.sh     # 想等更久
+```
+
+三个细节是脚本的全部价值，改它之前先想清楚：
+
+1. **等就绪探的是 TCP 端口，不是 `/livez`**。用 `/livez` 轮询就绪，那个轮询本身就是第一次探测，正好把秒表需要的提前量送给它——于是缺陷实现也能通过。
+2. **沉默是断言的一部分**。等满 `WAIT_SECONDS` 之后才发第一个 HTTP 请求，然后要求 `uptime >= WAIT_SECONDS`。缺陷实现这一刻回答的是 `0`。
+3. **两个端点一起查**，并要求 `|livez - health| <= 1`——它们读的是同一个内核值。
+
+实测：把 `livez` 改回 `OnceLock` 语义，脚本立刻 `::error::uptime 0s is below the 5s this script waited`；还原后 `[ok] the process reported 6s of age after 5s of silence.`
+
 ## 代码风格
 
 - 注释写**为什么**，不写**做了什么**。一个解释"这行在干嘛"的注释是噪音；解释"为什么必须这样而不是那样"的注释才是资产。

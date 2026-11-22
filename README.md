@@ -198,6 +198,7 @@ cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此
 
 - **正确性由 replay 定义**，不是手写断言。两档：`./scripts/replay.sh gate` 是 111 条纯本地 case，必须全绿，CI 跑的就是它；`./scripts/replay.sh` 是全量 153 条、基线 **148/153**，5 条失败是录制工具的采样副作用导致的 `x-cache-status` 差异（`record` 每条跑两遍，第二遍撞上进程内 L1），非移植缺陷。全量档**别直接调 `rust-anything app replay`**——卡片的 `更新于 2026-11-21` 是录制当天写死的，不钉时钟直接跑会得到 127/153 的假回归。
 - **别拿「replay 还是绿的」当证据**：`/health` 的 body、`/api/cache/stats` 的数值、卡片的 `x-cache-key`/`x-cache-status` 在录制时都被归一化成了通配，等于没有断言。动这些地方必须手工对拍。
+- **有些东西 replay 和单元测试都盖不到，只能跨进程验**。进程年龄（`/livez` 的 `uptime`）是例子：单元测试的参考读数与「首次探活才起表」那个缺陷的起点几乎同时，两种实现都能通过。`scripts/process-age.sh` 起进程、静默等 5 秒、只探一次，缺陷实现回答 `0` 而真实现回答 `5`。CI 里它就是这一步。
 
 ## 🔜 即将支持
 
