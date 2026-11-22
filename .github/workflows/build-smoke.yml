@@ -74,7 +74,8 @@ jobs:
           echo $! > server.pid
           ready=0
           for i in $(seq 1 60); do
-            # 用 /livez 等启动：/health 报的是外部平台状态，缺上游凭据时会一直 unhealthy。
+            # 用 /livez 等启动：/health 报的是外部平台状态（data.status 可能是 unknown/
+            # unhealthy），那份读数跟进程有没有起来无关。
             if curl -fsS -m 2 http://127.0.0.1:8080/livez > /dev/null 2>&1; then
               echo "服务在 ${i} 秒内就绪"
               ready=1

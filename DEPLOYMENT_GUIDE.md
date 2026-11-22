@@ -146,7 +146,7 @@ services:
 探针语义区分（所有平台一致）：
 
 - `/livez` —— 「进程还活着吗」。恒 200，不触达任何上游，**健康检查请用这个**
-- `/health` —— 「上游都通吗」。未配 `GITHUB_TOKEN` / `BILIBILI_SESSDATA` 或上游限流时会报告 unhealthy，但进程本身仍正常服务
+- `/health` —— 「上游都通吗」。`data.status` 有三种答案：`healthy`（问过的平台最近一次都成功）、`unhealthy`（至少一个平台最近一次失败，例如未配 `GITHUB_TOKEN` 撞上匿名配额限流）、`unknown`（启动后还没有任何卡片请求，无从判断）。无论哪种，进程本身都仍在正常服务
 
 用 `/health` 当存活探针会让平台在 GitHub 限流时反复重启一个本来健康的实例。
 
@@ -255,7 +255,9 @@ server {
 - **`/livez`** —— 存活探针，`{"code":200,"msg":"ok","data":{"status":"alive","uptime":N}}`
   - `uptime` 是**进程真实年龄**（秒，向下取整），取自内核记录的进程启动时刻（macOS `proc_pidinfo(PROC_PIDTBSDINFO)`、Linux `/proc/self/stat` 的 starttime + `/proc/stat` 的 btime），与 `/metrics` 的 `process_start_time_seconds` 同源。不是「首次探活以来」的计时器——那样启动一分钟的服务第一次探活会答 `uptime: 0`。
   - 读不到启动时刻的平台（非 macOS / Linux）答 `uptime: null`，不是 `0`：`0` 会被读成「刚启动」，`null` 才是「这个构建测不出来」。
-- **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）、`platforms`、`memory` 与 `uptime`（同上，同源同语义）
+- **`/health`** —— 依赖健康，含 `status`、`database`、`platforms`、`memory` 与 `uptime`（同上，同源同语义）
+  - `status` 是**上游通不通**，从下面的 `platforms` 计数派生，两者出自同一次快照，不会自相矛盾。三态：`healthy` 每个被问过的平台最近一次都成功；`unhealthy` 至少一个平台最近一次失败；`unknown` 启动后还没人请求过任何卡片（空对象既不是健康也不是不健康）。只读**最近一次**——失败后恢复的平台会把字段带回 `healthy`，它回答「现在通不通」而不是「有没有出过错」。平局（`lastOkAt == lastFailureAt`，同一毫秒）判给失败：健康字段多报问题会被查，少报问题会被信。
+  - `database` 恒为 `{"status":"not_configured","pool":{"isConnected":false,"poolSize":0}}`——本项目不接数据库，这个状态说的是「没配」，不是「坏了」。原版 Node 把它绑在 PostgreSQL 连接状态上，Rust 版没有那个依赖，早先照抄成 `unhealthy`，等于宣称一个从不存在的数据库故障中，运维会去找一条不该存在的连接串。
   - `platforms` 是**真实调用计数**，不是占位：每个被请求过的平台一条 `{ok, fail, lastOkAt?, lastFailureAt?, lastError?}`，`lastError` 取 `NOT_FOUND` / `RATE_LIMITED` / `DATA_UNAVAILABLE` / `UPSTREAM_ERROR`。上游静默失效（掘金返回空壳、CSDN 返 521）时这里能直接看出来。从未被请求过的平台不出现——空对象是「还没人问」，不是「全挂了」。
   - 计数在进程内累积、重启清零；`/health` 自身不参与缓存也不计数，所以监控轮询不会把数字算成流量。
   - `memory` 只报 `{ "rss": N }` —— 常驻内存字节数，真实测量。原版 `process.memoryUsage()` 的另外四个键（`heapTotal` / `heapUsed` / `external` / `arrayBuffers`）是 V8 的账目，Rust 进程没有对应物，**不再输出**：留着恒 0 的键和 `/metrics` 里删掉的 `nodejs_*` 族是同一种谎。读 `memory.rss` 的消费者不受影响；读 V8 四键的消费者本来读到的就是常数 0。
