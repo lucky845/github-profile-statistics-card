@@ -35,17 +35,31 @@ cargo clippy  --all-targets --workspace -- -D warnings
 
 ### 行为契约：replay，不是手写断言
 
-这个项目的正确性由 **153 条录制的 HTTP case** 定义，位于 `rust/app-cases/`：
+这个项目的正确性由 **153 条录制的 HTTP case** 定义，位于 `rust/app-cases/`。它们回答两个不同的问题，用两个不同的档位：
 
 ```bash
-# 一行搞定：钉死时钟 + 配额预检 + 基线判定
+# 我这一改有没有搞坏东西？106 条纯本地，必须全绿。CI 跑的就是这一档。
+./scripts/replay.sh gate
+
+# 录制行为有没有漂移？全量 153 条，基线 148/153。依赖上游，会波动。
 ./scripts/replay.sh
 
 # 只跑单个 case（快速迭代）
 ./scripts/replay.sh home
 ```
 
-**基线 148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS`，**原始 Node 实现同样失败这 5 条**。
+| 档位 | 条数 | 打上游 | 判定 | 用途 |
+| --- | --- | --- | --- | --- |
+| `gate` | 106 | 否 | 必须 106/106 | 改代码后的硬门，CI |
+| 全量 | 153 | 是 | ≥148/153 | 查录制漂移 |
+
+**为什么 `gate` 排掉 47 条**：46 条是卡片（每张都要打 GitHub / CSDN / 力扣），外加 `cache-stats`（上报本次 run 的 `hits`/`misses`/`keys`，天然依赖跑过哪些 case）。这 47 条与会话无关地依赖匿名配额、上游存活状态和录制当天日期——实测**同样的代码连跑两遍能给出 148 和 147 两种结果**（`trap-112-get-csdn` 在 CSDN 回 521 时渲染成"暂无数据"错误卡）。拿它当 CI 门只会制造与代码无关的红灯。
+
+排除后剩下的 106 条可复现到什么程度：连跑 5 次全部 106/106；把 `x-frame-options` 从 `DENY` 改成 `SAMEORIGIN`，立刻 0/106。它会红，也会绿，所以不是装饰。
+
+注意这 106 条**不需要钉时钟**（它们不断言卡片 footer），脚本仍然钉着，是为了让快照行为与全量档一致。
+
+**基线 148/153**，5 条失败是 `x-cache-status` 的 `HIT` vs `MISS`——录制工具对每条 case 跑两遍，第二遍命中了第一遍写下的进程内 L1，于是基线里钉死的是 `HIT`。这是**采样副作用，不是行为差异**：在干净进程里录同一条路径，落下来的是 `MISS`（已实测，见下）。
 
 ### 为什么必须用脚本跑，而不是直接 `rust-anything app replay`
 
@@ -56,9 +70,26 @@ cargo clippy  --all-targets --workspace -- -D warnings
 另外两件脚本替你挡掉的事：
 
 - **GitHub 匿名配额**：未设 `GITHUB_TOKEN` 时只有 60 次/小时。配额耗尽后，11 条 github case 会渲染成"数据源限流"错误卡，看上去像大面积回归。脚本会在配额低于 20 时警告。
-- **Redis 残留**：这条基线是在**不配置 Redis** 的前提下录的。跑 replay 时不要设 `REDIS_*`，否则会读到真实缓存，`x-cache-status` 与录制值不符（那不是 bug）。
+- **别配 Redis**：这 5 条基线值来自进程内 L1，与 Redis 无关；但跑 replay 时设 `REDIS_*` 会让 L2 也参与读写，`x-cache-status` 更不稳定。保持不配即可。
 
 **改动前后都要跑一次 replay。** 如果你让分数低于 148，那不是"差一点"，是回归——脚本会直接以非零码退出。
+
+想自己验证那 5 条是采样副作用而不是缺陷，单跑一条并看它的 `x-cache-status`：
+
+```bash
+./scripts/replay.sh csdn-user          # 0/1，diff 只有 HIT -> MISS
+```
+
+再用干净进程录同一个路径，看落下来的是 `MISS` 还是 `HIT`：
+
+```bash
+echo '{"name":"probe","args":[],"method":"GET","path":"/csdn/testuser"}' > /tmp/probe.jsonl
+rust-anything app record /tmp/rec-probe --http --inputs /tmp/probe.jsonl \
+  -- env RUST_ANYTHING_WTS_OVERRIDE=1795219200 target/debug/app
+grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
+```
+
+`record` 对每条 case 跑两遍（工具自述：*Run the original twice on every case*），第二遍命中了第一遍写在进程内 L1 的条目。基线的 `HIT` 就是那次命中被记下来的结果。
 
 ### 通配断言：别以为 replay 全绿就安全
 

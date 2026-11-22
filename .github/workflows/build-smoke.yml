@@ -34,6 +34,23 @@ jobs:
       - name: Lint
         run: cargo clippy --release --locked --all-targets --workspace -- -D warnings
 
+      # 行为契约门：106 条纯本地 case 必须全绿。
+      #
+      # 为什么是 106 而不是全部 153：其余 46 条是卡片（每张都要打上游），外加一条
+      # cache-stats（上报本次 run 的计数）。它们依赖 GitHub 匿名配额、CSDN 存活状态
+      # 和录制当天的日期，在 CI 里跑只会得到和代码无关的红灯——实测同样的代码连跑
+      # 两遍能给出 148 和 147 两种结果。这 106 条不打上游、不看时间，5 次连跑稳定
+      # 全绿；改动一个安全头能让它立刻 0/106，所以它不是装饰。
+      #
+      # rust-anything 本身是 Node 工具，用它验证不等于二进制依赖 Node——上面那条
+      # self-contained 检查依然在，且跑的是 target/release/app 这个纯 Rust 产物。
+      - name: Behaviour gate (106 hermetic replay cases)
+        run: |
+          set -uo pipefail
+          npm install --global rust-anything@2.1.0 > /dev/null
+          rust-anything --version
+          REPLAY_APP_BIN="$PWD/target/release/app" ./scripts/replay.sh gate
+
       # 二进制必须自足：只允许 libc 这类系统库，不许有 Node 运行时或外部模块。
       - name: Verify the binary is self-contained
         run: |
