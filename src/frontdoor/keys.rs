@@ -132,24 +132,10 @@ fn header_key(key: &str) -> Option<String> {
     Some(key.chars().map(|c| c as u32 as u8 as char).collect())
 }
 
-/// The prefix each platform router is mounted on, in app.use(...) order.
-pub const PLATFORMS: [(&str, &str); 5] = [
-    ("leetcode", "username"),
-    ("github", "username"),
-    ("csdn", "userId"),
-    ("juejin", "user_id"),
-    ("bilibili", "uid"),
-];
-
-/// Which platform a raw path belongs to, if any.
-pub fn platform_of(raw_path: &str) -> Option<&'static str> {
-    PLATFORMS
-        .iter()
-        .map(|(name, _)| *name)
-        .find(|name| {
-            raw_path == format!("/{name}") || raw_path.starts_with(&format!("/{name}/"))
-        })
-}
+// The platform list used to live here as a const PLATFORMS array, with a platform_of that walked
+// it. It moved to super::registry, which also carries each platform's validator, sanitizer and card
+// function, so the mount list and the dispatch table can no longer disagree. Callers that only need
+// the mount use registry::platform_of.
 
 #[cfg(test)]
 mod tests {

@@ -15,8 +15,6 @@ use axum::http::uri::PathAndQuery;
 use axum::middleware::Next;
 use axum::response::Response;
 
-use super::keys;
-
 /// The paths app.ts registers with `app.get` or `app.delete`.
 const FIXED: [&str; 9] = [
     "/",
@@ -84,7 +82,8 @@ pub fn canonical(path: &str) -> Option<String> {
     if let Some(route) = fixed(path) {
         return Some(route.to_string());
     }
-    for (name, _) in keys::PLATFORMS {
+    for desc in super::registry::all() {
+        let name = desc.name;
         let Some(mount_len) = mount(path, name) else {
             continue;
         };
@@ -168,7 +167,8 @@ mod tests {
 
     #[test]
     fn every_platform_answers_the_same_way() {
-        for (name, _) in keys::PLATFORMS {
+        for desc in crate::frontdoor::registry::all() {
+            let name = desc.name;
             let path = format!("/{name}/someone");
             assert_eq!(canonical(&path), Some(path.clone()));
             assert_eq!(canonical(&format!("/{name}//someone")), Some(path.clone()));

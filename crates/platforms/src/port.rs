@@ -13,51 +13,19 @@ use serde_json::{Map, Value, json};
 
 /// One row of the gallery: the platform, its heading, route segment, sample user, extra query
 /// string and the reserved card height.
-struct GalleryEntry {
-    title: &'static str,
-    path: &'static str,
-    sample: &'static str,
-    extra_query: &'static str,
-    height: u32,
+///
+/// The rows are supplied by the caller rather than kept here. The platform list is owned by
+/// `frontdoor::registry` — it has to be, because a row carries the platform's validator and card
+/// function, which are app-crate items. Holding a copy of the list in this crate is what let the
+/// gallery and the 404 handler disagree about whether juejin existed.
+#[derive(Clone, Copy)]
+pub struct GalleryEntry {
+    pub title: &'static str,
+    pub path: &'static str,
+    pub sample: &'static str,
+    pub extra_query: &'static str,
+    pub height: u32,
 }
-
-const ENTRIES: [GalleryEntry; 5] = [
-    GalleryEntry {
-        title: "GitHub 统计",
-        path: "github",
-        sample: "lucky845",
-        extra_query: "",
-        height: 200,
-    },
-    GalleryEntry {
-        title: "LeetCode 统计",
-        path: "leetcode",
-        sample: "lucky845",
-        extra_query: "&cn=true",
-        height: 200,
-    },
-    GalleryEntry {
-        title: "CSDN 统计",
-        path: "csdn",
-        sample: "testuser",
-        extra_query: "",
-        height: 200,
-    },
-    GalleryEntry {
-        title: "掘金统计",
-        path: "juejin",
-        sample: "testuser",
-        extra_query: "",
-        height: 200,
-    },
-    GalleryEntry {
-        title: "哔哩哔哩统计",
-        path: "bilibili",
-        sample: "89389361",
-        extra_query: "",
-        height: 200,
-    },
-];
 
 /// The four characters escapeHtml replaces, & first so nothing is escaped twice.
 fn escape_html(s: &str) -> String {
@@ -94,7 +62,14 @@ fn encode_uri_component(s: &str) -> Result<String, String> {
 }
 
 /// Port of renderGallery (src/services/platforms/gallery.ts:36).
-pub fn render_gallery(base_url: String, theme: Option<String>) -> Result<String, String> {
+///
+/// `entries` is the caller's platform list: the app crate derives it from its registry, so a
+/// platform added there appears in the gallery without a second edit.
+pub fn render_gallery(
+    base_url: String,
+    theme: Option<String>,
+    entries: &[GalleryEntry],
+) -> Result<String, String> {
     // theme = 'light' is a default parameter, so only an omitted argument falls back; the bridge
     // hands undefined over as None.
     let theme = theme.unwrap_or_else(|| "light".to_string());
@@ -102,12 +77,12 @@ pub fn render_gallery(base_url: String, theme: Option<String>) -> Result<String,
 
     // Every entry has a registered source, so the filtered list is never empty; the branch stays
     // to keep the original's early return.
-    if ENTRIES.is_empty() {
+    if entries.is_empty() {
         return Ok(String::new());
     }
 
     let mut cards = String::new();
-    for (i, e) in ENTRIES.iter().enumerate() {
+    for (i, e) in entries.iter().enumerate() {
         let url = format!(
             "{}/{}/{}?theme={}{}",
             base_url, e.path, e.sample, encoded_theme, e.extra_query
@@ -259,23 +234,62 @@ mod tests {
         assert_eq!(encode_uri_component("a&b=c").unwrap(), "a%26b%3Dc");
     }
 
+    /// The app crate owns the real list; these rows only have to exercise the template.
+    const TEST_ENTRIES: [GalleryEntry; 2] = [
+        GalleryEntry {
+            title: "GitHub 统计",
+            path: "github",
+            sample: "lucky845",
+            extra_query: "",
+            height: 200,
+        },
+        GalleryEntry {
+            title: "哔哩哔哩统计",
+            path: "bilibili",
+            sample: "89389361",
+            extra_query: "",
+            height: 200,
+        },
+    ];
+
     #[test]
     fn gallery_markup_matches_the_original_template() {
-        let html = render_gallery("http://x".to_string(), None).unwrap();
+        let html = render_gallery("http://x".to_string(), None, &TEST_ENTRIES).unwrap();
         assert!(html.starts_with("<section class=\"gallery\">\n    <h2>卡片预览</h2>\n    <div class=\"gallery-grid\">\n      <figure class=\"card\">"));
         assert!(html.ends_with("</figure></div>\n  </section>"));
         assert!(html.contains("<img src=\"http://x/github/lucky845?theme=light\" alt=\"GitHub 统计示例卡片\" height=\"200\" loading=\"lazy\">"));
-        // LeetCode carries &cn=true, which the HTML escape turns into &amp;cn=true.
-        assert!(html.contains("http://x/leetcode/lucky845?theme=light&amp;cn=true"));
         assert!(
-            html.contains("<code id=\"code-4\">![](http://x/bilibili/89389361?theme=light)</code>")
+            html.contains("<code id=\"code-1\">![](http://x/bilibili/89389361?theme=light)</code>")
         );
-        assert_eq!(html.matches("<figure class=\"card\">").count(), 5);
+        assert_eq!(html.matches("<figure class=\"card\">").count(), 2);
+    }
+
+    /// The app crate's own table is the one that must keep &cn=true and its order; this only
+    /// proves the extra query string reaches the URL through the HTML escape.
+    #[test]
+    fn an_extra_query_string_is_escaped_not_dropped() {
+        const WITH_QUERY: [GalleryEntry; 1] = [GalleryEntry {
+            title: "LeetCode 统计",
+            path: "leetcode",
+            sample: "lucky845",
+            extra_query: "&cn=true",
+            height: 200,
+        }];
+        let html = render_gallery("http://x".to_string(), None, &WITH_QUERY).unwrap();
+        assert!(html.contains("http://x/leetcode/lucky845?theme=light&amp;cn=true"));
+    }
+
+    #[test]
+    fn an_empty_entry_list_renders_nothing() {
+        assert_eq!(
+            render_gallery("http://x".to_string(), None, &[]).unwrap(),
+            ""
+        );
     }
 
     #[test]
     fn theme_is_percent_encoded() {
-        let html = render_gallery("u".to_string(), Some("a b".to_string())).unwrap();
+        let html = render_gallery("u".to_string(), Some("a b".to_string()), &TEST_ENTRIES).unwrap();
         assert!(html.contains("?theme=a%20b\""));
     }
 

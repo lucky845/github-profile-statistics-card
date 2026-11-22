@@ -121,10 +121,33 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 
 ## 添加新平台
 
+平台清单只有一处：`src/frontdoor/registry.rs` 的 `PLATFORMS` 表。路由分派、限流前缀、404 的 SVG/JSON 判定、首页画廊、缓存键分隔符全部从这张表派生，所以要加一个平台：
+
 1. `src/frontdoor/` 下新建模块，照抄 `github.rs` 的结构（validate → 上游取数 → `generate_card` → 响应头）
-2. 在 `handlers.rs::dispatch` 里接线——**不接线就是 404**，这是刻意的：让遗漏暴露在测试里，而不是被静默吞掉
-3. `keys.rs` 的 `PLATFORMS` 加上平台名与参数名
-4. 若是新的缓存键形态，同步 `keys.rs` 的键生成；若是新的平台层缓存语义，同步缓存文档
+2. 写一个 `fn card_<平台><'a>(id, ctx, key) -> BoxFuture<'a, Response>` 薄包装，签名对齐 `registry::CardFn`
+3. 在 `registry.rs` 的 `PLATFORMS` 里追加一行 `PlatformDesc`——这是唯一必须改的地方
+
+`PlatformDesc` 的字段就是那个平台与其余代码的全部契约：
+
+| 字段 | 作用 | 写错的后果 |
+| --- | --- | --- |
+| `name` | 挂载路径段 | 路由、限流、画廊一起失配 |
+| `title` / `sample` / `extra_query` / `height` | 首页画廊那一行卡片 | 首页文案或示例链接错 |
+| `key_style` | 缓存键用冒号还是下划线 | `X-Cache-Key` 形状变（有单测钉住） |
+| `rejects` + `valid` | 400 文案与校验器；`None` 表示不校验 | 非法 id 被放行或合法 id 被拒 |
+| `sanitize` | 取数前清洗 id；`None` 表示原样透传 | 上游收到脏 id |
+| `nocache_skips_platform_key` | `?nocache=true` 是否跳过平台键 | 缓存键语义漂移 |
+| `container_theme_fatal` | `?theme=` 为容器时是否抛 500 | 错误码变 |
+| `card` | 取数并渲染的入口 | — |
+
+加完之后这几处会**自动**跟上，不需要再改：`handlers::dispatch` 的分派、`handlers::not_found` 的 SVG 判定、`ratelimit` 的挂载前缀、`paths::canonical` 的路由改写、首页画廊。
+
+验证方式：
+
+- `cargo test --workspace` —— `tests/platform_coverage.rs` 会遍历这张表，逐个断言 `/<平台>/` 返回 `image/svg+xml` 且首页出现该平台；漏改任何一处立刻红
+- `./scripts/replay.sh gate` —— 行为门，111 条纯本地用例必须全绿。**加平台会让 `home` 用例失败**（首页多一张卡片），这是预期的：用 `./scripts/replay.sh home` 看 diff 后更新 `rust/app-cases/http/home.body`
+
+> 历史教训：这张表以前是六份互不相干的清单，juejin 加进了其中五份、漏了 404 判定那一份，于是 `GET /juejin/` 回 JSON 而不是卡片，同一个缺陷在 Node 版就存在并活过了整个 Rust 迁移。现在清单只有一份，出错的形状从"漏改一处"变成"表里写错一行"，而那一行有单测盯着。
 
 ## 报告 Bug
 

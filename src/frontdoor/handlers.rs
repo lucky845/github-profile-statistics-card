@@ -74,11 +74,11 @@ pub async fn dispatch(req: Request) -> Response {
 
     // A platform router owns one path segment. Anything with an id reaches its validators; a
     // missing id never matches the /:param pattern, so it lands in the 404 handler below.
-    if let Some(platform) = keys::platform_of(&path) {
+    if let Some(desc) = super::registry::platform_of(&path) {
         // "/github" alone matches the mount but carries no parameter, so there is no rest to read.
         // Slicing it would index past the end of the string. What follows is what the mount left
         // behind, still led by the slash the mount did not eat.
-        let rest = &path[platform.len() + 1..];
+        let rest = &path[desc.name.len() + 1..];
         let id = rest.strip_prefix('/').unwrap_or(rest);
         // The child router only registers /:param, so anything deeper than one segment never
         // matches a route there and lands in its 404 handler.
@@ -93,28 +93,22 @@ pub async fn dispatch(req: Request) -> Response {
             // skipCache is the first thing the platform middleware checks, so a nocache=true
             // request never gets a platform key at all — the app-level key answers instead.
             // Only the three routers built by createCacheMiddleware carry that option; juejin and
-            // bilibili hand-roll their middleware and have no skipCache.
+            // bilibili hand-roll their middleware and have no skipCache. Which ones those are is
+            // now a field on the descriptor rather than a list repeated here.
             let nocache = super::query::folded(raw_query.as_deref(), "nocache")
                 .is_some_and(|flag| flag.text_valued && flag.text == "true");
-            let skip_platform_key =
-                nocache && matches!(platform, "github" | "leetcode" | "csdn");
+            let skip_platform_key = nocache && desc.nocache_skips_platform_key;
             // When the id cannot be spelled in a latin-1 header the platform key is never set, so
             // the cache middleware's own key — built from the path as it arrived — is what answers.
             let platform_key = if skip_platform_key {
                 None
-            } else if matches!(platform, "juejin" | "bilibili") {
-                keys::underscore_key(platform, &decoded, if theme_first.is_empty() { "default" } else { theme_first })
             } else {
-                keys::platform_key(platform, &decoded, if theme_text.is_empty() { "default" } else { theme_text })
+                super::registry::cache_key_for(desc, &decoded, theme_text, theme_first)
             };
             let key = platform_key.unwrap_or_else(|| keys::default_key("GET", &asked, &query));
-            let rejected = match platform {
-                "github" => Some(("无效的GitHub用户名格式", !is_github_name(&decoded))),
-                "leetcode" => Some(("无效的LeetCode用户名格式", !is_leetcode_name(&decoded))),
-                "csdn" | "bilibili" => Some(("用户 ID 非法", sanitize_id(&decoded).is_empty())),
-                _ => None,
-            };
-            if let Some((message, true)) = rejected {
+            // A platform with no validator carries rejects: None, and its valid fn is never asked.
+            let rejected = desc.rejects.filter(|_| !(desc.valid)(&decoded));
+            if let Some(message) = rejected {
                 // res.send('...') types a bare string as HTML.
                 return Reply::new(
                     StatusCode::BAD_REQUEST,
@@ -129,7 +123,7 @@ pub async fn dispatch(req: Request) -> Response {
             // TypeError into an SVG card. juejin's router has no validateTheme in its chain, which
             // is why it is the one platform a container theme cannot knock over.
             let theme_is_container = theme.as_ref().is_some_and(|theme| !theme.text_valued);
-            if theme_is_container && platform != "juejin" {
+            if theme_is_container && desc.container_theme_fatal {
                 let body = svg::port::generate_card(
                     Value::String("error".into()),
                     Value::String("theme.replace is not a function".into()),
@@ -150,32 +144,24 @@ pub async fn dispatch(req: Request) -> Response {
                 .as_ref()
                 .filter(|theme| !theme.text.is_empty())
                 .map(|theme| theme.text.as_str());
-            if platform == "github" {
-                return super::github::card(&decoded, card_theme, key).await;
-            }
-            if platform == "csdn" {
-                // validateGenericUsername rewrites the route parameter with the sanitized name
-                // before the handler runs, so the upstream fetch sees the clean id.
-                let clean = sanitize_id(&decoded);
-                return super::csdn::card(&clean, card_theme, key).await;
-            }
-            if platform == "leetcode" {
-                // The route only validates the shape of the name; the handler gets it untouched and
-                // picks the region from ?cn=true.
-                let use_cn = query.iter().any(|(k, v)| k == "cn" && v == "true");
-                return super::leetcode::card(&decoded, card_theme, key, use_cn)
-                    .await;
-            }
-            if platform == "juejin" {
-                // This router carries no validators, so the id reaches the service as it arrived.
-                return super::juejin::card(&decoded, card_theme, key).await;
-            }
-            if platform == "bilibili" {
-                let clean = sanitize_id(&decoded);
-                return super::bilibili::card(&clean, card_theme, key).await;
-            }
-            // Every name in PLATFORMS is handled above, so this arms only if one is added there
-            // and forgotten here. Falling through to the 404 keeps the omission visible in tests.
+            // validateGenericUsername rewrites the route parameter with the sanitized name before
+            // the handler runs, so the upstream fetch sees the clean id. Platforms without that
+            // middleware carry sanitize: None and get the id as it arrived.
+            let clean = desc
+                .sanitize
+                .map_or_else(|| decoded.clone(), |f| f(&decoded));
+            // The route only validates the shape of a LeetCode name; the handler gets it untouched
+            // and picks the region from ?cn=true. Every other platform ignores the flag.
+            let use_cn = query.iter().any(|(k, v)| k == "cn" && v == "true");
+            return (desc.card)(
+                &clean,
+                super::registry::CardCtx {
+                    theme: card_theme,
+                    use_cn,
+                },
+                key,
+            )
+            .await;
         }
     }
 
@@ -193,10 +179,10 @@ async fn method_not_allowed(req: Request) -> Response {
 
 /// notFoundHandler: any path that names a platform mount gets an SVG, everything else gets JSON.
 ///
-/// The list is derived from `keys::PLATFORMS` rather than spelled out again. A second hardcoded
-/// copy used to live here, and it drifted: juejin was added to PLATFORMS but never to this array,
-/// so `GET /juejin/` answered a JSON 404 where every other platform answered a card. The defect
-/// survived the Node-to-Rust port because the original
+/// The list is derived from `registry::PLATFORMS` rather than spelled out again. A second
+/// hardcoded copy used to live here, and it drifted: juejin was added to the platform list but
+/// never to this array, so `GET /juejin/` answered a JSON 404 where every other platform answered
+/// a card. The defect survived the Node-to-Rust port because the original
 /// (src/middleware/error.middleware.ts:168) had the same four-entry list. Deriving it here means
 /// the next platform is covered by the one registration it already needs.
 ///
@@ -204,9 +190,11 @@ async fn method_not_allowed(req: Request) -> Response {
 /// GET and HEAD, so it never stamped X-Cache-Key on the others.
 fn not_found(path: &str, query: &[(String, String)], cacheable: bool) -> Response {
     let key = keys::default_key("GET", path, query);
-    let is_svg = keys::PLATFORMS
+    // Same test as before — a mount appears anywhere in the path as a whole segment — but the
+    // names come from the registry, so a new platform is covered without a second edit.
+    let is_svg = super::registry::all()
         .iter()
-        .any(|(name, _)| path.contains(&format!("/{name}/")));
+        .any(|desc| path.contains(&format!("/{}/", desc.name)));
     if is_svg {
         // res.locals.themeName is never set, so the theme is always the literal "default".
         let body = svg::port::generate_card(
@@ -496,8 +484,11 @@ async fn home(req: Request) -> Response {
     // page with no Node build beside it, and src/views/index.html is the copy copy-assets.js
     // duplicates into dist anyway.
     let mut html = INDEX_HTML.to_string();
-    let gallery = platforms::port::render_gallery(base_url.clone(), Some(active.to_string()))
-        .unwrap_or_default();
+    // The rows come from the registry, so a platform registered there appears here too.
+    let entries = super::registry::gallery_entries();
+    let gallery =
+        platforms::port::render_gallery(base_url.clone(), Some(active.to_string()), &entries)
+            .unwrap_or_default();
     html = html.replace("<!-- GALLERY -->", &gallery);
     html = html.replace("${THEME_OPTIONS}", &THEMES.join(" / "));
     html = html.replace(
@@ -533,35 +524,8 @@ fn encode_uri_component(input: &str) -> String {
     out
 }
 
-/// The GitHub username rule: two to thirty-nine characters, alphanumeric with inner hyphens.
-fn is_github_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    if bytes.len() < 2 || bytes.len() > 39 {
-        return false;
-    }
-    bytes[0].is_ascii_alphanumeric()
-        && bytes[bytes.len() - 1].is_ascii_alphanumeric()
-        && bytes
-            .iter()
-            .all(|b| b.is_ascii_alphanumeric() || *b == b'-')
-}
-
-/// The LeetCode username rule: one to thirty word characters or hyphens.
-fn is_leetcode_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    !bytes.is_empty()
-        && bytes.len() <= 30
-        && bytes
-            .iter()
-            .all(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-')
-}
-
-/// Keep only the characters the generic validator accepts.
-fn sanitize_id(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
-        .collect()
-}
+// The three validators moved to `super::registry` along with the platform table: a platform's
+// validator is a field on its descriptor now, so it cannot be missing from the list that uses it.
 
 /// The query a handler reads, folded the way the original's middleware chain folds it.
 ///

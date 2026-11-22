@@ -8,4 +8,6 @@
 pub mod js;
 pub mod port;
 
-pub use port::{fail, record_fail, record_ok, render_gallery, reset_health, snapshot_health};
+pub use port::{
+    GalleryEntry, fail, record_fail, record_ok, render_gallery, reset_health, snapshot_health,
+};
