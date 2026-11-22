@@ -2,8 +2,12 @@
 //!
 //! Express mounts one limiter instance on five prefixes (app.ts:74-78), so all five share a single
 //! bucket per client. The bucket is a fixed window that opens when the process starts and rolls
-//! over every fifteen minutes, and it is keyed by the raw X-Forwarded-For header when the caller
-//! sends one and by the peer address otherwise.
+//! over every fifteen minutes, and it is keyed by the client address.
+//!
+//! The original keyed it by the *raw* X-Forwarded-For header whenever a caller sent one, which let
+//! any caller mint a fresh bucket per request: four requests carrying four different values each
+//! saw 299 remaining. That header is now read only from a peer entitled to speak for the client,
+//! and only the entries that peer appended are read — see `client_key`.
 //!
 //! Three consequences are load-bearing and each was observed against the original:
 //!
@@ -15,8 +19,8 @@
 //! - a request the limiter turns away still carries the cache middleware's X-Cache-Key and
 //!   X-Cache-Status, because Express stamps those before the limiter runs.
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::collections::{HashMap, VecDeque};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -41,9 +45,17 @@ const RETRY_AFTER: &str = "900";
 /// The copy the limiter's handler renders. It says API, unlike the unmounted global limiter.
 const MESSAGE: &str = "API请求过于频繁，请稍后再试";
 
+/// The most clients one window will remember. A key that comes from a request header can be minted
+/// at will, so the map needs a ceiling: without one a caller rotating values grows it forever. At
+/// roughly a hundred bytes a slot this caps the whole structure near a megabyte.
+const MAX_TRACKED_CLIENTS: usize = 10_000;
+
 struct Bucket {
     started: Instant,
     hits: HashMap<String, u64>,
+    /// Insertion order, so eviction takes the client that has been quiet the longest rather than an
+    /// arbitrary one.
+    order: VecDeque<String>,
 }
 
 /// MemoryStore: one map and one window for the whole process, exactly as the module keeps it.
@@ -53,6 +65,7 @@ fn store() -> &'static Mutex<Bucket> {
         Mutex::new(Bucket {
             started: Instant::now(),
             hits: HashMap::new(),
+            order: VecDeque::new(),
         })
     })
 }
@@ -67,6 +80,15 @@ fn charge(key: &str) -> (u64, u64) {
     if now.duration_since(bucket.started) >= WINDOW {
         bucket.started = now;
         bucket.hits.clear();
+        bucket.order.clear();
+    }
+    if !bucket.hits.contains_key(key) {
+        while bucket.order.len() >= MAX_TRACKED_CLIENTS {
+            if let Some(oldest) = bucket.order.pop_front() {
+                bucket.hits.remove(&oldest);
+            }
+        }
+        bucket.order.push_back(key.to_string());
     }
     let hits = bucket.hits.entry(key.to_string()).or_insert(0);
     *hits += 1;
@@ -83,18 +105,71 @@ fn under_a_platform_prefix(path: &str) -> bool {
     super::registry::under_a_mount(path)
 }
 
-/// keyGenerator: the raw X-Forwarded-For value, else the peer address, else the literal fallback.
-fn client_key(req: &Request) -> String {
-    if let Some(value) = req
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|value| value.to_str().ok())
-    {
-        return value.to_string();
-    }
+/// How many proxies sit in front of this process. Zero means none, which is also the default: see
+/// `ClientKey::trusted_hops`.
+const TRUST_PROXY: &str = "TRUST_PROXY";
+
+/// The number of hops in front of this process that may speak for a client, from `TRUST_PROXY`.
+///
+/// The default is zero, and that is the whole point. The original keyed the bucket by the raw
+/// X-Forwarded-For header, so any caller could mint a fresh bucket per request by sending a
+/// different value: four requests with four values each saw 299 remaining. Nothing a request
+/// carries can be trusted until an operator says which hop writes it, and the answer differs by
+/// deployment — `docker run -p 3000:3000` (`Dockerfile` EXPOSE 3000) reaches the process directly,
+/// while `render.yaml` terminates TLS on a proxy that appends the header. Guessing either way is
+/// wrong for the other, so the safe answer is the peer address until told otherwise.
+///
+/// A non-numeric or unparsable value is read as zero: a typo should cost accuracy, not safety.
+fn trusted_hops() -> usize {
+    std::env::var(TRUST_PROXY)
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(0)
+}
+
+/// The address of the peer that opened the connection, when the transport told us.
+fn peer_ip(req: &Request) -> Option<IpAddr> {
     req.extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map(|peer| peer.0.ip().to_string())
+        .map(|peer| peer.0.ip())
+}
+
+/// keyGenerator: the client address, never a header value the client itself controls.
+///
+/// With `TRUST_PROXY=<n>`, the rightmost `n` entries were appended by proxies we operate, so the
+/// client is the entry immediately left of them (`entries[len - n]`). A chain shorter than `n`
+/// means the request did not cross every hop we expected, so it is not treated as proxied at all.
+/// A single entry that is not an address makes the whole chain unusable — discarding just that entry
+/// would shift every later position one to the left and let a caller reach a different client's
+/// bucket by padding its own header with junk. An unusable chain falls back to the peer address,
+/// then to the literal fallback.
+fn client_key(req: &Request) -> String {
+    client_key_at(req, trusted_hops())
+}
+
+/// `client_key` with the hop count given, so the address arithmetic can be tested without the
+/// environment deciding it.
+fn client_key_at(req: &Request, hops: usize) -> String {
+    let peer = peer_ip(req);
+    if hops > 0
+        && let Some(chain) = req
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|value| value.to_str().ok())
+    {
+        let addresses: Option<Vec<IpAddr>> = chain
+            .split(',')
+            .map(|entry| entry.trim().parse::<IpAddr>().ok())
+            .collect();
+        if let Some(addresses) = addresses
+            && let Some(client) = addresses.len().checked_sub(hops).map(|at| addresses[at])
+        {
+            return client.to_string();
+        }
+    }
+    // No trusted proxy, or a chain that does not reach back far enough: the socket is the only
+    // thing the caller cannot forge.
+    peer.map(|address| address.to_string())
         .unwrap_or_else(|| "unknown-client".to_string())
 }
 
@@ -165,6 +240,7 @@ mod tests {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         bucket.started = Instant::now();
         bucket.hits.clear();
+        bucket.order.clear();
         guard
     }
 
@@ -214,6 +290,110 @@ mod tests {
         for path in ["/githubx", "/github-style/x", "/nope", "/", "/health", "/api/github"] {
             assert!(!under_a_platform_prefix(path), "{path}");
         }
+    }
+
+    /// A request as axum hands it to middleware, with the peer the transport reported.
+    fn request_from(peer: &str, forwarded_for: Option<&str>) -> Request {
+        let mut builder = Request::builder().method("GET").uri("/github/octocat");
+        if let Some(value) = forwarded_for {
+            builder = builder.header("x-forwarded-for", value);
+        }
+        let mut request = builder.body(Body::empty()).expect("a request");
+        let address: SocketAddr = peer.parse().expect("a socket address");
+        request.extensions_mut().insert(ConnectInfo(address));
+        request
+    }
+
+    #[test]
+    fn a_header_the_caller_writes_does_not_become_the_bucket() {
+        // The defect: four requests with four values each saw 299 remaining. Without a declared
+        // proxy every value has to collapse onto the one thing the caller cannot choose.
+        let mut seen = Vec::new();
+        for forged in ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"] {
+            seen.push(client_key_at(&request_from("10.0.0.7:5000", Some(forged)), 0));
+        }
+        assert_eq!(seen, ["10.0.0.7"; 4]);
+    }
+
+    #[test]
+    fn one_declared_hop_reads_the_rightmost_entry() {
+        // A single proxy appends the address it saw, so the client is the last entry.
+        let request = request_from("10.0.0.7:5000", Some("203.0.113.9, 198.51.100.4"));
+        assert_eq!(client_key_at(&request, 1), "198.51.100.4");
+    }
+
+    #[test]
+    fn two_declared_hops_read_the_entry_left_of_both_of_them() {
+        // Two proxies we operate append two entries; everything left of them is the client's own
+        // claim and must not be read even when it looks like an address.
+        let request = request_from("10.0.0.7:5000", Some("6.6.6.6, 203.0.113.9, 198.51.100.4"));
+        assert_eq!(client_key_at(&request, 2), "203.0.113.9");
+    }
+
+    #[test]
+    fn a_chain_shorter_than_the_declared_hops_is_not_treated_as_proxied() {
+        // `TRUST_PROXY=3` but only two entries: the request did not cross every hop the operator
+        // declared, so the header says nothing trustworthy and the socket decides.
+        let request = request_from("10.0.0.7:5000", Some("203.0.113.9, 198.51.100.4"));
+        assert_eq!(client_key_at(&request, 3), "10.0.0.7");
+    }
+
+    #[test]
+    fn one_unparsable_entry_voids_the_whole_chain_rather_than_shifting_it() {
+        // Dropping the junk and keeping the rest would slide `203.0.113.9` into the position the
+        // real client occupies, so a caller could aim the bucket at someone else's address. The
+        // whole chain is unusable instead.
+        let request = request_from("10.0.0.7:5000", Some("not-an-ip, 203.0.113.9"));
+        assert_eq!(client_key_at(&request, 1), "10.0.0.7");
+        // With a clean chain the same hop count does reach the address.
+        let clean = request_from("10.0.0.7:5000", Some("203.0.113.9"));
+        assert_eq!(client_key_at(&clean, 1), "203.0.113.9");
+    }
+
+    #[test]
+    fn a_request_with_no_header_and_no_peer_still_gets_a_key() {
+        let request = Request::builder()
+            .uri("/github/octocat")
+            .body(Body::empty())
+            .expect("a request");
+        assert_eq!(client_key_at(&request, 0), "unknown-client");
+        assert_eq!(client_key_at(&request, 2), "unknown-client");
+    }
+
+    #[test]
+    fn a_nonsense_trust_proxy_setting_is_read_as_no_proxy_at_all() {
+        let _guard = TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for value in ["", "  ", "yes", "-1", "1.5"] {
+            // SAFETY: TEST_LOCK serialises every test that touches the environment here.
+            unsafe { std::env::set_var(TRUST_PROXY, value) };
+            assert_eq!(trusted_hops(), 0, "{value:?} should not declare a proxy");
+        }
+        unsafe { std::env::set_var(TRUST_PROXY, " 2 ") };
+        assert_eq!(trusted_hops(), 2, "surrounding space should not break the count");
+        unsafe { std::env::remove_var(TRUST_PROXY) };
+        assert_eq!(trusted_hops(), 0, "unset means no proxy");
+    }
+
+    #[test]
+    fn the_bucket_evicts_the_quietest_client_instead_of_growing_forever() {
+        // A key minted per request used to grow the map without bound. The ceiling is what stops
+        // that, so it has to actually evict.
+        let _guard = guarded();
+        for index in 0..MAX_TRACKED_CLIENTS + 5 {
+            charge(&format!("client-{index}"));
+        }
+        let bucket = store()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(bucket.hits.len(), MAX_TRACKED_CLIENTS);
+        assert_eq!(bucket.order.len(), MAX_TRACKED_CLIENTS);
+        assert!(!bucket.hits.contains_key("client-0"), "the oldest should be gone");
+        assert!(!bucket.hits.contains_key("client-4"), "five more clients arrived after it");
+        assert!(bucket.hits.contains_key("client-5"), "the first survivor should be kept");
+        assert!(bucket.hits.contains_key(&format!("client-{}", MAX_TRACKED_CLIENTS + 4)));
+        drop(bucket);
     }
 
     #[test]
