@@ -41,9 +41,6 @@ const RETRY_AFTER: &str = "900";
 /// The copy the limiter's handler renders. It says API, unlike the unmounted global limiter.
 const MESSAGE: &str = "API请求过于频繁，请稍后再试";
 
-/// The five prefixes app.use() mounts the limiter on.
-const PREFIXES: [&str; 5] = ["/leetcode", "/github", "/csdn", "/juejin", "/bilibili"];
-
 struct Bucket {
     started: Instant,
     hits: HashMap<String, u64>,
@@ -83,12 +80,7 @@ fn charge(key: &str) -> (u64, u64) {
 /// Express mounts a router on a prefix with a segment boundary and matches it case-insensitively,
 /// so /GitHub/octocat counts and /githubx does not.
 fn under_a_platform_prefix(path: &str) -> bool {
-    PREFIXES.iter().any(|prefix| {
-        path.is_char_boundary(prefix.len())
-            && path.len() >= prefix.len()
-            && path[..prefix.len()].eq_ignore_ascii_case(prefix)
-            && (path.len() == prefix.len() || path.as_bytes()[prefix.len()] == b'/')
-    })
+    super::registry::under_a_mount(path)
 }
 
 /// keyGenerator: the raw X-Forwarded-For value, else the peer address, else the literal fallback.

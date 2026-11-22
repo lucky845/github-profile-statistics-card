@@ -14,6 +14,7 @@ pub mod paths;
 pub mod query;
 pub mod r;
 pub mod ratelimit;
+pub mod registry;
 pub mod remote;
 
 pub use handlers::router;

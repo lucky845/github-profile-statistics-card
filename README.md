@@ -120,6 +120,7 @@
 - **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB
 - **渲染** — 手写 SVG 生成，无模板引擎
 - **首页** — HTML 在编译期用 `include_str!` 编进二进制
+- **平台扩展** — 一张 `PlatformDesc` 常量表（`src/frontdoor/registry.rs`）描述每个平台，路由分派／限流前缀／404 判定／首页画廊／缓存键分隔符全部从它派生。加平台只改这一处，见 [CONTRIBUTING.md](CONTRIBUTING.md#添加新平台)
 - **部署** — 多阶段 Docker 单二进制，或 Vercel Rust runtime
 
 ## 🚀 部署
