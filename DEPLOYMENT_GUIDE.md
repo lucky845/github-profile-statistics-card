@@ -252,11 +252,11 @@ server {
 
 ## 观测
 
-- **`/livez`** —— 存活探针，`{"status":"alive","uptime":N}`
+- **`/livez`** —— 存活探针，`{"code":200,"msg":"ok","data":{"status":"alive","uptime":N}}`
 - **`/health`** —— 依赖健康，含 `database`（恒 unhealthy，本项目不用数据库）与 `platforms`
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
-- **`/stats`** —— `{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}`
+- **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode}}}`
 - **`/api/cache/stats`** —— 缓存计数器（HTTP 层与 storage 层共用一套）
 - **`DELETE /api/cache/clear?all=true`** —— 清空缓存条目（**不重置计数器**，与原实现一致）
 

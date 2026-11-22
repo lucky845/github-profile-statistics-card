@@ -1,1 +1,1 @@
-{"code":"ROUTE_NOT_FOUND","message":"请求的路由不存在","timestamp":"[..]","path":"/api/stra%C3%9Fe/stats"}
+{"code":404,"msg":"请求的路由不存在","data":{"reason":"ROUTE_NOT_FOUND","path":"/api/stra%C3%9Fe/stats","timestamp":"[..]"}}

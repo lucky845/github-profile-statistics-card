@@ -211,12 +211,20 @@ fn not_found(path: &str, query: &[(String, String)], cacheable: bool) -> Respons
         let reply = Reply::new(StatusCode::NOT_FOUND, "image/svg+xml; charset=utf-8", body);
         return with_cache_key(reply, key, cacheable).into_response();
     }
-    let body = format!(
-        "{{\"code\":\"ROUTE_NOT_FOUND\",\"message\":\"请求的路由不存在\",\"timestamp\":\"{}\",\"path\":\"{}\"}}",
-        iso_now(),
-        path
-    );
-    let reply = Reply::new(StatusCode::NOT_FOUND, "application/json; charset=utf-8", body);
+    // The 404 is a failure envelope: the reason code and the path live under `data`, the sentence
+    // moves up into `msg`. The HTTP status stays 404 -- curl -f and every probe that reads only the
+    // status must keep seeing the failure.
+    let body = super::r::R::fail(
+        StatusCode::NOT_FOUND,
+        "请求的路由不存在",
+        serde_json::json!({
+            "reason": "ROUTE_NOT_FOUND",
+            "path": path,
+            "timestamp": iso_now(),
+        }),
+    )
+    .body();
+    let reply = Reply::new(StatusCode::NOT_FOUND, super::r::JSON_CONTENT_TYPE, body);
     with_cache_key(reply, key, cacheable).into_response()
 }
 
@@ -321,14 +329,18 @@ async fn cache_clear(req: Request) -> Response {
     let group = selector("group");
     let pattern = selector("pattern");
     // Express answers res.json(), which is JSON typed as UTF-8.
-    let (status, body) = super::cache::clear_response(all, group.as_deref(), pattern.as_deref()).await;
-    let body = serde_json::to_string(&body).unwrap_or_default();
+    let (status, envelope) =
+        super::cache::clear_response(all, group.as_deref(), pattern.as_deref()).await;
     // The cache middleware only touches GET/HEAD, so this response carries no X-Cache-* pair.
-    Reply::new(status, "application/json; charset=utf-8", body).into_response()
+    envelope.reply(status).into_response()
 }
 
 async fn livez() -> Response {
-    let body = format!("{{\"status\":\"alive\",\"uptime\":{}}}", process_uptime());
+    let body = super::r::R::ok(serde_json::json!({
+        "status": "alive",
+        "uptime": process_uptime(),
+    }))
+    .body();
     // No X-Cache-Key here: the middleware stamps one from the path the client sent, and a key
     // spelled from the canonical route instead would disagree on /livez/ and /LIVEZ.
     Reply::new(StatusCode::OK, "application/json; charset=utf-8", body).into_response()
@@ -340,11 +352,28 @@ async fn health() -> Response {
     // `database` keeps its shape for probes that parse it, and stays unhealthy because there is
     // no database. `cache` is the honest answer for the layer that replaced it: whether a shared
     // tier is configured, which decides if two instances see each other's entries.
-    let body = format!(
-        "{{\"status\":\"unhealthy\",\"uptime\":{},\"database\":{{\"status\":\"unhealthy\",\"pool\":{{\"isConnected\":false,\"poolSize\":0}}}},\"cache\":{{\"shared\":{}}},\"platforms\":{{}},\"memory\":{{\"rss\":0,\"heapTotal\":0,\"heapUsed\":0,\"external\":0,\"arrayBuffers\":0}}}}",
-        process_uptime(),
-        super::remote::configured()
-    );
+    // `status` stays inside `data` on purpose: the envelope's `code` mirrors the HTTP status, which
+    // is 200 because the process answered at all, while `data.status` is the upstream verdict.
+    // Folding the two together would make a rate-limited upstream look like a dead process to
+    // anything that parses the body.
+    let body = super::r::R::ok(serde_json::json!({
+        "status": "unhealthy",
+        "uptime": process_uptime(),
+        "database": {
+            "status": "unhealthy",
+            "pool": { "isConnected": false, "poolSize": 0 },
+        },
+        "cache": { "shared": super::remote::configured() },
+        "platforms": {},
+        "memory": {
+            "rss": 0,
+            "heapTotal": 0,
+            "heapUsed": 0,
+            "external": 0,
+            "arrayBuffers": 0,
+        },
+    }))
+    .body();
     // skipCache keeps /health out of the cache middleware, so it carries no X-Cache-* headers.
     Reply::new(StatusCode::OK, "application/json; charset=utf-8", body).into_response()
 }

@@ -12,6 +12,7 @@ pub mod leetcode;
 pub mod metrics;
 pub mod paths;
 pub mod query;
+pub mod r;
 pub mod ratelimit;
 pub mod remote;
 

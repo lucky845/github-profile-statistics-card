@@ -418,7 +418,7 @@ pub async fn clear_response(
     all: bool,
     group: Option<&str>,
     pattern: Option<&str>,
-) -> (StatusCode, Value) {
+) -> (StatusCode, super::r::R) {
     if all {
         clear();
         // The shared tier has to go too: leaving it behind would let the cluster keep serving
@@ -426,11 +426,7 @@ pub async fn clear_response(
         super::remote::clear_all().await;
         return (
             StatusCode::OK,
-            json!({
-                "status": "success",
-                "message": "Cleared all cache",
-                "deletedCount": "all",
-            }),
+            super::r::R::ok_msg(json!({ "deletedCount": "all" }), "Cleared all cache"),
         );
     }
     // group and pattern are interpolated into the message verbatim, the way the original's
@@ -440,11 +436,10 @@ pub async fn clear_response(
         let dropped = drop_prefix(&prefix) + super::remote::delete_prefix(&prefix).await;
         return (
             StatusCode::OK,
-            json!({
-                "status": "success",
-                "message": format!("Cleared cache group: {group}"),
-                "deletedCount": js_number(dropped as f64),
-            }),
+            super::r::R::ok_msg(
+                json!({ "deletedCount": js_number(dropped as f64) }),
+                format!("Cleared cache group: {group}"),
+            ),
         );
     }
     if let Some(pattern) = pattern {
@@ -453,36 +448,28 @@ pub async fn clear_response(
         let dropped = drop_prefix(prefix) + super::remote::delete_prefix(prefix).await;
         return (
             StatusCode::OK,
-            json!({
-                "status": "success",
-                "message": format!("Cleared cache by pattern: {pattern}"),
-                "deletedCount": js_number(dropped as f64),
-            }),
+            super::r::R::ok_msg(
+                json!({ "deletedCount": js_number(dropped as f64) }),
+                format!("Cleared cache by pattern: {pattern}"),
+            ),
         );
     }
     (
         StatusCode::BAD_REQUEST,
-        json!({
-            "status": "error",
-            "message": "Must provide one of: pattern, group, or all=true",
-        }),
+        super::r::R::err(
+            StatusCode::BAD_REQUEST,
+            "Must provide one of: pattern, group, or all=true",
+        ),
     )
 }
 
 /// GET /api/cache/stats, answered from the same counters the middleware feeds.
 pub fn stats_response() -> Response {
-    let body = json!({
-        "status": "success",
-        "data": stats(),
-        "message": "Cache statistics retrieved successfully",
-    });
-    let body = serde_json::to_string(&body).unwrap_or_default();
-    let mut response = (StatusCode::OK, body).into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    with_security(response)
+    // The counters were already nested under `data`, so the envelope takes the old outer shell's
+    // place and `stats()` does not move: a client reading `data.hits` still finds it.
+    super::r::R::ok_msg(stats(), "Cache statistics retrieved successfully")
+        .reply(StatusCode::OK)
+        .into_response()
 }
 
 #[cfg(test)]
@@ -518,11 +505,12 @@ mod tests {
         // signatures, the lock itself is a plain mutex and does not care which thread takes it.
         let _guard = guarded();
         set("a:1", b"x".to_vec(), Vec::new(), 60);
-        let (status, body) = block_on_async(clear_response(true, None, None));
+        let (status, envelope) = block_on_async(clear_response(true, None, None));
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["message"], "Cleared all cache");
+        assert_eq!(envelope.code, 200);
+        assert_eq!(envelope.msg, "Cleared all cache");
         // manualCacheClearHandler writes the literal "all", not the number of keys it dropped.
-        assert_eq!(body["deletedCount"], "all");
+        assert_eq!(envelope.data["deletedCount"], "all");
         let inner = cache().lock().unwrap_or_else(|p| p.into_inner());
         assert!(inner.entries.is_empty());
     }
@@ -533,10 +521,10 @@ mod tests {
         set("g1:one", b"x".to_vec(), Vec::new(), 60);
         set("g1:two", b"x".to_vec(), Vec::new(), 60);
         set("g2:three", b"x".to_vec(), Vec::new(), 60);
-        let (status, body) = block_on_async(clear_response(false, Some("g1"), None));
+        let (status, envelope) = block_on_async(clear_response(false, Some("g1"), None));
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["message"], "Cleared cache group: g1");
-        assert_eq!(body["deletedCount"], 2);
+        assert_eq!(envelope.msg, "Cleared cache group: g1");
+        assert_eq!(envelope.data["deletedCount"], 2);
         let inner = cache().lock().unwrap_or_else(|p| p.into_inner());
         assert!(inner.entries.contains_key("g2:three"));
         assert!(!inner.entries.contains_key("g1:one"));
@@ -549,9 +537,9 @@ mod tests {
         set("p:2", b"x".to_vec(), Vec::new(), 60);
         set("q:3", b"x".to_vec(), Vec::new(), 60);
         // deleteByPattern strips one trailing '*' before matching, but the message keeps it.
-        let (_, body) = block_on_async(clear_response(false, None, Some("p:*")));
-        assert_eq!(body["message"], "Cleared cache by pattern: p:*");
-        assert_eq!(body["deletedCount"], 2);
+        let (_, envelope) = block_on_async(clear_response(false, None, Some("p:*")));
+        assert_eq!(envelope.msg, "Cleared cache by pattern: p:*");
+        assert_eq!(envelope.data["deletedCount"], 2);
         let inner = cache().lock().unwrap_or_else(|p| p.into_inner());
         assert!(inner.entries.contains_key("q:3"));
     }
@@ -559,9 +547,11 @@ mod tests {
     #[test]
     fn no_selector_at_all_is_the_bad_request() {
         let _guard = guarded();
-        let (status, body) = block_on_async(clear_response(false, None, None));
+        let (status, envelope) = block_on_async(clear_response(false, None, None));
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["status"], "error");
+        // The envelope's code mirrors the status, and there is nothing to report beyond the copy.
+        assert_eq!(envelope.code, 400);
+        assert_eq!(envelope.data, Value::Null);
     }
 
     #[test]

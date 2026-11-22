@@ -99,6 +99,8 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 - `/api/cache/stats` 的数值
 - 平台卡片的 `x-cache-key` / `x-cache-status` / `x-xss-protection`
 
+另外，JSON 端点的 body 现在统一包在 `{code,msg,data}` 信封里（见 README 的「JSON 响应统一信封」）。录制的 73 条 404 body 已同步改写，但 `/stats`、`/metrics/json`、`DELETE /api/cache/clear` 这五个端点**没有任何用例**——改它们的形状，replay 一个字都不会变，只能手工 `curl` 对拍。
+
 改动这些地方时，**必须手工对拍**，不能拿"replay 还是绿的"当证据。
 
 ## 代码风格

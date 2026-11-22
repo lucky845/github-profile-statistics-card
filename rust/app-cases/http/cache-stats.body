@@ -1,1 +1,1 @@
-{"status":"success","data":{"hits":0,"misses":3,"keys":2,"groups":0,"hitsRate":0},"message":"Cache statistics retrieved successfully"}
+{"code":200,"msg":"Cache statistics retrieved successfully","data":{"hits":0,"misses":3,"keys":2,"groups":0,"hitsRate":0}}
