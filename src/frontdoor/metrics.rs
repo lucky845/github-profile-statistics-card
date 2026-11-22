@@ -12,6 +12,7 @@
 //! prom-client used, so an existing scraper keeps parsing.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::Request;
 use axum::http::StatusCode;
@@ -75,6 +76,46 @@ struct Sample {
     cpu_system: f64,
     start_time: f64,
     resident_bytes: f64,
+}
+
+/// The two process readings `/livez` and `/health` publish, taken from one procfs (or
+/// proc_pidinfo) snapshot so both numbers describe the same instant.
+///
+/// Both are `Option` on purpose. A reading this process cannot take is reported as unknown, not
+/// as zero: `uptime: 0` and `rss: 0` read as measurements, and a probe cannot tell them apart from
+/// a process that really is brand new and really is holding no pages. `null` is the honest answer.
+pub struct Readings {
+    pub uptime_seconds: Option<u64>,
+    pub resident_bytes: Option<u64>,
+}
+
+/// The process readings behind `/livez` and `/health`, from one sample.
+pub fn readings() -> Readings {
+    let sample = sample();
+    Readings {
+        uptime_seconds: seconds_since_start(sample.start_time, SystemTime::now()),
+        // A resident size of zero is what an unreadable structure leaves behind, so it is
+        // reported as unknown too: no live process holds no pages.
+        resident_bytes: (sample.resident_bytes > 0.0).then_some(sample.resident_bytes as u64),
+    }
+}
+
+/// Seconds between `start_time` (unix seconds, fractional) and `now`, floored the way
+/// `Math.floor(process.uptime())` floors.
+///
+/// Split out from `readings` so a test can pin both ends instead of racing the clock. A start time
+/// that was never read (0.0), is not a number, or lies in the future has no duration to report and
+/// answers `None` -- reporting 0 would claim this process had just started.
+fn seconds_since_start(start_time: f64, now: SystemTime) -> Option<u64> {
+    if !start_time.is_finite() || start_time <= 0.0 {
+        return None;
+    }
+    let now_seconds = now.duration_since(UNIX_EPOCH).ok()?.as_secs_f64();
+    let elapsed = now_seconds - start_time;
+    if !elapsed.is_finite() || elapsed < 0.0 {
+        return None;
+    }
+    Some(elapsed.floor() as u64)
 }
 
 /// prom-client prints every family it knows, in registration order.
@@ -405,6 +446,45 @@ mod tests {
         let sample = &rate["values"][0];
         assert_eq!(sample["labels"], json!({}));
         assert!(sample["value"].is_number());
+    }
+
+    #[test]
+    fn a_process_that_started_an_hour_ago_has_been_up_for_an_hour() {
+        // Both ends pinned: a start time 3600s before a fixed instant must round down to 3600,
+        // never 3599 -- which is what a float subtraction of two unrelated epochs risks.
+        let now = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let start = 1_700_000_000.0 - 3600.0;
+        assert_eq!(seconds_since_start(start, now), Some(3600));
+        // Half a second into the process is still zero seconds elapsed, the way Math.floor
+        // reports it, and it is `Some(0)` rather than `None`: this process really did start.
+        let fresh = 1_700_000_000.0 - 0.5;
+        assert_eq!(seconds_since_start(fresh, now), Some(0));
+    }
+
+    #[test]
+    fn an_unreadable_start_time_is_unknown_rather_than_zero() {
+        let now = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        // 0.0 is what every `sample()` implementation returns when it cannot read the field.
+        assert_eq!(seconds_since_start(0.0, now), None);
+        assert_eq!(seconds_since_start(f64::NAN, now), None);
+        assert_eq!(seconds_since_start(f64::INFINITY, now), None);
+        // A start time after `now` is a clock that moved, not an uptime that is negative.
+        assert_eq!(seconds_since_start(1_700_000_100.0, now), None);
+    }
+
+    #[test]
+    fn the_live_readings_are_taken_from_this_process() {
+        // Not pinning the numbers -- they move -- only that on a platform that can read /proc (or
+        // call proc_pidinfo) the readings are present and describe a process that has been up
+        // for a plausible time. This is the assertion that would have caught the OnceLock bug:
+        // a value read at first request would still be Some(0) here, which is allowed, so the
+        // separate integration test pins the number against a second reading instead.
+        let readings = readings();
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            assert!(readings.uptime_seconds.is_some(), "this process knows when it started");
+            assert!(readings.resident_bytes.is_some_and(|bytes| bytes > 0), "this process holds pages");
+        }
     }
 
     #[test]
