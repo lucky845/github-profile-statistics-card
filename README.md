@@ -177,7 +177,7 @@ cargo test    --workspace
 cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此失败
 ```
 
-- **正确性由 replay 定义**，不是手写断言：153 条录制 case，当前基线 **148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status` 差异，非移植缺陷。改动前后都要跑。
+- **正确性由 replay 定义**，不是手写断言：153 条录制 case，基线 **148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status` 差异，非移植缺陷。改动前后都要跑 `./scripts/replay.sh`——**别直接调 `rust-anything app replay`**，卡片的 `更新于 2026-11-21` 是录制当天写死的，不钉时钟直接跑会得到 127/153 的假回归。
 - **别拿「replay 还是绿的」当证据**：`/health` 的 body、`/api/cache/stats` 的数值、卡片的 `x-cache-key`/`x-cache-status` 在录制时都被归一化成了通配，等于没有断言。动这些地方必须手工对拍。
 
 ## 🔜 即将支持

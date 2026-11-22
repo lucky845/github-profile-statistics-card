@@ -303,7 +303,7 @@ cargo build --release
 PORT=3000 ./target/release/app
 ```
 
-行为契约不是手写断言，是 `rust/app-cases/` 里录制的 **153 条 HTTP case**，用 `rust-anything app replay` 重放。当前基线：**148/153**，5 条失败全部是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS` 差异，原始 Node 实现同样失败这 5 条。
+行为契约不是手写断言，是 `rust/app-cases/` 里录制的 **153 条 HTTP case**，用 `./scripts/replay.sh` 重放（它把时钟钉回录制日 2026-11-21，否则卡片 footer 的 `更新于` 会让 25 条 case 假失败）。基线：**148/153**，5 条失败全部是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS` 差异，原始 Node 实现同样失败这 5 条。
 
 ## API
 

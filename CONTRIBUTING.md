@@ -38,16 +38,27 @@ cargo clippy  --all-targets --workspace -- -D warnings
 这个项目的正确性由 **153 条录制的 HTTP case** 定义，位于 `rust/app-cases/`：
 
 ```bash
-# 用 rust-anything 重放，比对状态码、响应头与 body
-# workspace 在仓库根，产物在 target/debug/app（不是 crates/ 下的 target）
-rust-anything app replay --repo . --build target/debug/app
+# 一行搞定：钉死时钟 + 配额预检 + 基线判定
+./scripts/replay.sh
+
+# 只跑单个 case（快速迭代）
+./scripts/replay.sh home
 ```
 
-当前基线 **148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS`，**原始 Node 实现同样失败这 5 条**。
+**基线 148/153**，5 条失败是录制期 Redis 残留键导致的 `x-cache-status HIT vs MISS`，**原始 Node 实现同样失败这 5 条**。
 
-注意：这条基线是在**不配置 Redis** 的前提下录的。跑 replay 时不要设 `REDIS_*`，否则会读到真实缓存，`x-cache-status` 与录制值不符（那不是 bug）。
+### 为什么必须用脚本跑，而不是直接 `rust-anything app replay`
 
-**改动前后都要跑一次 replay。** 如果你让分数下降，那不是"差一点"，是回归。
+卡片的 footer 是 `更新于 {format_date_now()}`（`crates/svg/src/port.rs:213`），录制时把 **2026-11-21** 写死进了 25 个 `.body` 文件。日期一过，直接跑就是 **127/153**——而基线是 148/153。
+
+`scripts/replay.sh` 通过 `crates/svg/src/port.rs:181` 已有的时钟注入点 `RUST_ANYTHING_WTS_OVERRIDE`（单位秒）把时钟钉回录制日（`1795219200` = 2026-11-21T00:00:00Z），26 条日期漂移的假失败随即消失，只剩下那 5 条已知差异。
+
+另外两件脚本替你挡掉的事：
+
+- **GitHub 匿名配额**：未设 `GITHUB_TOKEN` 时只有 60 次/小时。配额耗尽后，11 条 github case 会渲染成"数据源限流"错误卡，看上去像大面积回归。脚本会在配额低于 20 时警告。
+- **Redis 残留**：这条基线是在**不配置 Redis** 的前提下录的。跑 replay 时不要设 `REDIS_*`，否则会读到真实缓存，`x-cache-status` 与录制值不符（那不是 bug）。
+
+**改动前后都要跑一次 replay。** 如果你让分数低于 148，那不是"差一点"，是回归——脚本会直接以非零码退出。
 
 ### 通配断言：别以为 replay 全绿就安全
 
