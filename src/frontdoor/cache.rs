@@ -469,6 +469,10 @@ pub fn stats_response() -> Response {
     // place and `stats()` does not move: a client reading `data.hits` still finds it.
     super::r::R::ok_msg(stats(), "Cache statistics retrieved successfully")
         .reply(StatusCode::OK)
+        // no-store: the body is a live reading of the very cache answering this request. Caching
+        // it means the second call reports the numbers from before the first one, which is how a
+        // statistics endpoint ends up permanently showing hits:0, keys:0.
+        .cache_control(super::metrics::LIVE_CACHE_CONTROL)
         .into_response()
 }
 

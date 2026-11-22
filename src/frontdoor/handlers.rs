@@ -377,7 +377,14 @@ async fn livez() -> Response {
     .body();
     // No X-Cache-Key here: the middleware stamps one from the path the client sent, and a key
     // spelled from the canonical route instead would disagree on /livez/ and /LIVEZ.
-    Reply::new(StatusCode::OK, "application/json; charset=utf-8", body).into_response()
+    //
+    // no-store because this is a liveness probe read by Docker, Render and the smoke workflow. A
+    // cached "alive" outlives the process it describes: the healthcheck would keep answering 200
+    // from the cache while the thing it checks is gone. It happens to escape the cache today only
+    // because its body is under the default TTL, which is not a property to rely on.
+    Reply::new(StatusCode::OK, "application/json; charset=utf-8", body)
+        .cache_control(super::metrics::LIVE_CACHE_CONTROL)
+        .into_response()
 }
 
 /// The original reports database and platform health; the recording wildcards the body, so the
@@ -412,8 +419,13 @@ async fn health() -> Response {
         },
     }))
     .body();
-    // skipCache keeps /health out of the cache middleware, so it carries no X-Cache-* headers.
-    Reply::new(StatusCode::OK, "application/json; charset=utf-8", body).into_response()
+    // skipCache keeps /health out of the process cache, so it carries no X-Cache-* headers. That
+    // says nothing about the shared tiers in front of it: a bodiless 200 with no Cache-Control is
+    // exactly what a CDN is allowed to cache heuristically, and a cached "alive" outliving the
+    // process it describes is the one answer a probe must never get. no-store says it out loud.
+    Reply::new(StatusCode::OK, "application/json; charset=utf-8", body)
+        .cache_control(super::metrics::LIVE_CACHE_CONTROL)
+        .into_response()
 }
 
 async fn theme_test(req: Request) -> Response {

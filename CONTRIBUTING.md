@@ -105,6 +105,8 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 
 改动这些地方时，**必须手工对拍**，不能拿"replay 还是绿的"当证据。
 
+诊断端点的 `Cache-Control: no-store` 也是 replay 抓不到的一类：录制时 `x-cache-status` 是 `[..]` 通配，把 `no-store` 删掉 replay 照样全绿，但 `/stats` 会开始返回五分钟前的读数。这类"中间件默认值 + 处理函数没设策略"的缺陷，只有直接驱动 `app::router()` 的集成测试抓得住——见 `tests/live_diagnostics.rs`（连打两次断言不得 `HIT`）与 `tests/home_host_cache.rs`（两个 Host 断言不得同体）。
+
 ## 代码风格
 
 - 注释写**为什么**，不写**做了什么**。一个解释"这行在干嘛"的注释是噪音；解释"为什么必须这样而不是那样"的注释才是资产。
