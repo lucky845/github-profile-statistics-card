@@ -103,6 +103,8 @@ grep x-cache-status /tmp/rec-probe/rust/app-cases/http/probe.toml   # MISS
 
 另外，JSON 端点的 body 现在统一包在 `{code,msg,data}` 信封里（见 README 的「JSON 响应统一信封」）。录制的 73 条 404 body 已同步改写，但 `/stats`、`/metrics/json`、`DELETE /api/cache/clear` 这五个端点**没有任何用例**——改它们的形状，replay 一个字都不会变，只能手工 `curl` 对拍。
 
+（`DELETE /api/cache/clear` 现在有了一组直接驱动路由的测试——`tests/cache_clear_auth.rs`——但它们断言的是凭据与缓存状态，仍然不钉响应体形状。改这个端点的信封形状，replay 与那组测试都会保持绿色。）
+
 改动这些地方时，**必须手工对拍**，不能拿"replay 还是绿的"当证据。
 
 诊断端点的 `Cache-Control: no-store` 也是 replay 抓不到的一类：录制时 `x-cache-status` 是 `[..]` 通配，把 `no-store` 删掉 replay 照样全绿，但 `/stats` 会开始返回五分钟前的读数。这类"中间件默认值 + 处理函数没设策略"的缺陷，只有直接驱动 `app::router()` 的集成测试抓得住——见 `tests/live_diagnostics.rs`（连打两次断言不得 `HIT`）与 `tests/home_host_cache.rs`（两个 Host 断言不得同体）。
@@ -129,6 +131,14 @@ WAIT_SECONDS=8 PORT=8090 ./scripts/process-age.sh     # 想等更久
 3. **两个端点一起查**，并要求 `|livez - health| <= 1`——它们读的是同一个内核值。
 
 实测：把 `livez` 改回 `OnceLock` 语义，脚本立刻 `::error::uptime 0s is below the 5s this script waited`；还原后 `[ok] the process reported 6s of age after 5s of silence.`
+
+### 拒绝类测试：断言副作用，别只断言状态码
+
+`tests/cache_clear_auth.rs` 覆盖 `DELETE /api/cache/clear` 的凭据检查。它的每一条拒绝用例都断言两件事：状态码，以及**缓存仍然命中**。
+
+第二条才是重点。一个「先清空、再返回 403」的实现能通过任何只看状态码的断言，而它造成的破坏正是这次改动要防的东西——只测状态码等于把这个 bug 判为已修复。所以每条拒绝用例先做一次 `warm()`：连打两次同一路径，断言 `MISS` 然后 `HIT`。这一步是证人的资格检查——如果那路径压根没进缓存，后面「仍然 HIT」就什么也证明不了。
+
+顺带记一条这类比较器的坑：手写的、不因提前失配而短路的令牌比较，如果不同时把**长度差异**折进累加器，`Bearer <正确值>EXTRA` 会通过——循环只遍历期望值，多出来的字节它根本不看。而「前缀太短」的方向不会漏，因为循环读到的零字节与期望字节不匹配。两个方向都要有用例，只有长的那条能抓住这个回归。
 
 ## 代码风格
 
