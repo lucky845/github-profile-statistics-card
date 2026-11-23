@@ -327,6 +327,10 @@ server {
 - **`/metrics`** —— Prometheus exposition 格式。**只报本进程真实拥有的 6 条**：`process_cpu_user_seconds_total`、`process_cpu_system_seconds_total`、`process_cpu_seconds_total`、`process_start_time_seconds`、`process_resident_memory_bytes`、`github_stats_cache_hit_rate`。原版的 `nodejs_*` 族（eventloop lag、GC、V8 heap space、libuv handle）**有意不再出现**：Rust 进程没有事件循环、没有 V8 堆、没有 libuv handle，打印这些数字等于把兼容演成谎言。
 - **`/metrics/json`** —— 同一批数据的 JSON 形态，供调试
 - **`/stats`** —— `{code:200, msg:"ok", data:{requests:{total,lastHour}, cache:{hits,misses,keys,groups,hitsRate}, externalApis:{github,leetcode,csdn,juejin,bilibili}}}`
+  - `requests.lastHour` 是**真正滚动的一小时**：60 个按分钟桶，进出两个方向都做惰性轮转（`advance`），所以没有后台任务，进程空转一天也不会攒着旧数字——下一次被问到时它先把自己转到当下再求和。分辨率是分钟：窗口是「当前这一分钟 + 之前 59 分钟」。
+    - 原版 Node 在 `metrics.middleware.ts` 里把 `global.requestCount` 和 `global.requestCountLastHour` 一起 `++` 且从不重置，`metrics.routes.ts` 又把后者当 `lastHour` 发出去，于是这两个数在整个进程生命周期里恒等——一个名字承诺了窗口、代码从未打开过窗口的字段。照抄它就等于把总量挂牌成一小时量，和保留 V8 那四个恒 0 的内存键、把 `database` 写成 `unhealthy` 是同一种谎。
+    - 时钟回拨（NTP 步进）不会抹掉已发生的计数：窗口只前进不后退，`advance` 对 `minute <= window.minute` 直接返回。宁可暂时少算，也不把真实发生过的请求删掉——删掉的分钟没有任何东西能补回来。
+    - 这个字段的**忘记**没法在 CI 里等一小时验证，所以 `tests/last_hour_window.rs` 用 `metrics::age_last_hour_for_tests(61)` 走同一段轮转代码把窗口推到一小时之后，断言 `lastHour` 归零而 `total` 只前进它自己那一次。换成「lastHour 最多等于 total」这种断言是没用的——原缺陷恰好满足它。
   - `externalApis` **每个已注册平台一个键，全部是真实出站请求数**，键集合与顺序由 `src/frontdoor/registry.rs` 的平台表派生，接入新平台自动有这个键。原版 Node 只声明了 `githubApiCallCount` 却从未递增，而输出也只有 `github`/`leetcode` 两个键——这里把两条都补上了。
   - 计数点在"请求被构造出来"的那一刻，不是"请求成功"的那一刻：超时的请求同样占用上游配额，只统计成功会恰好在出问题时少报。重试不重复计，这个数回答的是"给上游送了多少流量"。
   - 一张卡片实际发几次上游请求，就计几次：`github` 2 次（profile + repos），`leetcode` 按区域尝试次数，`csdn` 1 次（抓 profile 页），`juejin` 2 次（用户 GET 与文章列表 POST 并发），`bilibili` 4 次（空间页 + stat + upstat + card）。

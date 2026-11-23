@@ -11,6 +11,7 @@
 //! hit rate the counters actually know. The names, help strings and exposition format stay the ones
 //! prom-client used, so an existing scraper keeps parsing.
 
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,9 +36,35 @@ pub use super::r::JSON_CONTENT_TYPE;
 /// a HIT never calls next.
 static REQUESTS_TOTAL: AtomicU64 = AtomicU64::new(0);
 
-/// global.requestCountLastHour. The original increments it and never resets it, so it tracks the
-/// total since boot; kept identical rather than inventing an hourly window the recording never had.
-static REQUESTS_LAST_HOUR: AtomicU64 = AtomicU64::new(0);
+/// The bucket count of the rolling hour: one per minute, the newest 60 minutes of traffic.
+const HOUR_BUCKETS: usize = 60;
+
+/// `requests.lastHour` -- how many requests reached this middleware in the last hour.
+///
+/// The original bumps `global.requestCountLastHour` beside the total in metrics.middleware.ts and
+/// never resets it, while metrics.routes.ts publishes it as `lastHour`. The two numbers were
+/// therefore equal for the whole life of the process: a field whose name promises a window that
+/// no code ever opened. A port that copies that is not being faithful, it is publishing a
+/// mislabelled total -- the same defect as the V8 memory keys and the always-unhealthy status.
+///
+/// An hour is kept here as 60 per-minute buckets, rotated lazily on the way in and on the way out,
+/// so a process that goes quiet for a day costs nothing until somebody asks. `minute` is the
+/// newest minute the buckets describe, which makes the window the current minute plus the 59
+/// before it: an hour to the minute, not to the second. That is the resolution the upstream
+/// recording had, and pretending to second precision would be inventing numbers again.
+struct HourWindow {
+    minute: u64,
+    buckets: [u64; HOUR_BUCKETS],
+}
+
+/// The one lock this module takes. It is what makes rotation exact: 60 atomics updated without
+/// one would let a thread add to a bucket another thread is clearing, and the lost increment
+/// would be invisible. An uncontended lock is a handful of nanoseconds against a request that
+/// already walked through routing, caching and an SVG render.
+static LAST_HOUR: Mutex<HourWindow> = Mutex::new(HourWindow {
+    minute: 0,
+    buckets: [0; HOUR_BUCKETS],
+});
 
 /// One outbound-call tally per registered platform, in `registry::PLATFORMS` order.
 ///
@@ -49,6 +76,98 @@ static REQUESTS_LAST_HOUR: AtomicU64 = AtomicU64::new(0);
 /// the same disease in `/stats`' `externalApis`.
 static EXTERNAL_API_CALLS: [AtomicU64; registry::PLATFORMS.len()] =
     [const { AtomicU64::new(0) }; registry::PLATFORMS.len()];
+
+/// The only entry point to the window's state: every read and every charge takes this lock.
+fn last_hour() -> std::sync::MutexGuard<'static, HourWindow> {
+    LAST_HOUR.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The unix minute this process is living in.
+///
+/// A clock that cannot be read before the epoch answers 0, which the rotation treats as "no time
+/// has passed": the counts stay where they are instead of being thrown away over a bad read.
+fn current_minute() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() / 60)
+        .unwrap_or(0)
+}
+
+/// Move the window's newest minute forward to `minute`, clearing only the buckets that closed.
+///
+/// Runs on the way in and on the way out, so the number is right without a background task and a
+/// process that idles for a week answers with its real (empty) hour the moment it is asked.
+fn advance(window: &mut HourWindow, minute: u64) {
+    // A clock that steps backwards must not erase counts that really happened. Clamping keeps the
+    // window where it is; rewinding would answer with a smaller hour than the process observed,
+    // and the lost minutes would never be restored.
+    if minute <= window.minute {
+        return;
+    }
+    let elapsed = minute - window.minute;
+    if elapsed >= HOUR_BUCKETS as u64 {
+        // The whole window fell out: everything it held is older than an hour.
+        window.buckets = [0; HOUR_BUCKETS];
+    } else {
+        // Only the minutes that closed are cleared, so a bucket still holding a count from inside
+        // the hour keeps it. A single `buckets = [0; _]` here would pass a fresh-window test and
+        // silently drop the counts of the last 59 minutes.
+        for step in 1..=elapsed {
+            let index = ((window.minute + step) % HOUR_BUCKETS as u64) as usize;
+            window.buckets[index] = 0;
+        }
+    }
+    window.minute = minute;
+}
+
+/// Charge one request to the minute it arrived in.
+fn charge(window: &mut HourWindow, minute: u64) {
+    advance(window, minute);
+    let index = (window.minute % HOUR_BUCKETS as u64) as usize;
+    window.buckets[index] = window.buckets[index].saturating_add(1);
+}
+
+/// The rolling hour, as of `minute`.
+fn windowed(window: &mut HourWindow, minute: u64) -> u64 {
+    advance(window, minute);
+    window
+        .buckets
+        .iter()
+        .fold(0u64, |sum, bucket| sum.saturating_add(*bucket))
+}
+
+/// `requests.lastHour`: the requests this middleware answered in the last 60 minutes.
+pub fn last_hour_requests() -> u64 {
+    let mut window = last_hour();
+    windowed(&mut window, current_minute())
+}
+
+/// Move the rolling hour forward as if `minutes` had passed.
+///
+/// Exposed for the integration test only. The roll-off is the one behaviour a test cannot reach
+/// by waiting: proving at the endpoint that `lastHour` forgets would otherwise cost an hour of
+/// CI, and the weaker assertion available instead -- "the hour is at most the total" -- is one
+/// the defect this replaced also satisfies, since it published the total twice.
+///
+/// The window is left `minutes` ahead of the wall clock, so this belongs at the end of a test
+/// process rather than in the middle of one: reads clamp to the newest minute they have, which
+/// keeps the counts where they are instead of rewinding them.
+#[doc(hidden)]
+pub fn age_last_hour_for_tests(minutes: u64) {
+    let mut window = last_hour();
+    let ahead = window.minute.max(current_minute()).saturating_add(minutes);
+    advance(&mut window, ahead);
+}
+
+/// Charge one request into the rolling hour.
+///
+/// A named function rather than a line in `middleware` so the guard's scope ends before the
+/// `await`: a `MutexGuard` held across a yield point makes the middleware future `!Send`, and
+/// axum refuses to layer it.
+fn note_request() {
+    let mut window = last_hour();
+    charge(&mut window, current_minute());
+}
 
 /// The slot a platform's tally lives in, looked up by the same name the router matches.
 fn external_slot(platform: &str) -> Option<usize> {
@@ -81,8 +200,10 @@ pub fn external_calls(platform: &str) -> u64 {
 /// metricsMiddleware, reduced to the counters /stats reads. The duration and error instruments it
 /// also fills go to the private registry, which has no HTTP route in the original either.
 pub async fn middleware(req: Request, next: Next) -> Response {
+    // The total is bumped first: the hour is a subset of it, and a reader that catches the two
+    // mid-update must never see an hour larger than the process's whole life.
     REQUESTS_TOTAL.fetch_add(1, Ordering::Relaxed);
-    REQUESTS_LAST_HOUR.fetch_add(1, Ordering::Relaxed);
+    note_request();
     next.run(req).await
 }
 
@@ -389,7 +510,7 @@ pub fn stats_response() -> Response {
     let data = json!({
         "requests": {
             "total": REQUESTS_TOTAL.load(Ordering::Relaxed),
-            "lastHour": REQUESTS_LAST_HOUR.load(Ordering::Relaxed),
+            "lastHour": last_hour_requests(),
         },
         "cache": cache::stats(),
         "externalApis": external_api_tallies(),
@@ -542,6 +663,75 @@ mod tests {
         assert!(REQUESTS_TOTAL.load(Ordering::Relaxed) >= before);
         assert!(external_calls(platform) > calls_before);
         assert_eq!(body.status(), StatusCode::OK);
+    }
+
+    /// A window as of `minute`, with nothing charged yet.
+    fn window_at(minute: u64) -> HourWindow {
+        HourWindow {
+            minute,
+            buckets: [0; HOUR_BUCKETS],
+        }
+    }
+
+    #[test]
+    fn the_hour_forgets_a_minute_once_sixty_minutes_have_closed() {
+        // The defect this replaces could not fail here: the old counter never decreased, so a
+        // test that only charged and read would pass against both implementations. Forgetting is
+        // the property, and 60 minutes is where it has to happen.
+        let mut window = window_at(100);
+        for _ in 0..3 {
+            charge(&mut window, 100);
+        }
+        assert_eq!(windowed(&mut window, 100), 3, "the minute that just closed is still inside");
+        assert_eq!(windowed(&mut window, 159), 3, "minute 100 is inside a window ending at 159");
+        assert_eq!(windowed(&mut window, 160), 0, "minute 100 left a window ending at 160");
+    }
+
+    #[test]
+    fn only_the_buckets_that_closed_are_cleared() {
+        // This is what tells a correct rotation from the two-line version that just zeroes the
+        // whole array on every minute change: that one passes a single-charge test and drops the
+        // previous 59 minutes of traffic every time.
+        let mut window = window_at(100);
+        charge(&mut window, 100);
+        charge(&mut window, 130);
+        assert_eq!(windowed(&mut window, 140), 2);
+        assert_eq!(windowed(&mut window, 161), 1, "the 100 charge left the hour, the 130 charge stayed");
+    }
+
+    #[test]
+    fn a_clock_that_steps_backwards_keeps_the_count() {
+        // NTP steps an unvirtualised host backwards. Rewinding the window would report a smaller
+        // hour than the process really served, and nothing would ever put the minutes back.
+        let mut window = window_at(100);
+        charge(&mut window, 100);
+        charge(&mut window, 100);
+        assert_eq!(windowed(&mut window, 90), 2, "a backwards step must not erase what happened");
+        charge(&mut window, 95);
+        assert_eq!(windowed(&mut window, 100), 3, "the charge lands in the minute the window is on");
+    }
+
+    #[test]
+    fn a_long_silence_empties_the_window_instead_of_summing_stale_minutes() {
+        let mut window = window_at(100);
+        for _ in 0..5 {
+            charge(&mut window, 100);
+        }
+        assert_eq!(windowed(&mut window, 160), 0, "an hour of silence leaves nothing in the hour");
+        assert_eq!(windowed(&mut window, 10_000), 0, "a day of silence must not resurrect counts");
+    }
+
+    #[test]
+    fn the_published_hour_is_never_larger_than_the_total() {
+        // `lastHour` is a subset of `total` by construction. If a future edit wires the field
+        // back to the total the two become equal and this cannot tell -- an hour always equal to
+        // the life of the process needs 61 minutes of running to disprove, which is why the
+        // rotation above is tested as a pure function. What this can catch is the hour counting
+        // something the total does not.
+        assert!(
+            last_hour_requests() <= REQUESTS_TOTAL.load(Ordering::Relaxed),
+            "the hour cannot hold more requests than the process has answered"
+        );
     }
 
     #[test]
