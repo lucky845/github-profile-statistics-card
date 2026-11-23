@@ -25,20 +25,46 @@ use serde_json::{Value, json};
 
 use super::headers::SECURITY;
 
-/// The ceiling for one cache entry.
+/// The L1 ceiling when there is no shared tier: L1 is the whole cache, so it keeps the full TTL.
 ///
-/// The original had two tiers: `localSet` capped the **L1** map at 60 seconds, while the Redis
-/// tier stored the entry for the full TTL the caller asked for. Cards declare s-maxage between
-/// 600 and 3600 seconds, so L1 was only ever a 60-second fast path in front of a 10-to-60-minute
-/// store.
+/// The original's `localSet` capped the **L1** map at 60 seconds, while the Redis tier stored the
+/// entry for the full TTL the caller asked for. Cards declare s-maxage between 600 and 3600
+/// seconds, so L1 was only ever a 60-second fast path in front of a 10-to-60-minute store.
 ///
-/// This port has no Redis tier, so keeping the 60-second L1 cap would make every card refetch an
-/// upstream every minute — a 10x-to-60x increase in upstream traffic over the original. With
+/// A single-binary build has no such store behind it. Keeping the 60-second cap there would make
+/// every card refetch an upstream every minute — a 10x-to-60x increase in upstream traffic. With
 /// GitHub's anonymous budget at 60 requests/hour/IP and a single `/github/:user` costing two of
-/// them, one steady visitor would exhaust the quota on their own. The cap therefore moves up to
-/// the longest TTL any card declares (bilibili's 3600s), which is what the Redis tier used to
-/// provide.
-const LOCAL_TTL_CAP_MS: u64 = 3_600_000;
+/// them, one steady visitor would exhaust the quota on their own. So without a shared tier the cap
+/// moves up to the longest TTL any card declares (bilibili's 3600s), which is what the Redis tier
+/// used to provide.
+const LOCAL_TTL_CAP_ALONE_MS: u64 = 3_600_000;
+
+/// The L1 ceiling when a shared tier **is** configured: the original's 60 seconds, restored.
+///
+/// The port's Redis tier arrived after this file's first draft, and the "there is no Redis tier"
+/// reasoning above quietly stopped being true. With both tiers present and the same 3600-second
+/// ceiling, L1 and L2 hold the same bytes for the same length of time, and L2 only ever helps an
+/// instance that has not seen the key yet. The cost of that is invisible until you look for it:
+/// `DELETE /api/cache/clear` clears this process's map and the shared store, but **other instances
+/// keep answering from their own L1** — for an hour. The original bounds that staleness window at
+/// 60 seconds, which is the entire reason `localSet` had a cap separate from the store's TTL.
+///
+/// One Redis GET per key per minute is the price of that bound, and it is a cheap one: a GET is
+/// sub-millisecond and never touches the upstream, which is what the cap exists to protect.
+const LOCAL_TTL_CAP_SHARED_MS: u64 = 60_000;
+
+/// Which ceiling applies right now.
+///
+/// Takes the answer as an argument instead of reading `remote::configured()` itself so both
+/// branches are testable without mutating process-wide environment variables — the same reason
+/// `shared_ttl_seconds` is a pure function.
+fn local_ttl_cap_ms(shared_tier: bool) -> u64 {
+    if shared_tier {
+        LOCAL_TTL_CAP_SHARED_MS
+    } else {
+        LOCAL_TTL_CAP_ALONE_MS
+    }
+}
 
 /// cache.service.ts keeps at most 500 entries and evicts the oldest insertion first.
 const LOCAL_MAX_ENTRIES: usize = 500;
@@ -147,8 +173,26 @@ pub fn get(key: &str) -> Option<Hit> {
 
 /// cacheService.set: store unconditionally, capping the TTL and evicting the oldest key.
 pub fn set(key: &str, body: Vec<u8>, headers: Vec<(String, String)>, ttl_seconds: u64) {
+    set_capped(
+        key,
+        body,
+        headers,
+        ttl_seconds,
+        local_ttl_cap_ms(super::remote::configured()),
+    );
+}
+
+/// `set` with the ceiling supplied by the caller, so a test can drive both tiers without
+/// mutating process-wide environment variables.
+fn set_capped(
+    key: &str,
+    body: Vec<u8>,
+    headers: Vec<(String, String)>,
+    ttl_seconds: u64,
+    cap_ms: u64,
+) {
     let mut inner = cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let ttl_ms = ttl_seconds.saturating_mul(1000).min(LOCAL_TTL_CAP_MS);
+    let ttl_ms = ttl_seconds.saturating_mul(1000).min(cap_ms);
     if !inner.entries.contains_key(key) {
         inner.order.push_back(key.to_string());
     }
@@ -165,6 +209,20 @@ pub fn set(key: &str, body: Vec<u8>, headers: Vec<(String, String)>, ttl_seconds
             inner.entries.remove(&oldest);
         }
     }
+}
+
+/// How much life the entry for `key` has left, for tests that need to observe the L1 ceiling.
+///
+/// The two ceilings differ by a factor of sixty and both are minutes long, so a test cannot wait
+/// either one out. Reading the remaining lifetime is the only way to tell a 60-second entry from a
+/// 3600-second one without moving a clock that the rest of the cache also reads.
+#[doc(hidden)]
+pub fn lifetime_ms_for_tests(key: &str) -> Option<u64> {
+    let inner = cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    inner
+        .entries
+        .get(key)
+        .map(|entry| entry.expire_at_ms.saturating_sub(now_ms()))
 }
 
 /// storage.service.ts reads and writes through the same cache instance as the HTTP layer, so a
@@ -579,18 +637,52 @@ mod tests {
     }
 
     #[test]
-    fn a_declared_ttl_survives_the_cap_that_used_to_be_sixty_seconds() {
-        // The regression this guards: the L1 cap used to be 60s, so a 3600s card refetched its
-        // upstream every minute. Nothing below the cap may be truncated any more.
+    fn without_a_shared_tier_a_declared_ttl_is_not_truncated() {
+        // The regression this guards: a 60s L1 cap with nothing behind it made a 3600s card
+        // refetch its upstream every minute. Alone, L1 is the whole cache, so it keeps the TTL.
         let _guard = guarded();
-        set("slow", b"x".to_vec(), Vec::new(), shared_ttl_seconds("public, s-maxage=3600"));
-        let inner = cache().lock().unwrap_or_else(|p| p.into_inner());
-        let entry = inner.entries.get("slow").expect("entry");
-        let lifetime = entry.expire_at_ms.saturating_sub(now_ms());
+        set_capped(
+            "slow",
+            b"x".to_vec(),
+            Vec::new(),
+            shared_ttl_seconds("public, s-maxage=3600"),
+            local_ttl_cap_ms(false),
+        );
+        let lifetime = lifetime_ms_for_tests("slow").expect("entry");
         assert!(
             lifetime > 3_000_000,
-            "a 3600s entry kept only {lifetime}ms, the 60s cap is back"
+            "a 3600s entry kept only {lifetime}ms, the 60s cap is back without a shared tier"
         );
+    }
+
+    #[test]
+    fn a_shared_tier_shortens_the_l1_ceiling_to_a_minute() {
+        // With L2 present, L1 is a fast path and not the store: the same 3600s card may only sit
+        // in L1 for 60 seconds, which is the window the original bounded staleness at. Anything
+        // longer and another instance keeps answering from its own L1 after a clear.
+        let _guard = guarded();
+        set_capped(
+            "warm",
+            b"x".to_vec(),
+            Vec::new(),
+            shared_ttl_seconds("public, s-maxage=3600"),
+            local_ttl_cap_ms(true),
+        );
+        let lifetime = lifetime_ms_for_tests("warm").expect("entry");
+        assert!(
+            lifetime <= 60_000,
+            "a 3600s entry kept {lifetime}ms in L1, the shared-tier ceiling is not applied"
+        );
+        assert!(
+            lifetime > 50_000,
+            "a 3600s entry kept only {lifetime}ms in L1, the ceiling is applied twice"
+        );
+    }
+
+    #[test]
+    fn the_ceiling_follows_whether_a_shared_tier_exists() {
+        assert_eq!(local_ttl_cap_ms(true), 60_000);
+        assert_eq!(local_ttl_cap_ms(false), 3_600_000);
     }
 
     #[test]
