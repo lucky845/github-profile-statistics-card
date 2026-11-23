@@ -166,7 +166,7 @@ docker run -d -p 3000:3000 \
 
 镜像构成（`Dockerfile` 多阶段）：
 
-- **builder**：`rust:1.100-slim-bookworm`，`cargo build --release --locked`。**构建上下文只有 `rust/`**——首页模板在 `views/index.html`，编译期被 `include_str!` 编进二进制。仓库里已经没有任何 JS/TS、没有 `package.json`、没有 `node_modules`。
+- **builder**：`rust:1.100-slim-bookworm`，`cargo build --release --locked`。**构建上下文只有 `rust/`**——首页模板在 `views/index.html`，编译期被 `include_str!` 编进二进制。仓库里没有构建期的 JS/TS：没有 `package.json`、没有 `node_modules`、没有打包步骤。唯一的 `.js` 是 `views/app.js`，它是浏览器直接执行的源文件，同样在编译期被 `include_str!` 编进二进制并由 `GET /app.js` 原样送出——它不能内联进页面，因为 CSP 是 `script-src 'self'`（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
 - **runner**：`debian:bookworm-slim` + `ca-certificates` + `curl`（供 HEALTHCHECK），非 root 用户 `app`（uid 10001）。
 - 最终镜像约 **158 MB**（实测），`command -v node` 返回空。
 
