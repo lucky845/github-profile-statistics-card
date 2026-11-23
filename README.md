@@ -143,7 +143,7 @@ Docker 与 Vercel 跑的是**同一份二进制**——两者的区别只是由�
 | `PUBLIC_BASE_URL` | 空 | **Vercel 必配**。首页画廊用公开域名拼示例链接。留空则用请求的 `Host` 头——Vercel 的 `Host` 是带部署哈希的预览域名，位于 SSO 后面，用它拼出的图片会全部返回 302 |
 | `TRUST_PROXY` | 空（视为 `0`） | **只在有反向代理时配**。限流按客户端计数，默认用 TCP 对端地址；填代理层数后改为读 `X-Forwarded-For` 里代理追加的那几项。填错的后果是限流对不上人（多了误伤、少了被绕过），详见下方「限流键」 |
 | `CACHE_CLEAR_TOKEN` | 空 | **清缓存端点的凭据**。留空表示该端点关闭（任何调用都是 403）；填了则要求 `Authorization: Bearer <该值>`。详见下方「清缓存的凭据」 |
-| `REDIS_URL` 或 `REDIS_HOST`/`REDIS_PORT`/`REDIS_USERNAME`/`REDIS_PASSWORD` | 空 | **可选**。配置后启用 Redis 共享缓存层：TTL 按响应的 `s-maxage`（10–60 分钟），跨实例/跨冷启动共享。多实例部署强烈建议配上。两种写法任选，与原版 Node 兼容 |
+| `REDIS_URL` 或 `REDIS_HOST`/`REDIS_PORT`/`REDIS_USERNAME`/`REDIS_PASSWORD` | 空 | **可选**。配置后启用 Redis 共享缓存层：TTL 按响应的 `s-maxage`（10–60 分钟），跨实例/跨冷启动共享；同时把进程内 L1 的上限从 3600 秒收回 60 秒（原版 `localSet` 的形状）。多实例部署强烈建议配上。两种写法任选，与原版 Node 兼容 |
 
 ### Docker（推荐）
 

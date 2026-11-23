@@ -479,3 +479,27 @@ fn delete_prefix_walks_every_page_the_server_hands_back() {
 }
 
 
+
+/// The L1 ceiling is decided by whether this process has a shared tier, and this is the only
+/// test file where `remote::configured()` answers true for real: `fake()` sets `REDIS_URL` before
+/// anything else runs. Without this case the wiring `set` -> `configured()` -> ceiling is only
+/// exercised on its `false` side, and a port that forgot to ask would look fully covered.
+#[test]
+fn the_l1_ceiling_drops_to_a_minute_once_a_shared_tier_exists() {
+    let fake = fake();
+    let key = fake.unique("l1-ceiling");
+    // A card's own TTL: 3600 seconds. With nothing behind L1 that is what it keeps; with the
+    // shared tier present L1 may only hold it for the staleness window the original bounded.
+    app::frontdoor::cache::set(&key, b"body".to_vec(), Vec::new(), 3600);
+    let lifetime =
+        app::frontdoor::cache::lifetime_ms_for_tests(&key).expect("the entry must be stored");
+    assert!(
+        lifetime <= 60_000,
+        "with a shared tier an L1 entry may live 60s, got {lifetime}ms"
+    );
+    // The other direction: the ceiling must not clamp everything to zero, or L1 would never hit.
+    assert!(
+        lifetime > 50_000,
+        "an L1 entry kept only {lifetime}ms, the ceiling is too tight"
+    );
+}
