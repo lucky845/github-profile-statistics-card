@@ -41,10 +41,19 @@ const INDEX_HTML: &str = include_str!("../../views/index.html");
 /// policy allows, and `tests/home_page_script.rs` keeps it that way.
 const APP_JS: &str = include_str!("../../views/app.js");
 
+/// The home page's stylesheet, for the same reason as the script above.
+///
+/// The CSP used to carry `style-src 'self' 'unsafe-inline'` so the page's inline `<style>` could
+/// run. That allowance is global: any inline style -- including one an injected card could bring --
+/// was accepted. Moving the rules to a same-origin file lets the directive drop to `style-src
+/// 'self'` without changing a single rule. `tests/home_page_script.rs` pins both halves.
+const APP_CSS: &str = include_str!("../../views/app.css");
+
 pub fn router() -> Router {
     Router::new()
         .route("/", axum::routing::get(home))
         .route("/app.js", axum::routing::get(app_js))
+        .route("/app.css", axum::routing::get(app_css))
         .route("/health", axum::routing::get(health))
         .route("/livez", axum::routing::get(livez))
         .route("/api/theme/test", axum::routing::get(theme_test))
@@ -731,6 +740,14 @@ async fn home(req: Request) -> Response {
 /// script it expects (or the other way round) for as long as the longer one.
 async fn app_js() -> Response {
     Reply::new(StatusCode::OK, "text/javascript; charset=utf-8", APP_JS.to_string())
+        .cache_control(HOME_CACHE)
+        .into_response()
+}
+
+/// The stylesheet the home page links. Same cache policy as the page and its script, for the same
+/// reason: the three have to reach a browser from the same deploy.
+async fn app_css() -> Response {
+    Reply::new(StatusCode::OK, "text/css; charset=utf-8", APP_CSS.to_string())
         .cache_control(HOME_CACHE)
         .into_response()
 }
