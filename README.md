@@ -94,7 +94,7 @@
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
 | `/metrics` | GET | Prometheus 文本格式指标 |
 | `/metrics/json` | GET | 同上，JSON 格式 |
-| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.externalApis` 为每个已注册平台各给一个计数，全部是真实出站请求数 |
+| `/stats` | GET | 进程内统计（请求数、缓存命中率、外部 API 调用数）。`data.requests.lastHour` 是**真正滚动的一小时**（60 个按分钟桶，惰性轮转），不是总量；`data.externalApis` 为每个已注册平台各给一个计数，全部是真实出站请求数 |
 | `/api/cache/stats` | GET | 缓存计数器 |
 | `/api/cache/clear` | DELETE | 清空缓存，支持 `?all=true` / `?group=` / `?pattern=`。**需要凭据**：配了 `CACHE_CLEAR_TOKEN` 后须带 `Authorization: Bearer <token>`，没配则一律 403（见下方「清缓存的凭据」） |
 
