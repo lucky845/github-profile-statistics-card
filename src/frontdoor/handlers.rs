@@ -33,9 +33,18 @@ pub const HOME_CACHE: &str = "public, max-age=300, s-maxage=3600, stale-while-re
 /// not serve the page without a Node build next to it; the file is static, so it ships inside.
 const INDEX_HTML: &str = include_str!("../../views/index.html");
 
+/// The gallery's copy-button script, served as a file rather than inlined into the page.
+///
+/// The CSP every answer carries is `script-src 'self'` with no hash and no nonce, so an inline
+/// `<script>` is refused by the browser: the buttons were wired to a handler that never ran, and
+/// the only trace was a console error on every load. A file under the same origin is what the
+/// policy allows, and `tests/home_page_script.rs` keeps it that way.
+const APP_JS: &str = include_str!("../../views/app.js");
+
 pub fn router() -> Router {
     Router::new()
         .route("/", axum::routing::get(home))
+        .route("/app.js", axum::routing::get(app_js))
         .route("/health", axum::routing::get(health))
         .route("/livez", axum::routing::get(livez))
         .route("/api/theme/test", axum::routing::get(theme_test))
@@ -711,6 +720,17 @@ async fn home(req: Request) -> Response {
             .join(""),
     );
     Reply::new(StatusCode::OK, "text/html; charset=utf-8", html)
+        .cache_control(HOME_CACHE)
+        .into_response()
+}
+
+/// The copy-button script the home page loads.
+///
+/// It shares the page's cache policy on purpose: the markup and the script that wires it have to
+/// reach a browser in the same deploy, and two different TTLs would let a cached page outlive the
+/// script it expects (or the other way round) for as long as the longer one.
+async fn app_js() -> Response {
+    Reply::new(StatusCode::OK, "text/javascript; charset=utf-8", APP_JS.to_string())
         .cache_control(HOME_CACHE)
         .into_response()
 }

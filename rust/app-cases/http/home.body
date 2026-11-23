@@ -221,17 +221,6 @@
       卡片数据来自各平台公开接口，按 <code>cacheSeconds</code> 缓存以避免触发上游限流。
     </footer>
   </div>
-  <script>
-    document.addEventListener('click', function (e) {
-      var btn = e.target.closest('.copy-btn');
-      if (!btn) return;
-      var target = document.getElementById(btn.dataset.target);
-      if (!target) return;
-      navigator.clipboard.writeText(target.textContent.trim()).then(function () {
-        btn.textContent = '已复制';
-        setTimeout(function () { btn.textContent = '复制'; }, 1500);
-      });
-    });
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>
