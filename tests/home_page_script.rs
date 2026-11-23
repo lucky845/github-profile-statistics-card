@@ -1,16 +1,15 @@
-//! The home page's copy buttons, and the script that wires them.
+//! The home page's copy buttons, its stylesheet, and the CSP that governs both.
 //!
-//! The page used to carry the handler as an inline `<script>`. Every answer is served under
-//! `script-src 'self'` with no hash and no nonce, so the browser refused to run it: the buttons did
-//! nothing and the only symptom was a console error on load. The fix moves the code to `/app.js`,
-//! which the same policy allows.
+//! The page used to carry the click handler as an inline `<script>` and its rules in an inline
+//! `<style>`. The CSP allowed the script not at all (`script-src 'self'`, no hash, no nonce) and
+//! the style through a blanket `'unsafe-inline'`. The browser refused the script (buttons dead,
+//! console error on every load) while accepting every inline style an injected card might bring.
+//! Both are now files under the same origin, `/app.js` and `/app.css`, and the policy is strict for
+//! both.
 //!
-//! Both halves of that fix are asserted here, because either one alone can regress silently:
-//!
-//! - the page must contain no inline script (a new inline block would be blocked just as the old
-//!   one was), and
-//! - every script the page names must actually be served by this router (a page pointing at a 404
-//!   looks exactly like a page pointing at working code until someone clicks).
+//! The assertions come in pairs because either half alone can regress silently: the page must name
+//! no inline resource, every resource it names must actually be served with an executable/applicable
+//! content type, and both `script-src` and `style-src` must stay free of `'unsafe-inline'`.
 
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
@@ -53,6 +52,17 @@ fn script_tags(html: &str) -> Vec<&str> {
         .map(|(at, _)| {
             let rest = &html[at..];
             let end = rest.find('>').expect("an unterminated script tag");
+            &rest[..end]
+        })
+        .collect()
+}
+
+/// Every `<link ...>` opening tag in the page, with its attributes.
+fn link_tags(html: &str) -> Vec<&str> {
+    html.match_indices("<link")
+        .map(|(at, _)| {
+            let rest = &html[at..];
+            let end = rest.find('>').expect("an unterminated link tag");
             &rest[..end]
         })
         .collect()
@@ -183,6 +193,95 @@ fn the_script_is_cached_like_the_static_file_it_is() {
 }
 
 #[test]
+fn the_page_carries_no_inline_style() {
+    let html = home();
+    assert!(
+        !html.contains("<style"),
+        "an inline <style> would need style-src 'unsafe-inline' to be re-opened"
+    );
+    assert!(
+        !html.contains("style="),
+        "an inline style= attribute is also gated by style-src-attr / style-src"
+    );
+    assert!(
+        !link_tags(&html).is_empty(),
+        "the page is expected to link its stylesheet; if the rules were dropped, delete this test \
+         rather than the assertion"
+    );
+}
+
+#[test]
+fn every_stylesheet_the_page_names_is_served_here() {
+    let html = home();
+    let sheets: Vec<&str> = link_tags(&html)
+        .iter()
+        .filter(|tag| tag.contains("stylesheet"))
+        .filter_map(|tag| {
+            let at = tag.find("href=\"")? + "href=\"".len();
+            tag[at..].split('"').next()
+        })
+        .collect();
+    assert!(!sheets.is_empty(), "the page links no stylesheet at all");
+    for sheet in sheets {
+        assert!(sheet.starts_with('/'), "not same-origin: {sheet}");
+        let (status, headers, body) = get(sheet);
+        assert_eq!(status, StatusCode::OK, "{sheet} is referenced but not served");
+        assert!(!body.is_empty(), "{sheet} is served empty");
+        let content_type = headers
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            content_type.starts_with("text/css"),
+            "{sheet} is served as {content_type:?}; a browser refuses to apply a stylesheet with \
+             the wrong MIME type under strict CSS loading"
+        );
+    }
+}
+
+#[test]
+fn the_rules_the_page_lost_are_the_rules_the_file_carries() {
+    // Not a byte-for-byte copy of the old inline block -- that would pin whitespace. These are the
+    // three rule families the rendered page actually relies on: the copy buttons, the theme pills,
+    // and the responsive gallery grid. If any is lost in the extraction the page still loads with a
+    // 200 for /app.css, but the layout silently changes.
+    let (status, _, body) = get("/app.css");
+    assert_eq!(status, StatusCode::OK);
+    let css = String::from_utf8(body).expect("utf-8 css");
+    for rule in ["button.copy-btn", "theme-pill", "gallery-grid", "@media"] {
+        assert!(css.contains(rule), "the stylesheet lost its {rule:?} rules");
+    }
+    assert!(
+        css.contains(":root") && css.contains("--accent"),
+        "the stylesheet lost its theme variables"
+    );
+}
+
+#[test]
+fn the_stylesheet_route_follows_the_same_path_rules_as_the_other_fixed_routes() {
+    let (_, _, expected) = get("/app.css");
+    for spelling in ["/APP.CSS", "/App.Css", "/app.css/"] {
+        let (status, _, body) = get(spelling);
+        assert_eq!(status, StatusCode::OK, "{spelling} did not reach the handler");
+        assert_eq!(body, expected, "{spelling} answered with a different body");
+    }
+}
+
+#[test]
+fn the_stylesheet_is_cached_like_the_static_file_it_is() {
+    let uri = format!("/app.css?v={}", std::process::id());
+    let (_, _, first) = get(&uri);
+    let (status, headers, second) = get(&uri);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first, second);
+    let cache_status = headers
+        .get("x-cache-status")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    assert_eq!(cache_status, "HIT", "the stylesheet is re-rendered on every request");
+}
+
+#[test]
 fn the_policy_that_forbade_the_inline_script_is_still_in_force() {
     // The page no longer needs an inline script, but the reason it could not have one is the
     // header. If someone relaxes script-src to 'unsafe-inline', that trade should be a deliberate
@@ -200,4 +299,17 @@ fn the_policy_that_forbade_the_inline_script_is_still_in_force() {
     assert!(directive.contains("'self'"), "{directive}");
     assert!(!directive.contains("unsafe-inline"), "{directive}");
     assert!(!directive.contains("unsafe-eval"), "{directive}");
+    // The stylesheet moved out for exactly the same reason: leaving 'unsafe-inline' here would let
+    // any injected inline style through. Deleting this assertion should be a deliberate decision to
+    // accept that exposure, not a side effect of moving the CSS.
+    let style_directive = csp
+        .split(';')
+        .map(str::trim)
+        .find(|part| part.starts_with("style-src "))
+        .expect("no style-src directive");
+    assert!(style_directive.contains("'self'"), "{style_directive}");
+    assert!(
+        !style_directive.contains("unsafe-inline"),
+        "{style_directive}"
+    );
 }

@@ -5,7 +5,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 /// `helmet`'s content security policy, joined the way it serialises directives.
-pub const CSP: &str = "default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data: *;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests";
+pub const CSP: &str = "default-src 'self';script-src 'self';style-src 'self';img-src 'self' data: *;base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';upgrade-insecure-requests";
 
 /// The headers `helmet` sets, in the order it sets them.
 pub const SECURITY: [(&str, &str); 13] = [

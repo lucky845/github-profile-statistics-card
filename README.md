@@ -90,6 +90,7 @@
 | --- | --- | --- |
 | `/` | GET | 首页（主题预览与卡片画廊） |
 | `/app.js` | GET | 首页画廊"复制"按钮的脚本。**必须是独立文件**：CSP 是 `script-src 'self'`，内联脚本会被浏览器直接拦掉（见 [CONTRIBUTING.md](CONTRIBUTING.md#浏览器里才成立的那一半csp-拦掉自己页面的脚本)） |
+| `/app.css` | GET | 首页样式表。**同样必须是独立文件**：CSP 是 `style-src 'self'`（不再带 `unsafe-inline`），内联 `<style>` 与 `style=` 属性会被拦掉 |
 | `/livez` | GET | 存活探针：进程还在吗。**健康检查用这个** |
 | `/health` | GET | 连通性：上游平台都通吗。`data.status` 三态：`healthy`（问过的平台最近一次都成功）/ `unhealthy`（至少一个最近一次失败）/ `unknown`（启动后还没人问过）。`data.platforms` 是各平台真实调用计数（`ok`/`fail`/`lastError`），能看出静默失效 |
 | `/api/theme/test` | GET | 单主题样例卡，用于调样式（`?theme=`） |
@@ -124,7 +125,7 @@
 - **Rust** — Axum + Tokio + reqwest
 - **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB。L2 的五个操作由 `tests/remote_cache.rs` 用进程内 RESP 假服务器覆盖，CI 不需要 Redis service
 - **渲染** — 手写 SVG 生成，无模板引擎
-- **首页** — HTML 与它的脚本（`views/index.html`、`views/app.js`）在编译期用 `include_str!` 编进二进制，不需要 Node 构建产物
+- **首页** — HTML、脚本与样式表（`views/index.html`、`views/app.js`、`views/app.css`）在编译期用 `include_str!` 编进二进制，不需要 Node 构建产物
 - **平台扩展** — 一张 `PlatformDesc` 常量表（`src/frontdoor/registry.rs`）描述每个平台，路由分派／限流前缀／404 判定／首页画廊／缓存键分隔符全部从它派生。加平台只改这一处，见 [CONTRIBUTING.md](CONTRIBUTING.md#添加新平台)
 - **部署** — 多阶段 Docker 单二进制，或 Vercel Rust runtime
 

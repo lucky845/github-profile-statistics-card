@@ -16,10 +16,11 @@ use axum::middleware::Next;
 use axum::response::Response;
 
 /// The paths app.ts registers with `app.get` or `app.delete`.
-const FIXED: [&str; 10] = [
+const FIXED: [&str; 11] = [
     "/",
-    // Served rather than inlined because the CSP forbids inline script; see handlers::app_js.
+    // Served rather than inlined because the CSP forbids inline script/style; see handlers::app_js.
     "/app.js",
+    "/app.css",
     "/health",
     "/livez",
     "/api/theme/test",
