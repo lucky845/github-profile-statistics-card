@@ -1,19 +1,26 @@
 # GitHub Profile Statistics Card
 
-<div align="center">
-  <img src="https://img.shields.io/github/license/lucky845/github-profile-statistics-card?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/github/issues/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Issues">
-  <img src="https://img.shields.io/github/stars/lucky845/github-profile-statistics-card?style=for-the-badge" alt="Stars">
-  <img src="https://img.shields.io/badge/Rust-1.88+-dea584?style=for-the-badge&logo=rust" alt="Rust">
-</div>
+[![License](https://img.shields.io/github/license/lucky845/github-profile-statistics-card?style=flat-square)](LICENSE)
+[![Issues](https://img.shields.io/github/issues/lucky845/github-profile-statistics-card?style=flat-square)](https://github.com/lucky845/github-profile-statistics-card/issues)
+[![Stars](https://img.shields.io/github/stars/lucky845/github-profile-statistics-card?style=flat-square)](https://github.com/lucky845/github-profile-statistics-card/stargazers)
+[![Rust](https://img.shields.io/badge/Rust-1.88+-dea584?style=flat-square&logo=rust)](#技术栈)
+[![Tests](https://img.shields.io/badge/tests-153%20cases-6e9f18?style=flat-square)](#特性)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#参与贡献)
 
-## 🚀 项目简介
+把 GitHub、LeetCode、CSDN、掘金、哔哩哔哩的统计数据渲染成一张 **SVG 卡片**，一行 Markdown 嵌进你的 README。
+
+> [!NOTE]
+> **一个 Rust 二进制，没有 Node / package.json / 数据库。** 缓存默认进程内，可选 Redis 做跨实例共享；一次请求拿到一张自包含的 SVG。
+
+---
+
+## 项目简介
 
 把 GitHub、LeetCode、CSDN、掘金、哔哩哔哩的统计数据渲染成一张 **SVG 卡片**，一行 Markdown 嵌进你的 README。
 
 整个后端是**一个 Rust 二进制**：没有 Node 运行时、没有 `package.json`、没有数据库。缓存默认在进程内，可选接入 Redis 做跨实例共享。启动即服务，一次请求拿到一张自包含的 SVG。
 
-## ✨ 特性
+## 特性
 
 - **五个平台**：GitHub / LeetCode / CSDN / 掘金 / 哔哩哔哩
 - **四个主题**：light / dark / github-dark-dimmed / transparent
@@ -22,7 +29,7 @@
 - **行为有契约**：153 条录制的 HTTP case 做重放比对，不是手写断言
 - **双部署**：Docker 单二进制，或 Vercel 官方 Rust runtime
 
-## 🚀 使用方法
+## 使用方法
 
 把下面这行的 `用户名` 换成你的，粘进 README：
 
@@ -61,7 +68,7 @@
 - **部分用户数据**因平台隐私设置会缺失，此时显示 `0` 而不是报错
 - **哔哩哔哩不带 `SESSDATA`** 时上游返回 `-352` 风控码，卡片显示**全 0 的真实数据**（不是错误卡）
 
-## 🎨 主题
+## 主题
 
 | 参数 | 说明 |
 | --- | --- |
@@ -72,7 +79,7 @@
 
 所有主题可在[首页](/)实时预览与切换。
 
-## 🖼️ 为什么卡片里没有头像
+## 为什么卡片里没有头像
 
 早期版本会在左上角画用户头像，现在去掉了。这不是省事，而是**头像会让卡片在 README 里更容易裂、更慢**：
 
@@ -84,7 +91,7 @@
 
 去掉之后，每张卡从「一个 SVG + 一个外部图片」变成**单一自包含 SVG**：一次请求拿到全部内容，没有额外失败点。
 
-## 🔌 API
+## API
 
 | 端点 | 方法 | 说明 |
 | --- | --- | --- |
@@ -120,7 +127,7 @@
 
 `data.status` 只看**最近一次**：一个平台失败后恢复，字段会跟着回到 `healthy`——这正是 `record_ok` / `record_fail` 各自打时间戳的用途。所以它不是「有没有出过错」，而是「现在通不通」。
 
-## 🛠️ 技术栈
+## 技术栈
 
 - **Rust** — Axum + Tokio + reqwest
 - **缓存** — 两层：进程内 L1（始终）+ Redis L2（配了 `REDIS_*` 才启用）。无 PostgreSQL / MongoDB。L2 的五个操作由 `tests/remote_cache.rs` 用进程内 RESP 假服务器覆盖，CI 不需要 Redis service
@@ -129,7 +136,7 @@
 - **平台扩展** — 一张 `PlatformDesc` 常量表（`src/frontdoor/registry.rs`）描述每个平台，路由分派／限流前缀／404 判定／首页画廊／缓存键分隔符全部从它派生。加平台只改这一处，见 [CONTRIBUTING.md](CONTRIBUTING.md#添加新平台)
 - **部署** — 多阶段 Docker 单二进制，或 Vercel Rust runtime
 
-## 🚀 部署
+## 部署
 
 Docker 与 Vercel 跑的是**同一份二进制**——两者的区别只是由谁来转发流量，所以行为不可能漂移。
 
@@ -216,7 +223,7 @@ $ curl -s -X DELETE -H 'Authorization: Bearer s3cret-token' \
 
 完整说明（compose、Nginx、观测端点、缓存语义、故障排查）见 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。
 
-## 🤝 参与贡献
+## 参与贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。核心规矩先放这里：
 
@@ -231,7 +238,7 @@ cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此
 - **别拿「replay 还是绿的」当证据**：`/health` 的 body、`/api/cache/stats` 的数值、卡片的 `x-cache-key`/`x-cache-status` 在录制时都被归一化成了通配，等于没有断言。动这些地方必须手工对拍。
 - **有些东西 replay 和单元测试都盖不到，只能跨进程验**。进程年龄（`/livez` 的 `uptime`）是例子：单元测试的参考读数与「首次探活才起表」那个缺陷的起点几乎同时，两种实现都能通过。`scripts/process-age.sh` 起进程、静默等 5 秒、只探一次，缺陷实现回答 `0` 而真实现回答 `5`。CI 里它就是这一步。
 
-## 🔜 即将支持
+## 即将支持
 
 知乎与微博处于可行性评估阶段，**尚未排期接入**。两者对未登录流量均全面封锁，实测（2026-11-22）如下：
 
@@ -240,7 +247,7 @@ cargo clippy  --all-targets --workspace -- -D warnings   # 硬门，CI 会因此
 
 接入需引入需用户自备、会过期的登录态，与项目「匿名可跑、凭据可选」的现有模式冲突，暂不实施。
 
-## 📝 开源协议
+## 开源协议
 
 [Apache 2.0](LICENSE)
 
